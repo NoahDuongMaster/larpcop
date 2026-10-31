@@ -11,17 +11,17 @@ use ast_grep_language::SupportLang;
 use std::path::Path;
 
 pub enum FlowRule {
-    Taint(TaintRule),
+    Taint(Box<TaintRule>),
     Text(TextRule),
 }
 
 impl FlowRule {
     pub fn taint(cfg: &TaintConfig, root: &Path) -> Result<Self> {
-        Ok(Self::Taint(TaintRule::new(
+        Ok(Self::Taint(Box::new(TaintRule::new(
             cfg,
             Typed::default(),
             root.to_path_buf(),
-        )?))
+        )?)))
     }
 
     pub fn text(cfg: &TextRuleConfig) -> Result<Self> {

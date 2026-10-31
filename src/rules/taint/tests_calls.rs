@@ -36,6 +36,8 @@ fn guarded(
             safe_prefix: None,
             guards: s(guards),
             param_types: Default::default(),
+            param_decorators: Vec::new(),
+            handler_decorators: None,
             sink_types: Default::default(),
         },
         typed::Typed::default(),

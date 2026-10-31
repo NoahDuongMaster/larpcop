@@ -1,0 +1,20 @@
+id: taint-sql
+file: src/users.controller.ts
+valid:
+  - |
+    @Controller('users')
+    export class UsersController {
+      @Get()
+      find(@Query('name') name: string) {
+        return this.db.query('select * from users where name = $1', [name]);
+      }
+    }
+invalid:
+  - |
+    @Controller('users')
+    export class UsersController {
+      @Get()
+      find(@Query('name') name: string) {
+        return this.db.query(`select * from users where name = '${name}'`);
+      }
+    }

@@ -47,7 +47,9 @@ taint:
     sinks: ["$DB.query($SQL, $$$REST)", "$DB.query($SQL)", "$DB.execute($SQL, $$$REST)", "$DB.execute($SQL)", "$DB.raw($SQL, $$$REST)", "$DB.raw($SQL)", "$DB.$queryRawUnsafe($SQL, $$$REST)", "$DB.$queryRawUnsafe($SQL)"]
     sink_arg: SQL
     param_types: { Request: req, NextRequest: request }
-    sanitizers: ["Number($X)", "parseInt($$$X)", "parseFloat($X)", "$S.parse($X)"]
+    sanitizers: ["+$X", "Number($X)", "parseInt($$$X)", "parseFloat($X)", "$S.parse($X)"]
+    param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+
   - id: taint-shell
     languages: [TypeScript, Tsx, JavaScript]
     message: Request data reaches a shell command.
@@ -56,6 +58,8 @@ taint:
     sinks: ["exec($CMD, $$$REST)", "exec($CMD)", "execSync($CMD, $$$REST)", "execSync($CMD)", "$CP.exec($CMD, $$$REST)", "$CP.exec($CMD)", "$CP.execSync($CMD, $$$REST)", "$CP.execSync($CMD)"]
     sink_arg: CMD
     param_types: { Request: req }
+    param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+
   - id: taint-redirect
     languages: [TypeScript, Tsx, JavaScript]
     message: Request data decides where a redirect goes (open redirect).
@@ -66,6 +70,8 @@ taint:
     safe_prefix: '^/[^/\\]'
     guards: ["$U.startsWith($P)", "$L.includes($U)", "$L.has($U)", "$R.test($U)", "isSafeRedirect($U)", "isRelativeUrl($U)"]
     param_types: { Request: req, NextRequest: request }
+    param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+
   - id: taint-code
     languages: [TypeScript, Tsx, JavaScript]
     message: Request data evaluated as code (code injection).
@@ -73,16 +79,20 @@ taint:
     sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "await request.json()"]
     sinks: ["eval($X)", "new Function($$$A)", "vm.runInNewContext($X, $$$R)", "vm.runInThisContext($X, $$$R)", "vm.runInContext($X, $$$R)", "$M.eval($X, $$$R)", "$M.evaluate($X, $$$R)"]
     sink_arg: X
-    sanitizers: ["Number($X)", "parseInt($X, $$$R)", "parseFloat($X)"]
+    sanitizers: ["+$X", "Number($X)", "parseInt($X, $$$R)", "parseFloat($X)"]
     param_types: { Request: req }
+    param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+
   - id: taint-xss
     languages: [TypeScript, Tsx, JavaScript]
     message: Request data written into an HTML response without escaping (reflected XSS).
     note: Render through a template with autoescaping, or escape the value (escape-html, he.encode); send data as JSON with res.json.
     sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "req.files", "request.nextUrl.searchParams", "await request.json()", "await request.formData()"]
     sinks: ["$RES.send($A + $B)", "$RES.send(`$$$T`)", "$RES.write($A + $B)", "$RES.end($A + $B)", "$RES.type(\"html\").send($X)", "$RES.type('html').send($X)", "$RES.type(\"text/html\").send($X)", "$RES.type('text/html').send($X)", "$RES.contentType(\"html\").send($X)", "$RES.contentType('html').send($X)", "$RES.contentType(\"text/html\").send($X)", "$RES.contentType('text/html').send($X)", "$EL.innerHTML = $X", "$EL.outerHTML = $X", "document.write($X)"]
-    sanitizers: ["escapeHtml($X)", "escape($X)", "$E.escape($X)", "he.encode($X, $$$R)", "encodeURIComponent($X)", "DOMPurify.sanitize($X, $$$R)", "sanitizeHtml($X, $$$R)", "xss($X)", "Number($X)", "parseInt($X, $$$R)", "JSON.stringify($X)"]
+    sanitizers: ["+$X", "escapeHtml($X)", "escape($X)", "$E.escape($X)", "he.encode($X, $$$R)", "encodeURIComponent($X)", "DOMPurify.sanitize($X, $$$R)", "sanitizeHtml($X, $$$R)", "xss($X)", "Number($X)", "parseInt($X, $$$R)", "JSON.stringify($X)"]
     param_types: { Request: req, NextRequest: request }
+    param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+
   - id: taint-path
     languages: [TypeScript, Tsx, JavaScript]
     message: Request data used as a file path (path traversal).
@@ -90,9 +100,11 @@ taint:
     sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "req.files", "request.nextUrl.searchParams", "await request.json()", "await request.formData()"]
     sinks: ["fs.$F($P, $$$R)", "fsp.$F($P, $$$R)", "$RES.sendFile($P, $$$R)", "$RES.download($P, $$$R)", "readFileSync($P, $$$R)", "readFile($P, $$$R)", "createReadStream($P, $$$R)", "createWriteStream($P, $$$R)", "writeFileSync($P, $$$R)", "writeFile($P, $$$R)", "unlink($P, $$$R)", "unlinkSync($P)"]
     sink_arg: P
-    sanitizers: ["path.basename($X, $$$R)", "basename($X, $$$R)", "Number($X)", "parseInt($X, $$$R)", "sanitizeFilename($X)", "sanitize($X)"]
+    sanitizers: ["+$X", "path.basename($X, $$$R)", "basename($X, $$$R)", "Number($X)", "parseInt($X, $$$R)", "sanitizeFilename($X)", "sanitize($X)"]
     guards: ["$P.startsWith($B)", "$A.includes($B)", "$A.indexOf($B)", "$L.has($P)", "$R.test($P)", "isInside($$$A)", "isSubPath($$$A)"]
     param_types: { Request: req, NextRequest: request }
+    param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+
   - id: taint-ssrf
     languages: [TypeScript, Tsx, JavaScript]
     message: Request data decides which URL the server fetches (SSRF).
@@ -101,19 +113,23 @@ taint:
     sinks: ["fetch($U, $$$R)", "axios($U, $$$R)", "axios.$M($U, $$$R)", "got($U, $$$R)", "got.$M($U, $$$R)", "http.get($U, $$$R)", "https.get($U, $$$R)", "http.request($U, $$$R)", "https.request($U, $$$R)", "request($U, $$$R)", "request.$M($U, $$$R)", "needle.$M($U, $$$R)", "superagent.$M($U)", "ky($U, $$$R)", "ky.$M($U, $$$R)", "undici.request($U, $$$R)"]
     sink_arg: U
     safe_prefix: '^https?://[^/?#]+[/?#]'
-    sanitizers: ["encodeURIComponent($X)", "Number($X)", "parseInt($X, $$$R)"]
+    sanitizers: ["+$X", "encodeURIComponent($X)", "Number($X)", "parseInt($X, $$$R)"]
     guards: ["$L.includes($H)", "$L.has($H)", "$U.startsWith($P)", "$R.test($U)", "isAllowedUrl($U)", "isAllowedHost($H)"]
     param_types: { Request: req, NextRequest: request }
+    param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+
   - id: taint-nosql
     languages: [TypeScript, Tsx, JavaScript]
-    message: Request data used as a MongoDB filter (NoSQL operator injection with $ne, $gt, $where).
+    message: Request data used as a MongoDB filter (NoSQL operator injection with $ne, $gt, $where). Path parameters are always strings and are not counted.
     note: Cast each field to the type it must be (String(x), Number(x)) or validate the body with a schema, so an object with $-operators cannot reach the query.
-    sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "req.files", "request.nextUrl.searchParams", "await request.json()", "await request.formData()"]
+    sources: ["req.query", "req.body", "req.headers", "req.cookies", "req.files", "request.nextUrl.searchParams", "await request.json()", "await request.formData()"]
     sinks: ["$C.find($Q, $$$R)", "$C.findOne($Q, $$$R)", "$C.findOneAndUpdate($Q, $$$R)", "$C.findOneAndDelete($Q, $$$R)", "$C.updateOne($Q, $$$R)", "$C.updateMany($Q, $$$R)", "$C.deleteOne($Q, $$$R)", "$C.deleteMany($Q, $$$R)", "$C.countDocuments($Q, $$$R)", "$C.aggregate($Q, $$$R)"]
     sink_arg: Q
     # Sequelize filters sit under `where:` / `include:` and take no operators from JSON.
-    sanitizers: ["$M.$F({ $$$A, where: $W, $$$R })", "$M.$F({ $$$A, include: $I, $$$R })", "String($X)", "Number($X)", "parseInt($X, $$$R)", "sanitize($X)", "mongoSanitize($X)", "$S.parse($X)", "new ObjectId($X)", "$M.Types.ObjectId($X)", "escapeRegExp($X)"]
+    sanitizers: ["+$X", "$M.$F({ $$$A, where: $W, $$$R })", "$M.$F({ $$$A, include: $I, $$$R })", "String($X)", "Number($X)", "parseInt($X, $$$R)", "sanitize($X)", "mongoSanitize($X)", "$S.parse($X)", "new ObjectId($X)", "$M.Types.ObjectId($X)", "escapeRegExp($X)"]
     param_types: { Request: req, NextRequest: request }
+    param_decorators: [Body, Query, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+
   - id: taint-regex
     languages: [TypeScript, Tsx, JavaScript]
     message: Request data compiled as a regular expression (ReDoS / regex injection).
@@ -123,6 +139,8 @@ taint:
     sink_arg: X
     sanitizers: ["escapeRegExp($X)", "escapeStringRegexp($X)", "_.escapeRegExp($X)", "$S.replace($$$R)"]
     param_types: { Request: req, NextRequest: request }
+    param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+
   - id: py-taint-path
     languages: [Python]
     message: Request data used as a file path (path traversal).
@@ -132,6 +150,8 @@ taint:
     sink_arg: P
     sanitizers: ["secure_filename($X)", "os.path.basename($X)", "int($X)", "uuid.UUID($X)"]
     guards: ["$P.is_relative_to($B)", "$P.startswith($B)", "$X in $L"]
+    handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
+
   - id: py-taint-ssrf
     languages: [Python]
     message: Request data decides which URL the server fetches (SSRF).
@@ -142,6 +162,8 @@ taint:
     safe_prefix: '^https?://[^/?#]+[/?#]'
     sanitizers: ["int($X)", "quote($X)", "urllib.parse.quote($X)"]
     guards: ["$H in $L", "$U.startswith($P)"]
+    handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
+
   - id: py-taint-ssti
     languages: [Python]
     message: Request data used as a template (server-side template injection, runs code).
@@ -150,6 +172,8 @@ taint:
     sinks: ["render_template_string($T, $$$R)", "Template($T, $$$R)", "jinja2.Template($T)", "Environment($$$E).from_string($T)", "$ENV.from_string($T)", "Markup($T)"]
     sink_arg: T
     sanitizers: ["escape($X)", "markupsafe.escape($X)"]
+    handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
+
   - id: py-taint-code
     languages: [Python]
     message: Request data evaluated as code or deserialized into objects (code injection).
@@ -158,6 +182,8 @@ taint:
     sinks: ["eval($X, $$$R)", "exec($X, $$$R)", "pickle.loads($X)", "yaml.load($X, $$$R)", "marshal.loads($X)", "subprocess.$M($X, $$$R)", "os.system($X)", "os.popen($X, $$$R)"]
     sink_arg: X
     sanitizers: ["int($X)", "float($X)", "shlex.quote($X)", "ast.literal_eval($X)"]
+    handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
+
   - id: taint-log
     languages: [TypeScript, Tsx, JavaScript]
     severity: warning
@@ -165,8 +191,10 @@ taint:
     note: Log a fixed message and pass the value as a structured field, or strip CR/LF first (value.replace(/[\r\n]/g, '')).
     sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies"]
     sinks: ["console.$M($$$A)", "$L.info($$$A)", "$L.warn($$$A)", "$L.error($$$A)", "$L.debug($$$A)", "$L.log($$$A)"]
-    sanitizers: ["$S.replace($$$R)", "JSON.stringify($X)", "encodeURIComponent($X)", "Number($X)"]
+    sanitizers: ["+$X", "$S.replace($$$R)", "JSON.stringify($X)", "encodeURIComponent($X)", "Number($X)"]
     param_types: { Request: req }
+    param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+
   - id: py-taint-log
     languages: [Python]
     severity: warning
@@ -175,6 +203,8 @@ taint:
     sources: ["request.args", "request.form", "request.values", "request.json", "request.GET", "request.POST", "request.query_params", "request.headers", "await request.post()", "await request.json()", "await request.form()", "await request.text()", "request.query", "request.match_info", "request.rel_url.query", "self.get_argument($$$A)", "self.get_query_argument($$$A)", "self.get_body_argument($$$A)"]
     sinks: ["logging.$M($$$A)", "logger.$M($$$A)", "log.$M($$$A)", "$APP.logger.$M($$$A)"]
     sanitizers: ["$S.replace($$$R)", "json.dumps($X)", "int($X)", "repr($X)"]
+    handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
+
   - id: py-taint-sql
     languages: [Python]
     message: Request data reaches a SQL query.
@@ -183,3 +213,4 @@ taint:
     sinks: ["$C.execute($SQL)", "$C.execute($SQL, $$$P)", "$C.executemany($SQL, $$$P)", "$C.raw($SQL)", "$C.raw($SQL, $$$P)"]
     sink_arg: SQL
     sanitizers: ["int($X)", "float($X)", "uuid.UUID($X)"]
+    handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('

@@ -1,0 +1,8 @@
+id: py-taint-sql
+file: app/main.py
+valid:
+- "@app.get(\"/items/{item_id}\")\ndef read(item_id: int, db: Session = Depends(get_db)):\n    return db.execute(\"select * from items where id = :id\", {\"id\": item_id})\n"
+- "@app.get(\"/items/{item_id}\")\ndef read(item_id: int):\n    return db.execute(f\"select * from items where id = {item_id}\")\n"
+invalid:
+- "@app.get(\"/items\")\ndef read(q: str, db: Session = Depends(get_db)):\n    return db.execute(f\"select * from items where name = '{q}'\")\n"
+- "@bp.route(\"/user/<name>\")\ndef show(name):\n    cur.execute(\"select * from users where name = '\" + name + \"'\")\n"

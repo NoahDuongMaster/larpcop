@@ -32,6 +32,8 @@ pub struct TaintRule {
     /// Sources as written, without whitespace (`req.query`), for destructuring.
     source_texts: Vec<String>,
     param_types: std::collections::BTreeMap<String, String>,
+    param_decorators: Vec<String>,
+    handler_decorators: Option<regex::Regex>,
     /// `sink_types`: metavariables whose type the project's language server must confirm.
     typed: typed::Typed,
     /// Per language: (sources, sinks, sanitizers, guards), compiled for that grammar.
@@ -89,11 +91,30 @@ impl TaintRule {
                 .map(|s| s.split_whitespace().collect())
                 .collect(),
             param_types: cfg.param_types.clone(),
+            param_decorators: cfg.param_decorators.clone(),
+            handler_decorators: cfg
+                .handler_decorators
+                .as_deref()
+                .map(regex::Regex::new)
+                .transpose()
+                .with_context(|| format!("taint `{}`: handler_decorators", cfg.id))?,
             typed,
             langs,
             root,
             imported: Mutex::default(),
         })
+    }
+
+    /// Names a function receives as request data: destructured typed
+    /// parameters, decorated parameters, parameters of route handlers.
+    fn own_names<D: Doc>(&self, f: &Node<D>) -> std::collections::HashSet<String> {
+        let mut out = destructure::from_params(f, &self.param_types, &self.source_texts);
+        out.extend(handlers::params(
+            f,
+            &self.param_decorators,
+            self.handler_decorators.as_ref(),
+        ));
+        out
     }
 
     pub fn languages(&self) -> Vec<SupportLang> {
@@ -124,7 +145,7 @@ impl TaintRule {
             return Vec::new();
         };
         let mut out = Vec::new();
-        let own = |n: &Node<_>| destructure::from_params(n, &self.param_types, &self.source_texts);
+        let own = |n: &Node<_>| self.own_names(n);
         ctx.run(&root, &root, own(&root), &hits, &own, &mut |r| match r {
             Reached::Sink(arg, typed) if self.typed.holds(lang, file, &typed) => {
                 out.push(self.violation(file, &arg, None))
@@ -132,6 +153,9 @@ impl TaintRule {
             Reached::Call(arg, into) => out.push(self.violation(file, &arg, Some(into))),
             _ => {}
         });
+        // A sink reached directly and through a summary is one finding.
+        out.sort_by_key(|v| (v.line, v.column));
+        out.dedup_by_key(|v| (v.line, v.column));
         out
     }
 
@@ -182,6 +206,7 @@ mod destructure;
 mod events;
 mod flow;
 mod guards;
+mod handlers;
 mod imports;
 mod prefix;
 mod prepare;

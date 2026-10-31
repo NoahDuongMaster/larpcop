@@ -156,9 +156,7 @@ impl TaintRule {
         known: &Summaries,
     ) -> Summaries {
         let defs = functions(root);
-        let own = |n: &Node<'a, D>| {
-            super::destructure::from_params(n, &self.param_types, &self.source_texts)
-        };
+        let own = |n: &Node<'a, D>| self.own_names(n);
         let mut out = known.clone();
         for _ in 0..ROUNDS {
             let before = out.clone();

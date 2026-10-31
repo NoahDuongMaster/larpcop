@@ -1,0 +1,16 @@
+id: taint-sql
+file: src/users.controller.ts
+valid:
+  - |
+    @Controller('users')
+    export class UsersController {
+      @Get(':id')
+      find(@Param('id', ParseIntPipe) id: number) {
+        return this.db.query(`select * from users where id = ${id}`);
+      }
+      @Get('n/:n')
+      byNumber(@Param('n') n: string) {
+        return this.db.query(`select * from users where id = ${+n}`);
+      }
+    }
+invalid: []

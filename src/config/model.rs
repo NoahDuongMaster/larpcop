@@ -108,6 +108,12 @@ pub struct TaintConfig {
     /// `{ query }: Request` reads `req.query`.
     #[serde(default)]
     pub param_types: std::collections::BTreeMap<String, String>,
+    /// Parameter decorators whose parameter is request data (`Body`, `Query`).
+    #[serde(default)]
+    pub param_decorators: Vec<String>,
+    /// Regex over a function's decorators (without `@`) that makes it a route
+    /// handler: all its parameters are request data (`app\.get\(`).
+    pub handler_decorators: Option<String>,
     /// Sink metavariable → regex over its type as the project's language server
     /// shows it (`DB: "Pool|PoolClient"`). Without a server the sink counts.
     #[serde(default)]

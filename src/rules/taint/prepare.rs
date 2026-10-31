@@ -68,6 +68,7 @@ impl TaintRule {
             && base.sources.is_empty()
             && !self.source_texts.iter().any(|s| property(s) == Some(true))
             && !known.values().any(|s| s.returns_source)
+            && !self.decorated_input(&file.content)
         {
             return None;
         }
@@ -137,5 +138,14 @@ impl TaintRule {
             .ok()?
             .insert(path.to_path_buf(), s.clone());
         Some(s)
+    }
+
+    /// Could a decorator bring request data into this file (`@Body()`, a route
+    /// handler)? Cheap text check before the walk.
+    fn decorated_input(&self, content: &str) -> bool {
+        self.param_decorators
+            .iter()
+            .any(|d| content.contains(&format!("@{d}(")))
+            || (self.handler_decorators.is_some() && content.contains('@'))
     }
 }

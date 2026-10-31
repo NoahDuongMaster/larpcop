@@ -1,0 +1,20 @@
+id: taint-nosql
+file: src/cats.controller.ts
+valid:
+  - |
+    @Controller('cats')
+    export class CatsController {
+      @Get(':id')
+      findOne(@Param('id') id: string) {
+        return this.catModel.findOne({ _id: id });
+      }
+    }
+invalid:
+  - |
+    @Controller('cats')
+    export class CatsController {
+      @Post('search')
+      search(@Body() filter: CatFilter) {
+        return this.catModel.find(filter);
+      }
+    }

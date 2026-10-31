@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use std::ops::Range;
 
 /// Targets (left) and value (right) of the assignment kinds we follow.
-pub(super) const ASSIGNMENTS: [(&str, &str, &str); 13] = [
+pub(super) const ASSIGNMENTS: [(&str, &str, &str); 14] = [
     ("variable_declarator", "name", "value"),
     ("let_declaration", "pattern", "value"),
     ("var_spec", "name", "value"),
@@ -23,6 +23,7 @@ pub(super) const ASSIGNMENTS: [(&str, &str, &str); 13] = [
     ("augmented_assignment", "left", "right"),
     ("short_var_declaration", "left", "right"),
     ("assignment_statement", "left", "right"),
+    ("operator_assignment", "left", "right"),
     // Loops bind each element of the collection: `for (Cookie c : cookies)`,
     // `for (const x of xs)`, `for x in xs:`, `for _, x := range xs`.
     ("enhanced_for_statement", "name", "value"),

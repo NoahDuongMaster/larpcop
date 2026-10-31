@@ -2,7 +2,8 @@
 //! files: relative and `tsconfig` path-alias imports in JS/TS, `import`/`from`
 //! in Python (relative, from the root or `src/`), and in Go the other files of
 //! the same package plus packages of the same module, PHP `require`/`include`,
-//! Java and C# classes of the same directory that the file names.
+//! Java and C# classes of the same directory that the file names, Ruby
+//! `require_relative` and Rails autoloading.
 
 use ast_grep_core::{Doc, Node};
 use ast_grep_language::SupportLang;
@@ -12,6 +13,7 @@ mod go;
 mod js;
 mod php;
 mod python;
+mod ruby;
 mod siblings;
 
 pub struct Import {
@@ -34,6 +36,7 @@ pub fn imports<D: Doc>(lang: SupportLang, root: &Node<D>, file: &Path, repo: &Pa
         SupportLang::Go => go::imports(root, file, repo),
         SupportLang::Php => php::imports(root, dir),
         SupportLang::Java | SupportLang::CSharp => siblings::imports(root, file),
+        SupportLang::Ruby => ruby::imports(root, dir, file, repo),
         _ => Vec::new(),
     };
     for imp in &mut found {

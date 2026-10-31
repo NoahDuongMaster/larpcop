@@ -1,0 +1,8 @@
+id: rb-taint-code
+file: app/controllers/users_controller.rb
+valid:
+- "class UsersController < ApplicationController\n  def show\n    klass = { \"a\" => A, \"b\" => B }.fetch(params[:t])\n    klass.new\n  end\nend\n"
+invalid:
+- "class UsersController < ApplicationController\n  def show\n    params[:type].constantize.new\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    eval(params[:code])\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    @user.send(params[:attr])\n  end\nend\n"

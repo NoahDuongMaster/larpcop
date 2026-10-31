@@ -1,0 +1,6 @@
+id: rb-no-ssl-verify-none
+file: app/controllers/x_controller.rb
+valid:
+- http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+invalid:
+- http.verify_mode = OpenSSL::SSL::VERIFY_NONE

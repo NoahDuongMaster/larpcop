@@ -1,0 +1,9 @@
+id: rb-no-csrf-skip
+file: app/controllers/x_controller.rb
+valid:
+- before_action :authenticate_user!
+- skip_before_action :authenticate_user!
+invalid:
+- "class ApiController < ApplicationController\n  skip_before_action :verify_authenticity_token\nend\n"
+- 'skip_before_action :verify_authenticity_token, only: [:create]'
+- skip_forgery_protection

@@ -1,0 +1,7 @@
+id: rb-taint-deserialization
+file: app/controllers/users_controller.rb
+valid:
+- "class UsersController < ApplicationController\n  def show\n    prefs = JSON.parse(cookies[:prefs])\n  end\nend\n"
+invalid:
+- "class UsersController < ApplicationController\n  def show\n    prefs = Marshal.load(Base64.decode64(cookies[:prefs]))\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    cfg = YAML.load(params[:config])\n  end\nend\n"

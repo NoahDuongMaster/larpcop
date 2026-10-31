@@ -1,0 +1,7 @@
+id: rb-no-html-safe-interpolation
+file: app/controllers/x_controller.rb
+valid:
+- '"<b>ok</b>".html_safe'
+- content_tag(:b, name)
+invalid:
+- '"<b>#{name}</b>".html_safe'

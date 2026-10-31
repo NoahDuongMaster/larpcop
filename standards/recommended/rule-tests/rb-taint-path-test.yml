@@ -1,0 +1,9 @@
+id: rb-taint-path
+file: app/controllers/users_controller.rb
+valid:
+- "class UsersController < ApplicationController\n  def show\n    send_file Rails.root.join(\"public\", File.basename(params[:file]))\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    name = params[:file]\n    return head(400) if name.include?(\"..\")\n    send_file \"/srv/files/#{name}\"\n  end\nend\n"
+invalid:
+- "class UsersController < ApplicationController\n  def show\n    send_file \"/srv/files/#{params[:file]}\"\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    data = File.read(params[:path])\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    name = params[:file]\n    if name.include?(\"..\")\n      send_file name\n    end\n  end\nend\n"

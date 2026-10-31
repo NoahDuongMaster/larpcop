@@ -1,0 +1,7 @@
+id: rb-no-permit-all
+file: app/controllers/x_controller.rb
+valid:
+- params.require(:user).permit(:name, :email)
+invalid:
+- User.create(params.require(:user).permit!)
+- attrs = params.permit!

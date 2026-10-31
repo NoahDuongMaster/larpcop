@@ -11,7 +11,8 @@ UNTRUSTED = ("\\$\\{\\{\\s*(github\\.event\\.(issue|pull_request|comment|review|
 
 # Test code signs and compares throwaway values on purpose.
 TESTS = ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*",
-         "**/test_*.py", "**/*_test.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
+         "**/test_*.py", "**/*_test.py", "**/tests.py", "**/conftest.py", "**/*_test.go", "**/*_spec.rb",
+         "**/*_test.rb"]
 
 # A group holding an unbounded quantifier, itself repeated: `(a+)+`, `(\w+\s?)*`,
 # `((x)?(y+))*`. One level of inner groups; character classes are atoms.

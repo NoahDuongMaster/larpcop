@@ -11,9 +11,21 @@ use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
 use std::ops::Range;
 
-pub(super) const IFS: [&str; 2] = ["if_statement", "if_expression"];
+/// Ruby's `unless` and `… unless c` read their condition the other way round.
+pub(super) const IFS: [&str; 6] = [
+    "if_statement",
+    "if_expression",
+    "if",
+    "unless",
+    "if_modifier",
+    "unless_modifier",
+];
 /// Calls that end the request: PHP `die()`, Go `panic()`, Flask `abort()`.
-const EXIT_CALLS: [&str; 10] = [
+const EXIT_CALLS: [&str; 14] = [
+    "raise ",
+    "raise(",
+    "fail ",
+    "halt",
     "die(",
     "exit(",
     "panic(",
@@ -25,8 +37,9 @@ const EXIT_CALLS: [&str; 10] = [
     "log.Fatalf(",
     "log.Fatalln(",
 ];
-const EXITS: [&str; 7] = [
+const EXITS: [&str; 8] = [
     "exit_statement",
+    "return",
     "return_statement",
     "return_expression",
     "throw_statement",
@@ -35,14 +48,16 @@ const EXITS: [&str; 7] = [
     "break_statement",
 ];
 /// Negations: JS/TS/Java/Go/Rust `!x`, C# `!x`, PHP `!x`, Python `not x`.
-const NOTS: [&str; 5] = [
+const NOTS: [&str; 6] = [
+    "unary",
     "unary_expression",
     "prefix_unary_expression",
     "unary_op_expression",
     "not_operator",
     "prefix_expression",
 ];
-const BINARIES: [&str; 4] = [
+const BINARIES: [&str; 5] = [
+    "binary",
     "binary_expression",
     "boolean_operator",
     "comparison_operator",
@@ -81,6 +96,11 @@ pub(super) fn of<D: Doc>(n: &Node<D>, checks: &[Check]) -> Vec<Guard> {
         return out;
     };
     let (holds, fails) = safe(&condition, checks);
+    let (holds, fails) = if n.kind().starts_with("unless") {
+        (fails, holds)
+    } else {
+        (holds, fails)
+    };
     let otherwise = n.field("alternative");
     if exits(&then) && !fails.is_empty() {
         out.push(Guard::After(n.range().end, fails.clone()));
@@ -224,7 +244,11 @@ fn exits<D: Doc>(branch: &Node<D>) -> bool {
         (BLOCKS.contains(&l.kind().as_ref()) && exits(&l))
             || EXITS.contains(&l.kind().as_ref())
             || (l.kind() == "expression_statement"
-                && (l.children().any(|c| EXITS.contains(&c.kind().as_ref()))
-                    || EXIT_CALLS.iter().any(|e| l.text().starts_with(e))))
+                && l.children().any(|c| EXITS.contains(&c.kind().as_ref())))
+            || (matches!(l.kind().as_ref(), "expression_statement" | "call" | "identifier")
+                && EXIT_CALLS.iter().any(|e| l.text().starts_with(e)))
+            // Ruby: `redirect_to root_path and return`.
+            || (l.kind() == "binary"
+                && l.field("right").is_some_and(|r| EXITS.contains(&r.kind().as_ref())))
     })
 }

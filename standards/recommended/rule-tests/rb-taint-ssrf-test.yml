@@ -1,0 +1,7 @@
+id: rb-taint-ssrf
+file: app/controllers/users_controller.rb
+valid:
+- "class UsersController < ApplicationController\n  def show\n    res = Net::HTTP.get(URI(\"https://api.example.com/status\"))\n  end\nend\n"
+invalid:
+- "class UsersController < ApplicationController\n  def show\n    res = Net::HTTP.get(URI(params[:url]))\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    r = HTTParty.get(params[:callback])\n  end\nend\n"

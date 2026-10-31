@@ -1,0 +1,11 @@
+id: rb-taint-sql
+file: app/controllers/users_controller.rb
+valid:
+- "class UsersController < ApplicationController\n  def show\n    @users = User.where(name: params[:name])\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    @users = User.where(\"name = ?\", params[:name])\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    @users = User.order(params[:sort].to_i)\n  end\nend\n"
+invalid:
+- "class UsersController < ApplicationController\n  def show\n    @users = User.where(\"name = '#{params[:name]}'\")\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    q = \"SELECT * FROM users WHERE id = \" + params[:id]\n    ActiveRecord::Base.connection.execute(q)\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    @users = User.order(params[:sort])\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    User.find_by_sql \"SELECT * FROM users WHERE email = '#{params[:email]}'\"\n  end\nend\n"

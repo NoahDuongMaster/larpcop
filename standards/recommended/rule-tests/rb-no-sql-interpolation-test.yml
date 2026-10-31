@@ -1,0 +1,8 @@
+id: rb-no-sql-interpolation
+file: app/controllers/x_controller.rb
+valid:
+- User.where("name = ?", name)
+- 'msg = "Selected #{n} rows from cache"'
+invalid:
+- User.find_by_sql("SELECT * FROM users WHERE name = '#{name}'")
+- 'q = "SELECT * FROM users WHERE id = #{id}"'

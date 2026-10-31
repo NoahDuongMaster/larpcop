@@ -190,7 +190,7 @@ fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
 }
 
 /// Constructs whose insides run on some paths only.
-const CONDITIONAL: [&str; 26] = [
+const CONDITIONAL: [&str; 37] = [
     "if_statement",
     "if_expression",
     "else_clause",
@@ -217,6 +217,17 @@ const CONDITIONAL: [&str; 26] = [
     "case",
     "when",
     "rescue",
+    "if",
+    "unless",
+    "if_modifier",
+    "unless_modifier",
+    "while",
+    "until",
+    "while_modifier",
+    "until_modifier",
+    "case",
+    "conditional",
+    "elsif",
 ];
 
 /// Nodes of a scope in order, each with the end of the innermost conditional
@@ -243,7 +254,10 @@ fn walk<'a, D: Doc>(
 fn compound<D: Doc>(n: &Node<D>, left: &Node<D>, right: &Node<D>) -> bool {
     if matches!(
         n.kind().as_ref(),
-        "augmented_assignment_expression" | "augmented_assignment" | "compound_assignment_expr"
+        "augmented_assignment_expression"
+            | "augmented_assignment"
+            | "compound_assignment_expr"
+            | "operator_assignment"
     ) {
         return true;
     }

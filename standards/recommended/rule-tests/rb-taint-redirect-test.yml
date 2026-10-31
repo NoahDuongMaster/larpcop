@@ -1,0 +1,8 @@
+id: rb-taint-redirect
+file: app/controllers/users_controller.rb
+valid:
+- "class UsersController < ApplicationController\n  def show\n    redirect_to \"/users/#{params[:id]}\"\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    redirect_to root_path\n  end\nend\n"
+invalid:
+- "class UsersController < ApplicationController\n  def show\n    redirect_to params[:return_to]\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    url = params[:next]\n    redirect_to url, allow_other_host: true\n  end\nend\n"

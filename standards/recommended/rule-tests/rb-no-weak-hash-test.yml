@@ -1,0 +1,8 @@
+id: rb-no-weak-hash
+file: app/controllers/x_controller.rb
+valid:
+- Digest::SHA256.hexdigest(data)
+invalid:
+- Digest::MD5.hexdigest(password)
+- OpenSSL::Digest::SHA1.new
+- d = OpenSSL::Digest.new("md5")

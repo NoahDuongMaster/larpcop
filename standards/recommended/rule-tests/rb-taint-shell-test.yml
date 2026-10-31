@@ -1,0 +1,10 @@
+id: rb-taint-shell
+file: app/controllers/users_controller.rb
+valid:
+- "class UsersController < ApplicationController\n  def show\n    system(\"ping\", \"-c\", \"1\", \"localhost\")\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    system(\"ping -c 1 #{Shellwords.escape(params[:host])}\")\n  end\nend\n"
+invalid:
+- "class UsersController < ApplicationController\n  def show\n    system(\"ping -c 1 #{params[:host]}\")\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    `nslookup #{params[:host]}`\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    out, st = Open3.capture2(\"dig \" + params[:host])\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    system \"tar xf #{params[:file]}\"\n  end\nend\n"

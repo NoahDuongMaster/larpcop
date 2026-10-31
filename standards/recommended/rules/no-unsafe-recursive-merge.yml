@@ -113,7 +113,9 @@
     "**/*_test.py",
     "**/tests.py",
     "**/conftest.py",
-    "**/*_test.go"
+    "**/*_test.go",
+    "**/*_spec.rb",
+    "**/*_test.rb"
   ]
 }
 ---
@@ -231,7 +233,9 @@
     "**/*_test.py",
     "**/tests.py",
     "**/conftest.py",
-    "**/*_test.go"
+    "**/*_test.go",
+    "**/*_spec.rb",
+    "**/*_test.rb"
   ]
 }
 ---
@@ -349,6 +353,8 @@
     "**/*_test.py",
     "**/tests.py",
     "**/conftest.py",
-    "**/*_test.go"
+    "**/*_test.go",
+    "**/*_spec.rb",
+    "**/*_test.rb"
   ]
 }

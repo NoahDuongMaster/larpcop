@@ -49,6 +49,21 @@ impl TaintRule {
                     .sink_arg
                     .as_deref()
                     .and_then(|v| m.get_env().get_match(v).cloned());
+                // A Ruby call without parentheses (`where $SQL`) binds the
+                // whole argument list: it stands for its first argument.
+                let arg = arg.map(|a| {
+                    let first = (a.kind() == "argument_list")
+                        .then(|| a.children().find(|c| c.is_named()))
+                        .flatten();
+                    first.unwrap_or(a)
+                });
+                // Ruby hash conditions (`where(id: x)`) are bound, not SQL text.
+                if arg
+                    .as_ref()
+                    .is_some_and(|a| matches!(a.kind().as_ref(), "pair" | "hash"))
+                {
+                    continue;
+                }
                 let node = arg.unwrap_or_else(|| m.get_node().clone());
                 let fixed = self.safe_prefix.as_ref().zip(prefix::leading(&node));
                 if fixed.is_some_and(|(re, start)| re.is_match(&start)) {

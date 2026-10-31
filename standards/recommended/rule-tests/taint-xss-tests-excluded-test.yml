@@ -1,0 +1,5 @@
+id: taint-xss
+file: test/app.router.test.js
+valid:
+  - "app.get('/:user', (req, res) => res.end('poking ' + req.params.user));"
+invalid: []

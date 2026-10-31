@@ -122,6 +122,10 @@ pub struct TaintConfig {
     /// shows it (`DB: "Pool|PoolClient"`). Without a server the sink counts.
     #[serde(default)]
     pub sink_types: std::collections::BTreeMap<String, String>,
+    /// Globs of files the rule does not report in (tests, fixtures). Their
+    /// functions still count when other files call them.
+    #[serde(default)]
+    pub exclude: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -35,6 +35,7 @@ pub struct TaintRule {
     param_decorators: Vec<String>,
     handler_decorators: Option<regex::Regex>,
     resolver_args: bool,
+    exclude: globset::GlobSet,
     /// `sink_types`: metavariables whose type the project's language server must confirm.
     typed: typed::Typed,
     /// Per language: (sources, sinks, sanitizers, guards), compiled for that grammar.
@@ -94,6 +95,7 @@ impl TaintRule {
             param_types: cfg.param_types.clone(),
             param_decorators: cfg.param_decorators.clone(),
             resolver_args: cfg.resolver_args,
+            exclude: crate::files::globset(&cfg.exclude)?,
             handler_decorators: cfg
                 .handler_decorators
                 .as_deref()
@@ -156,7 +158,7 @@ impl TaintRule {
         lang: SupportLang,
         index: &FileIndex<D>,
     ) -> Vec<Violation> {
-        if !self.handles(lang) {
+        if !self.handles(lang) || self.exclude.is_match(&file.rel) {
             return Vec::new();
         }
         let root = &index.root;

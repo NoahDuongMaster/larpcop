@@ -39,6 +39,7 @@ fn guarded(
             param_decorators: Vec::new(),
             handler_decorators: None,
             resolver_args: false,
+            exclude: Default::default(),
             sink_types: Default::default(),
         },
         typed::Typed::default(),

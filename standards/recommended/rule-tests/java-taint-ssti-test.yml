@@ -1,0 +1,14 @@
+id: java-taint-ssti
+file: src/T.java
+valid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    VelocityContext ctx = new VelocityContext();\n    ctx.put(\"\
+  name\", request.getParameter(\"name\"));\n    Velocity.evaluate(ctx, out, \"t\", \"Hello $name\");\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String name = request.getParameter(\"name\");\n    TemplateEngine\
+  \ engine = new TemplateEngine();\n    engine.process(\"greeting\", ctxWith(name));\n  }\n}\n"
+invalid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String t = request.getParameter(\"template\");\n    Velocity.evaluate(new\
+  \ VelocityContext(), new StringWriter(), \"t\", t);\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String src = request.getParameter(\"t\");\n    Template\
+  \ tpl = new Template(\"x\", new StringReader(src), cfg);\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    SpringTemplateEngine engine = new SpringTemplateEngine();\n\
+  \    engine.process(request.getParameter(\"t\"), ctx);\n  }\n}\n"

@@ -29,6 +29,7 @@ clone govwa https://github.com/0c34/govwa.git 4058f79
 clone BenchmarkJava https://github.com/OWASP-Benchmark/BenchmarkJava.git f40c618
 clone DVWA https://github.com/digininja/DVWA.git a1978a2
 clone railsgoat https://github.com/OWASP/railsgoat.git f5951f1
+clone java-sec-code https://github.com/JoyChou93/java-sec-code.git 4711f4e
 # NIST Juliet C# 1.3: only the test cases whose data comes from an HTTP request.
 if [ ! -d "$WORK/juliet-web" ]; then
   curl -sfL -o "$WORK/juliet-cs.zip" \
@@ -112,6 +113,15 @@ rm .larpcop.yaml
 semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/juliet-cs-semgrep-default.json" --quiet . || true
 python3 "$HERE/juliet_cs.py" . "$OUT/juliet-cs-larpcop.json" "$OUT/juliet-cs-semgrep-default.json" > "$OUT/juliet-cs.md"
 
+# java-sec-code (Java/Spring): endpoints labelled by the project's routes and comments.
+cd "$WORK/java-sec-code"
+printf "extends: ['%s/standards/recommended']\ndisable: [dependency-vulnerability]\n" "$REPO" > .larpcop.yaml
+"$LARPCOP" check --format json > "$OUT/java-sec-code-larpcop.json" || true
+rm .larpcop.yaml
+semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/java-sec-code-semgrep.json" --quiet . || true
+python3 "$HERE/java_sec_code.py" "$HERE/java-sec-code-truth.json" . larpcop="$OUT/java-sec-code-larpcop.json" \
+  semgrep="$OUT/java-sec-code-semgrep.json" > "$OUT/java-sec-code.md"
+
 # vulnerable-node: only sast/seeds/, scored by the project's own sast/tests/score.js.
 cd "$WORK/vulnerable-node"
 printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
@@ -119,4 +129,4 @@ printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
 semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/seeds-semgrep.json" --quiet sast/seeds || true
 python3 "$HERE/seeds.py" "$WORK/vulnerable-node" "$OUT/seeds-larpcop.json" "$OUT/seeds-semgrep.json" > "$OUT/seeds.md"
 
-cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/dvpwa.md" "$OUT/dvws-node.md" "$OUT/govwa.md" "$OUT/railsgoat.md" "$OUT/owasp-benchmark.md" "$OUT/dvwa.md" "$OUT/juliet-cs.md" "$OUT/seeds.md"
+cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/dvpwa.md" "$OUT/dvws-node.md" "$OUT/govwa.md" "$OUT/railsgoat.md" "$OUT/owasp-benchmark.md" "$OUT/dvwa.md" "$OUT/juliet-cs.md" "$OUT/java-sec-code.md" "$OUT/seeds.md"

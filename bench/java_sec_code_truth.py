@@ -75,7 +75,7 @@ def main(root, out):
     missing = set(LABELS) - {(pathlib.Path(r["file"]).name, r["route"]) for r in rows}
     assert not missing, missing
     pathlib.Path(out).write_text(json.dumps(rows, indent=1) + "\n")
-    print(len(rows), "endpoints;", sum(r["vulnerable"] for r in rows), "vulnerable")
+    sys.stdout.write(f"{len(rows)} endpoints; {sum(r['vulnerable'] for r in rows)} vulnerable\n")
 
 
 if __name__ == "__main__":

@@ -31,4 +31,4 @@ def endpoints(path):
 if __name__ == "__main__":
     for f in sys.argv[1:]:
         for at, start, end, name, route in endpoints(pathlib.Path(f)):
-            print(f"{pathlib.Path(f).name}:{at}-{end} {name} {route}")
+            sys.stdout.write(f"{pathlib.Path(f).name}:{at}-{end} {name} {route}" + "\n")

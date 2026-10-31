@@ -3,6 +3,8 @@ file: src/T.java
 valid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    URL u = new URL(\"https://api.example.com/status\");\n\
   \    u.openStream();\n  }\n}\n"
+- "@RestController\nclass O {\n  @GetMapping(\"/owners\")\n  public List<Owner> list(@RequestParam int page, @RequestParam String name) {\n    Page<Owner> paginated = owners.findByName(name, PageRequest.of(page,\
+  \ 5));\n    return paginated.getContent();\n  }\n}\n"
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String target = request.getParameter(\"url\");\n    URL\
   \ u = new URL(target);\n    u.openStream();\n  }\n}\n"

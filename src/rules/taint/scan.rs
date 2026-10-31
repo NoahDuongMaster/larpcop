@@ -26,6 +26,8 @@ pub struct FileIndex<'a, D: Doc> {
     nodes: Vec<Node<'a, D>>,
     by_kind: HashMap<u16, Vec<usize>>,
     functions: OnceCell<Defs<'a, D>>,
+    /// The calls of the file with their callee name, computed once.
+    callees: OnceCell<Vec<(usize, String)>>,
     imports: OnceCell<Vec<Import>>,
     pub(super) skeletons: Skeletons<'a, D>,
 }
@@ -42,9 +44,25 @@ impl<'a, D: Doc> FileIndex<'a, D> {
             nodes,
             by_kind,
             functions: OnceCell::new(),
+            callees: OnceCell::new(),
             imports: OnceCell::new(),
             skeletons: Default::default(),
         }
+    }
+
+    /// The calls of the file and the names they call.
+    pub(super) fn callees(&self) -> impl Iterator<Item = (&Node<'a, D>, &str)> {
+        self.callees
+            .get_or_init(|| {
+                self.nodes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, n)| super::flow::CALLS.contains(&n.kind().as_ref()))
+                    .filter_map(|(i, n)| Some((i, summary::callee(n)?)))
+                    .collect()
+            })
+            .iter()
+            .map(|(i, c)| (&self.nodes[*i], c.as_str()))
     }
 
     /// Ranges of the calls whose called name (its last segment) matches.

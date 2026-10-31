@@ -37,6 +37,7 @@ pub struct TaintRule {
     exclude: globset::GlobSet,
     /// `sink_types`: metavariables whose type the project's language server must confirm.
     typed: typed::Typed,
+    responds: Option<responds::Responds>,
     /// Per language: (sources, sinks, sanitizers, guards), compiled for that grammar.
     langs: Vec<(SupportLang, scan::Indexed)>,
     root: PathBuf,
@@ -124,6 +125,11 @@ impl TaintRule {
                     out.push(self.violation(file, &arg, None))
                 }
                 Reached::Call(arg, into) => out.push(self.violation(file, &arg, Some(into))),
+                Reached::Responds(f, value)
+                    if self.responds.as_ref().is_some_and(|r| r.holds(&f, &value)) =>
+                {
+                    out.push(self.violation(file, &value, None))
+                }
                 Reached::Field(left) => {
                     if let Some(c) = class_of(&left) {
                         stored.entry(c).or_default().insert(left.text().to_string());
@@ -194,6 +200,7 @@ fn class_of<D: Doc>(n: &Node<D>) -> Option<(usize, usize)> {
 
 mod build;
 mod containers;
+mod declared;
 mod defs;
 mod destructure;
 mod events;
@@ -206,12 +213,15 @@ mod iteration;
 mod names;
 mod prefix;
 mod prepare;
+mod responds;
 mod returns;
 mod scan;
 pub use scan::FileIndex;
 mod summary;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_branches;
 #[cfg(test)]
 mod tests_calls;
 #[cfg(test)]
@@ -220,4 +230,8 @@ mod tests_csharp;
 mod tests_methods;
 #[cfg(test)]
 mod tests_ruby;
+#[cfg(test)]
+mod tests_validators;
 pub mod typed;
+mod validators;
+mod walk;

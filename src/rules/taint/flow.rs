@@ -2,11 +2,10 @@
 //! taint or clean names in source order; sinks, calls and returns are judged
 //! with the state at that point.
 
-use super::containers::filled;
-use super::events::{Event, Hits};
+use super::NAMES;
+use super::events::Hits;
 use super::fields::is_field;
 use super::summary::{Summaries, args, callee};
-use super::{NAMES, VARIABLES, destructure};
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
@@ -58,14 +57,16 @@ pub(super) enum Reached<'a, D: Doc> {
     /// Tainted argument into a function that sinks that parameter; where it ends up.
     Call(Node<'a, D>, String),
     /// A tainted value is returned.
-    Return,
+    Return(Node<'a, D>),
+    /// A function nested in the walked scope returns a tainted value.
+    Responds(Node<'a, D>, Node<'a, D>),
     /// A tainted value is stored in a field of the object (`this.x`, `self.x`),
     /// which the other methods of its class read.
     Field(Node<'a, D>),
 }
 
 /// What a walk of one scope found, before its nested functions are walked.
-enum Seen<'a, D: Doc> {
+pub(super) enum Seen<'a, D: Doc> {
     Reached(Reached<'a, D>),
     /// A nested function (callback, closure) and the tainted names it captures.
     Nested(Node<'a, D>, HashSet<String>),
@@ -81,6 +82,8 @@ pub(super) struct Ctx {
     pub sourcing: std::cell::OnceCell<bool>,
     /// Ruby: a bare name may call a method (`custom_fields`).
     pub bare_calls: bool,
+    /// The rule's `safe_prefix`: a name that starts safely stays clean through `+=`.
+    pub safe_prefix: Option<regex::Regex>,
 }
 
 fn within(r: &Range<usize>, outer: &Range<usize>) -> bool {
@@ -186,99 +189,10 @@ impl Ctx {
                 .collect();
             names.extend(own(&f));
             // A nested function's `return` is not this scope's.
-            self.run(&f, names, hits, own, &mut |reached| {
-                if !matches!(reached, Reached::Return) {
-                    on(reached)
-                }
+            self.run(&f, names, hits, own, &mut |reached| match reached {
+                Reached::Return(value) => on(Reached::Responds(f.clone(), value)),
+                other => on(other),
             });
-        }
-    }
-
-    fn run_scope<'a, D: Doc>(
-        &self,
-        scope: &Node<'a, D>,
-        mut names: HashSet<String>,
-        hits: &Hits<'a, D>,
-        on: &mut impl FnMut(Seen<'a, D>),
-    ) {
-        let events = hits.events(scope, &self.guards);
-        let mut cleaned: Vec<Vec<String>> = Vec::new();
-        // Names a branch cleaned, tainted again where the branch ends.
-        let mut until: Vec<(usize, String)> = Vec::new();
-        for (at, e) in events.iter() {
-            until.retain(|(end, name)| {
-                let over = *end <= *at;
-                if over {
-                    names.insert(name.clone());
-                }
-                !over
-            });
-            match e {
-                Event::Clean(guarded) => names.retain(|n| !guarded.contains(n)),
-                Event::Enter(guarded) => {
-                    let was: Vec<String> = guarded
-                        .iter()
-                        .filter(|g| names.remove(*g))
-                        .cloned()
-                        .collect();
-                    cleaned.push(was);
-                }
-                Event::Restore => names.extend(cleaned.pop().unwrap_or_default()),
-                Event::Assign(left, right, branch, true) => {
-                    if self.tainted(right, &names) {
-                        names.insert(left.text().to_string());
-                        on(Seen::Reached(Reached::Field(left.clone())));
-                    } else if names.remove(left.text().as_ref())
-                        && let Some(end) = branch
-                    {
-                        until.push((*end, left.text().to_string()));
-                    }
-                }
-                Event::Assign(left, right, branch, false) => {
-                    let tainted = self.tainted(right, &names);
-                    for v in left
-                        .dfs()
-                        .filter(|n| VARIABLES.contains(&n.kind().as_ref()))
-                    {
-                        if tainted {
-                            names.insert(v.text().to_string());
-                        } else if NAMES.contains(&left.kind().as_ref())
-                            && names.remove(v.text().as_ref())
-                            && let Some(end) = branch
-                        {
-                            until.push((*end, v.text().to_string()));
-                        }
-                    }
-                    if !tainted && right.kind() == "identifier" {
-                        let object = right.text();
-                        names.extend(destructure::from_object(left, &object, &self.source_texts));
-                    }
-                }
-                Event::Sink(arg, typed) if self.tainted(arg, &names) => {
-                    on(Seen::Reached(Reached::Sink(arg.clone(), typed.clone())))
-                }
-                Event::Nested(f) => on(Seen::Nested(f.clone(), names.clone())),
-                Event::Call(call) => {
-                    // `list.push(x)`, `map.set(k, x)`, `Object.assign(o, x)`: the
-                    // container now holds what was put in.
-                    if let Some(container) = filled(call)
-                        && args(call).iter().any(|a| self.tainted(a, &names))
-                    {
-                        names.insert(container);
-                    }
-                    let Some(s) = self.summary(call) else {
-                        continue;
-                    };
-                    let args = args(call);
-                    for (i, into) in &s.sinks {
-                        if let Some(a) = args.get(*i).filter(|a| self.tainted(a, &names)) {
-                            on(Seen::Reached(Reached::Call(a.clone(), into.clone())));
-                        }
-                    }
-                }
-                Event::Return(r) if self.tainted(r, &names) => on(Seen::Reached(Reached::Return)),
-                _ => {}
-            }
         }
     }
 }

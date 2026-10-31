@@ -17,9 +17,16 @@ pub enum FlowRule {
 
 impl FlowRule {
     pub fn taint(cfg: &TaintConfig, root: &Path) -> Result<Self> {
+        // Declared types decide `sink_types` here; no language server is started.
+        let typed = Typed::new(
+            &cfg.id,
+            &cfg.sink_types,
+            root.to_path_buf(),
+            Default::default(),
+        )?;
         Ok(Self::Taint(Box::new(TaintRule::new(
             cfg,
-            Typed::default(),
+            typed,
             root.to_path_buf(),
         )?)))
     }

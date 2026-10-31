@@ -1,0 +1,20 @@
+id: java-no-jackson-default-typing
+file: src/J.java
+valid:
+- "class J {\n  ObjectMapper m() {\n    ObjectMapper m = new ObjectMapper();\n    m.activateDefaultTyping(BasicPolymorphicTypeValidator.builder().allowIfBaseType(Animal.class).build());\n    return m;\n\
+  \  }\n}\n"
+- '@JsonTypeInfo(use = JsonTypeInfo.Id.NAME)
+
+  class Animal {}
+
+  '
+- "class S {\n  void m(ObjectMapper mapper) {\n    SecurityJackson2Modules.enableDefaultTyping(mapper);\n  }\n}\n"
+- '@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS)
+
+  abstract class UserMixin {}
+
+  '
+invalid:
+- "class J {\n  ObjectMapper m() {\n    ObjectMapper m = new ObjectMapper();\n    m.enableDefaultTyping();\n    return m;\n  }\n}\n"
+- "class J {\n  void m(ObjectMapper m) {\n    m.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, ObjectMapper.DefaultTyping.NON_FINAL);\n  }\n}\n"
+- "class Holder {\n  @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS)\n  Object value;\n}\n"

@@ -18,6 +18,8 @@ pub struct Summary {
     pub sinks: Vec<(usize, String)>,
     pub returns: BTreeSet<usize>,
     pub returns_source: bool,
+    /// Parameters it validates: it fails (null, false) unless they pass a guard.
+    pub validates: BTreeSet<usize>,
 }
 
 /// Callee as written (`f`, `db.run`, `utils.clean`) → its summary.
@@ -136,7 +138,7 @@ impl TaintRule {
         let mut out = known.clone();
         for _ in 0..ROUNDS {
             let before = out.clone();
-            let round = Ctx {
+            let mut round = Ctx {
                 sources: ctx.sources.clone(),
                 sanitizers: ctx.sanitizers.clone(),
                 guards: ctx.guards.clone(),
@@ -144,7 +146,10 @@ impl TaintRule {
                 source_texts: ctx.source_texts.clone(),
                 sourcing: Default::default(),
                 bare_calls: ctx.bare_calls,
+                safe_prefix: ctx.safe_prefix.clone(),
             };
+            let validating = super::validators::calls(index, &round);
+            round.guards.extend(validating);
             let params_only = round.clone_without_sources();
             for (name, f, params) in defs {
                 let mut s = Summary::default();
@@ -157,14 +162,15 @@ impl TaintRule {
                             }
                         }
                         Reached::Call(_, into) => s.sinks.push((i, format!("`{name}` → {into}"))),
-                        Reached::Return => {
+                        Reached::Return(_) => {
                             s.returns.insert(i);
                         }
-                        Reached::Field(_) => {}
+                        Reached::Field(_) | Reached::Responds(..) => {}
                     });
                 }
+                s.validates = super::validators::validated(f, params, &round.guards);
                 round.run(f, own(f), hits, &own, &mut |r| {
-                    if let Reached::Return = r {
+                    if let Reached::Return(_) = r {
                         s.returns_source = true;
                     }
                 });
@@ -209,6 +215,7 @@ impl Ctx {
             source_texts: Vec::new(),
             sourcing: Default::default(),
             bare_calls: self.bare_calls,
+            safe_prefix: self.safe_prefix.clone(),
         }
     }
 }

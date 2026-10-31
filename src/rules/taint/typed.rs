@@ -1,7 +1,8 @@
-//! `sink_types`: a sink only counts when the project's language server says a
-//! metavariable has the expected type, e.g. `DB: "Pool|PoolClient"` keeps
-//! `pool.query(sql)` and drops `list.query(x)`. No server, no answer: the
-//! syntactic finding stands.
+//! `sink_types`: a sink only counts when a metavariable has the expected type,
+//! e.g. `DB: "Pool|PoolClient"` keeps `pool.query(sql)` and drops
+//! `list.query(x)`. The type a name is declared with in the source decides
+//! (`Yaml y = …`, `db: Pool`); otherwise the project's language server is
+//! asked. No declaration and no server: the syntactic finding stands.
 
 use crate::files::SourceFile;
 use anyhow::{Context, Result};
@@ -54,7 +55,8 @@ impl Typed {
             .collect()
     }
 
-    /// False only when a language server answered with a type that does not match.
+    /// False only when the declared type, or else a language server's answer,
+    /// does not match.
     pub(super) fn holds<D: Doc>(
         &self,
         lang: SupportLang,
@@ -62,6 +64,9 @@ impl Typed {
         nodes: &[(usize, Node<D>)],
     ) -> bool {
         nodes.iter().all(|(i, node)| {
+            if let Some(declared) = super::declared::declared_type(node) {
+                return self.constraints[*i].1.is_match(&declared);
+            }
             let pos = node.start_pos();
             let at = (pos.line(), pos.column(node));
             let answer = crate::types::hover(

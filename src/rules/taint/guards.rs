@@ -80,6 +80,9 @@ pub(super) type Check = (Range<usize>, bool, usize);
 pub(super) enum Guard {
     After(usize, HashSet<String>),
     Within(Range<usize>, HashSet<String>),
+    /// Safe where the `if` is not taken: a clean value the branch assigns
+    /// them is clean after it too (`if (!ok(x)) { x = fallback; }`).
+    Settle(Range<usize>, HashSet<String>),
 }
 
 /// The guards an `if` node sets up.
@@ -104,6 +107,8 @@ pub(super) fn of<D: Doc>(n: &Node<D>, checks: &[Check]) -> Vec<Guard> {
     let otherwise = n.field("alternative");
     if exits(&then) && !fails.is_empty() {
         out.push(Guard::After(n.range().end, fails.clone()));
+    } else if otherwise.is_none() && !fails.is_empty() {
+        out.push(Guard::Settle(n.range(), fails.clone()));
     }
     if let Some(alt) = &otherwise
         && !matches!(
@@ -130,7 +135,7 @@ pub(super) fn of<D: Doc>(n: &Node<D>, checks: &[Check]) -> Vec<Guard> {
 type Sets = (HashSet<String>, HashSet<String>);
 
 /// Names safe when `n` is true, and names safe when it is false.
-fn safe<D: Doc>(n: &Node<D>, checks: &[Check]) -> Sets {
+pub(super) fn safe<D: Doc>(n: &Node<D>, checks: &[Check]) -> Sets {
     let range = n.range();
     // Of a guard and a reject matching the same node (`$A.includes($B)`,
     // `$P.includes("$S")`), the more specific pattern wins; a tie rejects.
@@ -161,7 +166,12 @@ fn safe<D: Doc>(n: &Node<D>, checks: &[Check]) -> Sets {
             .unwrap_or_default();
     }
     if BINARIES.contains(&kind.as_ref())
-        && let (Some(l), Some(r)) = (n.field("left"), n.field("right"))
+        && let (Some(l), Some(r)) = (
+            n.field("left").or_else(|| named.first().cloned()),
+            n.field("right").or_else(|| named.get(1).cloned()),
+        )
+        // Python's comparison_operator names no operands: `a != b`, two children.
+        && (n.field("left").is_some() || named.len() == 2)
     {
         return binary(&operator(n, &l, &r), &l, &r, checks);
     }
@@ -191,7 +201,7 @@ fn binary<'a, D: Doc>(op: &str, l: &Node<'a, D>, r: &Node<'a, D>, checks: &[Chec
             };
             let negative = matches!(
                 constant.as_str(),
-                "false" | "False" | "-1" | "null" | "nil" | "None"
+                "false" | "False" | "-1" | "null" | "nil" | "None" | "\"\"" | "''"
             );
             let flip = match op {
                 "==" | "===" | "is" => negative,
@@ -216,7 +226,7 @@ fn operator<'a, D: Doc>(n: &Node<'a, D>, l: &Node<'a, D>, r: &Node<'a, D>) -> St
 fn is_constant<D: Doc>(n: &Node<D>) -> bool {
     matches!(
         n.text().as_ref(),
-        "true" | "false" | "True" | "False" | "null" | "nil" | "None" | "-1" | "0"
+        "true" | "false" | "True" | "False" | "null" | "nil" | "None" | "-1" | "0" | "\"\"" | "''"
     )
 }
 

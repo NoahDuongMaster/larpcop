@@ -2,6 +2,10 @@ id: java-taint-redirect
 valid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    response.sendRedirect(\"/account/\" + request.getParameter(\"\
   tab\"));\n  }\n}\n"
+- "@Controller\npublic class R {\n  @GetMapping(\"/r\")\n  public String r(@RequestParam String url, HttpServletResponse response) {\n    return \"redirect:/home\";\n  }\n}\n"
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String next = request.getParameter(\"next\");\n    response.sendRedirect(next);\n\
   \  }\n}\n"
+- "@Controller\npublic class R {\n  @GetMapping(\"/r\")\n  public String r(@RequestParam String url, HttpServletResponse response) {\n    return \"redirect:\" + url;\n  }\n}\n"
+- "@Controller\npublic class R {\n  @GetMapping(\"/r\")\n  public String r(@RequestParam String url, HttpServletResponse response) {\n    response.setHeader(\"Location\", url);\n    return null;\n  }\n\
+  }\n"

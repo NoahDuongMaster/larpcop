@@ -48,6 +48,15 @@ impl TaintRule {
         let ranges = |ms: Vec<NodeMatch<'a, D>>| -> Vec<Range<usize>> {
             ms.iter().map(|m| m.range()).collect()
         };
+        let cleaned: Vec<Range<usize>> = ranges(sanitizers)
+            .into_iter()
+            .chain(
+                self.sanitizer_names
+                    .as_ref()
+                    .map(|re| index.calls_named(re))
+                    .unwrap_or_default(),
+            )
+            .collect();
         let mut hits: Vec<Hit<_>> = Vec::new();
         {
             // A source expression is not a sink call: gin's `c.Query("q")`
@@ -82,6 +91,16 @@ impl TaintRule {
                 if fixed.is_some_and(|(re, start)| re.is_match(&start)) {
                     continue;
                 }
+                // `reverse(…) + "?q=" + q`: starts with a URL the app builds.
+                let first = prefix::leftmost(&node).range();
+                if self.safe_prefix.is_some()
+                    && first != node.range()
+                    && cleaned
+                        .iter()
+                        .any(|s| s.start <= first.start && first.end <= s.end)
+                {
+                    continue;
+                }
                 let typed = self.typed.metavariables(m.get_env());
                 hits.push((m.range().start, node, typed));
             }
@@ -95,15 +114,7 @@ impl TaintRule {
                 .into_iter()
                 .chain(index.named(&self.source_names))
                 .collect(),
-            sanitizers: ranges(sanitizers)
-                .into_iter()
-                .chain(
-                    self.sanitizer_names
-                        .as_ref()
-                        .map(|re| index.calls_named(re))
-                        .unwrap_or_default(),
-                )
-                .collect(),
+            sanitizers: cleaned,
             guards: guards
                 .iter()
                 .filter(|(m, _)| prefix::guard_holds(m.get_node(), self.safe_prefix.as_ref()))
@@ -114,6 +125,7 @@ impl TaintRule {
             source_texts: self.source_texts.clone(),
             sourcing: Default::default(),
             bare_calls: lang == SupportLang::Ruby,
+            safe_prefix: self.safe_prefix.clone(),
         };
         let known = summary::with_unique_methods(self.imported_summaries(lang, index, file, depth));
         // The file being checked (not an import, whose callers need its
@@ -137,14 +149,14 @@ impl TaintRule {
                 index.functions().iter().map(|(n, ..)| n.as_str()).collect();
             summaries.retain(|name, _| own.contains(name.as_str()));
         }
-        Some((
-            Ctx {
-                summaries: summary::with_unique_methods(summaries),
-                sourcing: Default::default(),
-                ..base
-            },
-            hits,
-        ))
+        let mut ctx = Ctx {
+            summaries: summary::with_unique_methods(summaries),
+            sourcing: Default::default(),
+            ..base
+        };
+        let validating = super::validators::calls(index, &ctx);
+        ctx.guards.extend(validating);
+        Some((ctx, hits))
     }
 
     /// Summaries of what `root` imports, keyed the way calls name them here.

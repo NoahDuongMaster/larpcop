@@ -39,6 +39,17 @@ pub(super) fn leading<D: Doc>(node: &Node<D>) -> Option<String> {
     }
 }
 
+/// The first operand of a built value: `reverse(…)` in `reverse(…) + "?q=" + q`.
+pub(super) fn leftmost<'a, D: Doc>(node: &Node<'a, D>) -> Node<'a, D> {
+    let inner = match node.kind().as_ref() {
+        "binary_expression" | "binary_operator" => node.field("left"),
+        "parenthesized_expression" => node.child(1),
+        "argument" => node.children().filter(|c| c.is_named()).last(),
+        _ => None,
+    };
+    inner.map_or_else(|| node.clone(), |n| leftmost(&n))
+}
+
 /// A guard `x.startsWith("<literal>")` only proves anything when the literal
 /// is (the beginning of) a safe start: `startsWith("/")` keeps a redirect on
 /// the site, `startsWith("http")` does not. Other guards are kept as they are.

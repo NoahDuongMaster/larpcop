@@ -2,12 +2,14 @@
 
 mod fetch;
 mod model;
+mod taint;
 
 pub use fetch::cache_root;
 pub use model::{
     DependenciesConfig, ExtendSpec, LinterConfig, LlmCommand, LlmConfig, LlmRule, MaxLinesConfig,
-    MetricsConfig, RawConfig, SecretsConfig, TaintConfig, TextRuleConfig,
+    MetricsConfig, RawConfig, SecretsConfig, TextRuleConfig,
 };
+pub use taint::{ResponseReturns, TaintConfig};
 
 use anyhow::{Context, Result, bail};
 use std::collections::{BTreeMap, BTreeSet, HashSet};

@@ -42,7 +42,7 @@ pub(super) fn imports<D: Doc>(root: &Node<D>, file: &Path) -> Vec<Import> {
     out
 }
 
-fn listing(dir: &Path, ext: &str) -> Listing {
+pub(super) fn listing(dir: &Path, ext: &str) -> Listing {
     let key = dir.join(format!("*.{ext}"));
     if let Some(known) = DIRS.lock().ok().and_then(|d| d.get(&key).cloned()) {
         return known;

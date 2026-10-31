@@ -5,8 +5,16 @@ valid:
   \ view():\n    return redirect(url_for(\"profile\", user=request.args[\"u\"]))\n"
 - "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
   \ view():\n    return redirect(\"/items/\" + request.args[\"id\"])\n"
+- "from flask import Flask, request, redirect, url_for\nfrom urllib.parse import urlsplit\napp = Flask(__name__)\n\n@app.route('/login')\ndef login():\n    next_page = request.args.get('next')\n    if not\
+  \ next_page or urlsplit(next_page).netloc != '':\n        next_page = url_for('index')\n    return redirect(next_page)\n"
+- "from flask import Flask, request, redirect, url_for\nfrom urllib.parse import urlsplit\napp = Flask(__name__)\n\n@app.route('/login')\ndef login():\n    url = url_for('search')\n    q = request.args.get('q')\n\
+  \    if q:\n        url += '?q=%s' % q\n    return redirect(url)\n"
 invalid:
 - "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
   \ view():\n    return redirect(request.args.get(\"next\"))\n"
 - "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
   \ view():\n    target = request.form[\"return_to\"]\n    return redirect(target, code=302)\n"
+- "from flask import Flask, request, redirect, url_for\nfrom urllib.parse import urlsplit\napp = Flask(__name__)\n\n@app.route('/login')\ndef login():\n    next_page = request.args.get('next')\n    if not\
+  \ next_page:\n        next_page = url_for('index')\n    return redirect(next_page)\n"
+- "from flask import Flask, request, redirect, url_for\nfrom urllib.parse import urlsplit\napp = Flask(__name__)\n\n@app.route('/login')\ndef login():\n    url = ''\n    url += request.args.get('to')\n\
+  \    return redirect(url)\n"

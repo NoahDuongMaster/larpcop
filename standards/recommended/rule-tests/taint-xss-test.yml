@@ -9,6 +9,11 @@ valid:
 - 'app.get(''/l'', (req, res) => res.type(''html'').send(req.query.items.map(i => escapeHtml(i)).join('''')));
 
   '
+- 'const esc = (s) => s.replace(/&/g, ''&amp;'').replace(/</g, ''&lt;'');
+
+  app.get(''/e'', (req, res) => res.send(''<p>'' + esc(req.query.q) + ''</p>''));
+
+  '
 invalid:
 - app.get('/a', (req, res) => res.type("text/html").send(req.query.f));
 - app.get('/g', (req, res) => { const name = req.query.name || 'guest'; res.send('<h1>Hello ' + name + '</h1>'); });

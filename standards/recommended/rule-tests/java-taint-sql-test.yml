@@ -6,9 +6,13 @@ valid:
   \    stmt.executeQuery(\"SELECT * FROM users WHERE id = \" + id);\n  }\n}\n"
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    MessageDigest md = MessageDigest.getInstance(\"SHA-256\"\
   );\n    md.update(request.getParameter(\"p\").getBytes());\n  }\n}\n"
+- "@RestController\npublic class P {\n  @GetMapping(\"/p\")\n  public List<P> p(@RequestParam String sort) {\n    PExample e = new PExample();\n    e.setOrderByClause(\"id desc\");\n    return mapper.selectByExample(e);\n\
+  \  }\n}\n"
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String name = request.getParameter(\"name\");\n    String\
   \ sql = \"SELECT * FROM users WHERE name = '\" + name + \"'\";\n    statement.executeQuery(sql);\n  }\n}\n"
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String id = request.getHeader(\"X-Id\");\n    jdbcTemplate.queryForList(\"\
   SELECT * FROM t WHERE id = \" + id);\n  }\n}\n"
 - "@RestController\nclass C {\n  @GetMapping(\"/u\")\n  List<User> find(@RequestParam String name) {\n    return em.createQuery(\"from User where name = '\" + name + \"'\").getResultList();\n  }\n}\n"
+- "@RestController\npublic class P {\n  @GetMapping(\"/p\")\n  public List<P> p(@RequestParam String sort) {\n    PExample e = new PExample();\n    e.setOrderByClause(sort);\n    return mapper.selectByExample(e);\n\
+  \  }\n}\n"

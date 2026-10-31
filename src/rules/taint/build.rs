@@ -74,6 +74,11 @@ impl TaintRule {
                 .transpose()
                 .with_context(|| format!("taint `{}`: handler_decorators", cfg.id))?,
             typed,
+            responds: cfg
+                .response_returns
+                .as_ref()
+                .map(|r| super::responds::Responds::new(&cfg.id, r))
+                .transpose()?,
             langs,
             root,
             imported: Mutex::default(),

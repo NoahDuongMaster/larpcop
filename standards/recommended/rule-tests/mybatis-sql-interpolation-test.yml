@@ -1,0 +1,11 @@
+id: mybatis-sql-interpolation
+file: src/main/resources/mapper/UserMapper.xml
+valid:
+- "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<mapper namespace=\"a.UserMapper\">\n  <select id=\"byName\" resultType=\"User\">select * from users where name = #{name}</select>\n</mapper>\n"
+- "<configuration>\n  <properties>\n    <property name=\"url\" value=\"${jdbc.url}\"/>\n  </properties>\n</configuration>\n"
+- "<mapper namespace=\"a.UserMapper\">\n  <sql id=\"Example_Where_Clause\">\n    <where>\n      and ${criterion.condition} #{criterion.value}\n    </where>\n  </sql>\n  <select id=\"selectByExample\">select\
+  \ * from users <if test=\"orderByClause != null\">order by ${orderByClause}</if></select>\n</mapper>\n"
+invalid:
+- "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<mapper namespace=\"a.UserMapper\">\n  <select id=\"byName\" resultType=\"User\">select * from users where name = '${name}'</select>\n</mapper>\n"
+- "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<mapper namespace=\"a.UserMapper\">\n  <select id=\"list\" resultType=\"User\">\n    select * from users order by ${column}\n  </select>\n</mapper>\n"
+- "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<mapper namespace=\"a.UserMapper\">\n  <select id=\"find\">select * from users where name like '%${q}%'</select>\n</mapper>\n"

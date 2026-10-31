@@ -1,0 +1,7 @@
+id: java-no-mybatis-sql-interpolation
+file: src/UserMapper.java
+valid:
+- "interface UserMapper {\n  @Select(\"select * from users where name = #{name}\")\n  List<User> byName(@Param(\"name\") String name);\n}\n"
+invalid:
+- "interface UserMapper {\n  @Select(\"select * from users where name = '${name}'\")\n  List<User> byName(@Param(\"name\") String name);\n}\n"
+- "interface UserMapper {\n  @Select({\"select * from users\", \"order by ${col}\"})\n  List<User> sorted(@Param(\"col\") String col);\n}\n"

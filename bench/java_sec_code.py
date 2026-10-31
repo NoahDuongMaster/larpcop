@@ -36,7 +36,7 @@ def findings(path, repo):
     for v in data.get("violations", []):
         out.append((v["file"], v["line"], category(v["rule"])))
     for r in data.get("results", []):
-        f = str(pathlib.Path(r["path"]).resolve().relative_to(pathlib.Path(repo).resolve()))
+        f = str((pathlib.Path(repo) / r["path"]).resolve().relative_to(pathlib.Path(repo).resolve()))
         out.append((f, r["start"]["line"], category(r["check_id"])))
     return out
 
@@ -44,8 +44,8 @@ def findings(path, repo):
 def main(truth, repo, runs):
     rows = json.loads(pathlib.Path(truth).read_text())
     cats = sorted({r["category"] for r in rows})
-    print("| category (vuln/safe) | " + " | ".join(n for n, _ in runs) + " |")
-    print("|---|" + "---|" * len(runs))
+    sys.stdout.write("| category (vuln/safe) | " + " | ".join(n for n, _ in runs) + " |" + "\n")
+    sys.stdout.write("|---|" + "---|" * len(runs) + "\n")
     totals = {n: [0, 0, 0, 0] for n, _ in runs}
     scores = {n: [] for n, _ in runs}
     hits = {n: findings(p, repo) for n, p in runs}
@@ -66,11 +66,11 @@ def main(truth, repo, runs):
             fpr = fp / neg if neg else 0
             scores[n].append(tpr - fpr)
             cells.append(f"{tp}/{pos} TP, {fp}/{neg} FP ({(tpr - fpr) * 100:+.0f}%)")
-        print(f"| {c} ({pos}/{neg}) | " + " | ".join(cells) + " |")
+        sys.stdout.write(f"| {c} ({pos}/{neg}) | " + " | ".join(cells) + " |" + "\n")
     avg = [f"**{sum(s) / len(s) * 100:+.1f}%**" for s in scores.values()]
-    print("| **average** | " + " | ".join(avg) + " |")
+    sys.stdout.write("| **average** | " + " | ".join(avg) + " |" + "\n")
     tot = [f"{t[0]}/{t[0] + t[1]} TP, {t[2]}/{t[2] + t[3]} FP" for t in totals.values()]
-    print("| **total** | " + " | ".join(tot) + " |")
+    sys.stdout.write("| **total** | " + " | ".join(tot) + " |" + "\n")
 
 
 if __name__ == "__main__":

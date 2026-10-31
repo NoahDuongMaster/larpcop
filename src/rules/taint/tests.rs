@@ -31,6 +31,7 @@ fn rule(
             resolver_args: false,
             exclude: Default::default(),
             sink_types: Default::default(),
+            response_returns: None,
         },
         typed::Typed::default(),
         std::env::temp_dir(),

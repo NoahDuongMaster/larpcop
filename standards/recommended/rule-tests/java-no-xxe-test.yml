@@ -1,0 +1,19 @@
+id: java-no-xxe
+file: src/Parse.java
+valid:
+- "class Parse {\n  Document read(InputStream in) throws Exception {\n    DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();\n    f.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\"\
+  , true);\n    return f.newDocumentBuilder().parse(in);\n  }\n}\n"
+- "class Parse {\n  void read(InputStream in) throws Exception {\n    XMLInputFactory f = XMLInputFactory.newInstance();\n    f.setProperty(XMLInputFactory.SUPPORT_DTD, false);\n    f.createXMLStreamReader(in);\n\
+  \  }\n}\n"
+- "class Parse {\n  private final SAXParserFactory factory = SAXParserFactory.newInstance();\n  Parse() throws Exception {\n    factory.setFeature(\"http://xml.org/sax/features/external-general-entities\"\
+  , false);\n    factory.setFeature(\"http://xml.org/sax/features/external-parameter-entities\", false);\n  }\n}\n"
+- "class Parse {\n  void transform(Source s, Result r) throws Exception {\n    TransformerFactory tf = TransformerFactory.newInstance();\n    tf.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, \"\");\n \
+  \   tf.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, \"\");\n    tf.newTransformer().transform(s, r);\n  }\n}\n"
+invalid:
+- "class Parse {\n  Document read(InputStream in) throws Exception {\n    DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();\n    return f.newDocumentBuilder().parse(in);\n  }\n}\n"
+- "class Parse {\n  Document read(String xml) throws Exception {\n    SAXReader reader = new SAXReader();\n    return reader.read(new StringReader(xml));\n  }\n}\n"
+- "class Parse {\n  void read(InputSource in) throws Exception {\n    XMLReader r = SAXParserFactory.newInstance().newSAXParser().getXMLReader();\n    r.parse(in);\n  }\n}\n"
+- "class Parse {\n  Document safe(InputStream in) throws Exception {\n    DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();\n    f.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\"\
+  , true);\n    return f.newDocumentBuilder().parse(in);\n  }\n  Document unsafe(InputStream in) throws Exception {\n    return DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);\n  }\n\
+  }\n"
+- "class Parse {\n  Document read(String xml) throws Exception {\n    return DocumentHelper.parseText(xml);\n  }\n}\n"

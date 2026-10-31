@@ -32,6 +32,8 @@ pub(super) enum Event<'a, D: Doc> {
     /// Names clean until the matching `Restore`.
     Enter(HashSet<String>),
     Restore,
+    /// Names whose clean value from the `if` ending there outlives it.
+    Settle(usize, HashSet<String>),
 }
 
 /// A scope's events, by position.
@@ -62,7 +64,8 @@ pub(super) struct Hits<'a, D: Doc> {
     /// Scope → its sinks (indexes into `list`).
     by_scope: HashMap<Key, Vec<usize>>,
     skeletons: Skeletons<'a, D>,
-    events: RefCell<HashMap<Key, Events<'a, D>>>,
+    /// By scope and number of guard matches (validators add some once known).
+    events: RefCell<HashMap<(Key, usize), Events<'a, D>>>,
 }
 
 fn key<D: Doc>(n: &Node<D>) -> Key {
@@ -88,11 +91,12 @@ impl<'a, D: Doc> Hits<'a, D> {
     }
 
     pub fn events(&self, scope: &Node<'a, D>, guards: &[Check]) -> Events<'a, D> {
-        if let Some(known) = self.events.borrow().get(&key(scope)) {
+        let at = (key(scope), guards.len());
+        if let Some(known) = self.events.borrow().get(&at) {
             return known.clone();
         }
         let built = Rc::new(self.build(scope, guards));
-        self.events.borrow_mut().insert(key(scope), built.clone());
+        self.events.borrow_mut().insert(at, built.clone());
         built
     }
 
@@ -119,6 +123,9 @@ impl<'a, D: Doc> Hits<'a, D> {
                     for guard in super::guards::of(n, guards) {
                         match guard {
                             Guard::After(at, names) => events.push((at, Event::Clean(names))),
+                            Guard::Settle(r, names) => {
+                                events.push((r.start, Event::Settle(r.end, names)))
+                            }
                             Guard::Within(r, names) => {
                                 events.push((r.start, Event::Enter(names)));
                                 events.push((r.end, Event::Restore));

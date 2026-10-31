@@ -45,6 +45,7 @@ pub(super) fn guarded(
             resolver_args: false,
             exclude: Default::default(),
             sink_types: Default::default(),
+            response_returns: None,
         },
         typed::Typed::default(),
         root.to_path_buf(),

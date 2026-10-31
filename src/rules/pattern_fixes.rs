@@ -31,6 +31,17 @@ pub fn variants(p: &str) -> Vec<String> {
     out
 }
 
+/// `p`, plus `x += v` for an assignment pattern `x = v`: appending to
+/// `cmd.CommandText` sets it as much as assigning it.
+pub fn compound(p: String) -> Vec<String> {
+    static ASSIGN: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"^([^=!<>]+?)\s=\s([^=>].*)$").expect("static regex"));
+    let extra = ASSIGN
+        .captures(&p)
+        .map(|c| format!("{} += {}", &c[1], &c[2]));
+    std::iter::once(p).chain(extra).collect()
+}
+
 /// `(context, selector)` for a Go pattern that does not parse on its own.
 pub fn context(p: &str) -> Option<(String, String)> {
     let lang = SupportLang::Go;

@@ -4,6 +4,7 @@
 //! rule; a rule adds its guards and sinks, once per scope however many
 //! parameters, summary rounds or callers ask about it.
 
+use super::fields::{class_field, is_field};
 use super::flow::{ASSIGNMENTS, CALLS, LOOPS, enclosing};
 use super::guards::{Check, Guard};
 use crate::rules::complexity::is_function;
@@ -18,8 +19,10 @@ pub(super) type Hit<'a, D> = (usize, Node<'a, D>, Vec<(usize, Node<'a, D>)>);
 pub(super) enum Event<'a, D: Doc> {
     /// Target, value, and for an assignment that runs on some paths only (in
     /// a branch, loop or `try`), where that construct ends: a clean value
-    /// cleans the name up to there, after which it is tainted again.
-    Assign(Node<'a, D>, Node<'a, D>, Option<usize>),
+    /// cleans the name up to there, after which it is tainted again. Last,
+    /// whether the target is a field of the object (`this.x`, a Java/C#
+    /// class field).
+    Assign(Node<'a, D>, Node<'a, D>, Option<usize>, bool),
     Sink(Node<'a, D>, Vec<(usize, Node<'a, D>)>),
     Call(Node<'a, D>),
     Return(Node<'a, D>),
@@ -39,7 +42,9 @@ type Key = (usize, usize);
 /// What a scope holds whatever the rule, in walk order: `If` stands where the
 /// guard events of an `if` go once a rule's guards are known.
 pub(super) enum Shape<'a, D: Doc> {
-    Assign(Node<'a, D>, Node<'a, D>, Option<usize>),
+    /// As `Event::Assign`; whether the target is a field is worked out once
+    /// per file here, it is costly.
+    Assign(Node<'a, D>, Node<'a, D>, Option<usize>, bool),
     Call(Node<'a, D>),
     Return(Node<'a, D>),
     Nested(Node<'a, D>),
@@ -106,7 +111,7 @@ impl<'a, D: Doc> Hits<'a, D> {
         let mut events: Vec<(usize, Event<D>)> = Vec::new();
         for (at, shape) in self.skeleton(scope).iter() {
             let event = match shape {
-                Shape::Assign(l, r, c) => Event::Assign(l.clone(), r.clone(), *c),
+                Shape::Assign(l, r, c, f) => Event::Assign(l.clone(), r.clone(), *c, *f),
                 Shape::Call(n) => Event::Call(n.clone()),
                 Shape::Return(n) => Event::Return(n.clone()),
                 Shape::Nested(n) => Event::Nested(n.clone()),
@@ -154,12 +159,20 @@ fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
                     .last()
             })
         {
+            // `x += v` adds to `x`: a clean `v` cleans `x` up to the
+            // assignment's own end, that is not at all.
+            let conditional = if compound(n, &left, &right) {
+                Some(n.range().end)
+            } else {
+                conditional
+            };
             let at = if LOOPS.contains(&kind.as_ref()) {
                 right.range().end
             } else {
                 n.range().end
             };
-            out.push((at, Shape::Assign(left, right, conditional)));
+            let field = is_field(&left) || class_field(&left);
+            out.push((at, Shape::Assign(left, right, conditional, field)));
         } else if CALLS.contains(&kind.as_ref()) {
             out.push((n.range().start, Shape::Call(n.clone())));
         } else if matches!(kind.as_ref(), "return_statement" | "return_expression") {
@@ -224,4 +237,26 @@ fn walk<'a, D: Doc>(
             walk(&c, inside, f);
         }
     }
+}
+
+/// `x += v`, `x .= v`, `x ||= v`: the operator between the sides is more than `=`.
+fn compound<D: Doc>(n: &Node<D>, left: &Node<D>, right: &Node<D>) -> bool {
+    if matches!(
+        n.kind().as_ref(),
+        "augmented_assignment_expression" | "augmented_assignment" | "compound_assignment_expr"
+    ) {
+        return true;
+    }
+    let start = n.range().start;
+    let (from, to) = (left.range().end, right.range().start);
+    if from < start || to < from {
+        return false;
+    }
+    let op = n.text()[from - start..to - start].trim().to_string();
+    op.len() >= 2
+        && op.ends_with('=')
+        && !matches!(op.as_str(), "==" | "<=" | ">=" | "!=" | ":=")
+        && op[..op.len() - 1]
+            .chars()
+            .all(|c| "+-*/%|&^<>?.".contains(c))
 }

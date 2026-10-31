@@ -4,8 +4,19 @@
 use super::summary::{args, callee};
 use ast_grep_core::{Doc, Node};
 
-/// Methods that store their arguments in the object they are called on.
-const FILLS: [&str; 12] = [
+/// Methods that store their arguments in the object they are called on,
+/// lowercased: C#'s `Add`/`AddLast`/`Enqueue`, Java's `put`/`offer` too.
+const FILLS: [&str; 22] = [
+    "addlast",
+    "addfirst",
+    "addall",
+    "addrange",
+    "put",
+    "putall",
+    "putifabsent",
+    "offer",
+    "enqueue",
+    "tryadd",
     "push",
     "unshift",
     "splice",
@@ -30,7 +41,7 @@ pub(super) fn filled<D: Doc>(call: &Node<D>) -> Option<String> {
     }
     let (receiver, method) = name.rsplit_once('.')?;
     let root = receiver.split(['.', '[']).next()?;
-    (FILLS.contains(&method)
+    (FILLS.contains(&method.to_lowercase().as_str())
         && !root.is_empty()
         && root
             .chars()

@@ -37,7 +37,9 @@ Một bộ chỉ đo được độ tổng quát khi rule chưa được viết 
 
 9. **DVWA (PHP)** đo 8 rule taint PHP và 3 rule cú pháp PHP vừa viết. Đáp án lấy từ cấu trúc của chính DVWA: trong mỗi module, `source/low.php`, `medium.php`, `high.php` có lỗ hổng theo thiết kế, `impossible.php` là bản đã sửa (8 module: SQLi, SQLi blind, command injection, file inclusion, upload, XSS phản chiếu, XSS lưu trữ, open redirect). Lần đầu: larpcop **+40,0%**, Semgrep **+3,3%**. Báo nhầm trên các bản `impossible.php` lộ ra: `is_numeric`/`ctype_digit` là phép kiểm (guard) chứ không phải hàm làm sạch, giá trị qua `md5()` là an toàn, `$_SERVER['SERVER_PROTOCOL']` không do client đặt (chỉ các khoá `HTTP_*`, `REQUEST_URI`, `QUERY_STRING`, `PHP_SELF`… là nguồn), hàm trong file được `require` không có summary, và một phép gán sạch trong nhánh `if` không làm sạch được biến cho phần còn lại của chính nhánh đó. Sau khi sửa: **+60,0%**. XSS ở DVWA nằm ở `index.php` dùng chung cho mọi mức (file nguồn chỉ dựng chuỗi `$html`), nên không công cụ nào bắt được theo file.
 
-Kết quả dưới đây là sau bước 9: chỉ có ý nghĩa *không thụt lùi* trên cả chín bộ. Rule mới cần một bộ chưa ai nhìn.
+10. **NIST Juliet C# 1.3** đo 9 rule taint C# (thêm `cs-taint-ldap`, `cs-taint-xpath` và các tên `HttpRequest`/`HttpResponse` cổ điển trước khi chạy). Chỉ lấy 1.443 ca có dữ liệu đến từ request HTTP (`QueryString`, `Params`, `Cookies`) ở 10 CWE: SQLi, lệnh OS, path traversal tương đối/tuyệt đối, open redirect, ba loại XSS, LDAP, XPath. Đáp án là nhãn của chính Juliet: mã trong method `Bad*` (hay file `*_bad.cs`) có lỗ hổng, mã trong `Good*` thì không. Lần đầu: larpcop **+43,9%**, Semgrep `p/default` và `p/csharp` cùng **+0,8%** (Semgrep bắt 67% ca SQL nhưng báo cả 61% bản đã sửa). Các ca bị sót lộ ra những chỗ engine chưa theo được: luồng qua nhiều file (Java/C# không có `import` cho class cùng namespace), `(new Helper()).Run(x)`, `cmd.CommandText += …`, `List.Add`/`AddLast`/`Dictionary`, field của class viết không có `this.`. Sau khi sửa engine, cộng sanitizer `SecurityElement.Escape` và sink `StatusDescription`: **+86,5%**, không còn báo nhầm. Còn sót: chuỗi gọi qua hơn 2 file (biến thể 53, 54), field static của class khác (68), dữ liệu qua serialize (75), gọi qua lớp cơ sở ảo (81).
+
+Kết quả dưới đây là sau bước 10: chỉ có ý nghĩa *không thụt lùi* trên cả mười bộ. Rule mới cần một bộ chưa ai nhìn.
 
 ## Kết quả (01/11/2026)
 
@@ -57,7 +59,9 @@ Kết quả dưới đây là sau bước 9: chỉ có ý nghĩa *không thụt 
 | GoVWA: dòng tìm thấy (/4) | **4** (lần đầu 0) | 4 | – |
 | OWASP Benchmark Java: thời gian | **7,11 s** | 48,6 s (`p/default`), 54,9 s (`p/java`) | 49,8 s |
 | DVWA (PHP): điểm trung bình (TPR − FPR) | **+60,0%** (lần đầu +40,0%) | +3,3% | – |
-| OWASP Benchmark Java: điểm trung bình (TPR − FPR) | **+44,0%** (lần đầu +37,5%) | +34,9% (`p/default`), +17,7% (`p/java`) | – |
+| Juliet C# (1.443 ca web): thời gian | **4,96 s** | 16,1 s (`p/default`) | – |
+| Juliet C# (1.443 ca web): điểm trung bình (TPR − FPR) | **+86,5%** (lần đầu +43,9%) | +0,8% (`p/default`, `p/csharp`) | – |
+| OWASP Benchmark Java: điểm trung bình (TPR − FPR) | **+46,2%** (lần đầu +37,5%) | +34,9% (`p/default`), +17,7% (`p/java`) | – |
 | vulnerable-node seeds (/12 file, báo nhầm trên 2 file sạch) | **11**, 1 báo nhầm (11 và 0 báo nhầm nếu bỏ rule chung chung) | 10, 1 báo nhầm (8 và 1 báo nhầm nếu bỏ rule chung chung) | – |
 | Secrets (so với gitleaks) | 69/69 và 3/3 trùng khớp | – | 69 và 3 |
 

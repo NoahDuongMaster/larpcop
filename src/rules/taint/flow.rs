@@ -4,6 +4,7 @@
 
 use super::containers::filled;
 use super::events::{Event, Hits};
+use super::fields::is_field;
 use super::summary::{Summaries, args, callee};
 use super::{NAMES, VARIABLES, destructure};
 use crate::rules::complexity::is_function;
@@ -208,7 +209,7 @@ impl Ctx {
                     cleaned.push(was);
                 }
                 Event::Restore => names.extend(cleaned.pop().unwrap_or_default()),
-                Event::Assign(left, right, branch) if is_field(left) => {
+                Event::Assign(left, right, branch, true) => {
                     if self.tainted(right, &names) {
                         names.insert(left.text().to_string());
                         on(Seen::Reached(Reached::Field(left.clone())));
@@ -218,7 +219,7 @@ impl Ctx {
                         until.push((*end, left.text().to_string()));
                     }
                 }
-                Event::Assign(left, right, branch) => {
+                Event::Assign(left, right, branch, false) => {
                     let tainted = self.tainted(right, &names);
                     for v in left
                         .dfs()
@@ -264,16 +265,6 @@ impl Ctx {
                 _ => {}
             }
         }
-    }
-}
-
-/// `this.x` (JS/TS) or `self.x` (Python): a field of the object a method runs on.
-pub(super) fn is_field<D: Doc>(node: &Node<D>) -> bool {
-    // Kind first: a field lookup on every node the walk visits is costly.
-    match node.kind().as_ref() {
-        "member_expression" => node.field("object").is_some_and(|o| o.kind() == "this"),
-        "attribute" => node.field("object").is_some_and(|o| o.text() == "self"),
-        _ => false,
     }
 }
 

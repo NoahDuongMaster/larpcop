@@ -54,6 +54,7 @@ impl TaintRule {
         let compile = |lang: SupportLang, list: &[String]| -> Result<Vec<scan::Compiled>> {
             list.iter()
                 .flat_map(|p| super::pattern_fixes::variants(p))
+                .flat_map(super::pattern_fixes::compound)
                 .map(|p| {
                     let compiled = pattern(&p, lang)
                         .with_context(|| format!("taint `{}`: pattern `{p}`", cfg.id))?;
@@ -175,7 +176,9 @@ impl TaintRule {
             let own = |n: &Node<_>| {
                 let mut names = self.own_names(n);
                 if let Some(f) = class_of(n).and_then(|c| fields.get(&c)) {
-                    names.extend(f.iter().cloned());
+                    // A bare field name is shadowed by a parameter or local.
+                    let own = |f: &&String| f.contains('.') || !fields::declares(n, f);
+                    names.extend(f.iter().filter(own).cloned());
                 }
                 names
             };
@@ -266,6 +269,7 @@ fn pattern(p: &str, lang: SupportLang) -> Result<Pattern> {
 mod containers;
 mod destructure;
 mod events;
+mod fields;
 mod flow;
 mod guards;
 mod handlers;
@@ -280,6 +284,8 @@ mod summary;
 mod tests;
 #[cfg(test)]
 mod tests_calls;
+#[cfg(test)]
+mod tests_csharp;
 #[cfg(test)]
 mod tests_methods;
 pub mod typed;

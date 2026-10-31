@@ -28,6 +28,16 @@ clone dvws-node https://github.com/snoopysecurity/dvws-node.git e83689c
 clone govwa https://github.com/0c34/govwa.git 4058f79
 clone BenchmarkJava https://github.com/OWASP-Benchmark/BenchmarkJava.git f40c618
 clone DVWA https://github.com/digininja/DVWA.git a1978a2
+# NIST Juliet C# 1.3: only the test cases whose data comes from an HTTP request.
+if [ ! -d "$WORK/juliet-web" ]; then
+  curl -sfL -o "$WORK/juliet-cs.zip" \
+    https://samate.nist.gov/SARD/downloads/test-suites/2020-08-01-juliet-test-suite-for-csharp-v1-3.zip
+  mkdir -p "$WORK/juliet-cs" && unzip -q -o "$WORK/juliet-cs.zip" -d "$WORK/juliet-cs"
+  (cd "$WORK/juliet-cs/src/testcases" && find CWE89_* CWE78_* CWE23_* CWE36_* CWE601_* CWE80_* CWE81_* CWE83_* \
+    CWE90_* CWE643_* -name '*.cs' | grep -E '_(QueryString_Web|Params_Get_Web|Get_Cookies_Web)_' |
+    while read -r f; do mkdir -p "$WORK/juliet-web/$(dirname "$f")" && cp "$f" "$WORK/juliet-web/$f"; done)
+  git -C "$WORK/juliet-web" init -q
+fi
 clone vulnerable-node https://github.com/cr0hn/vulnerable-node.git d68f2a3
 # Semgrep's registry pack, fetched once so timings exclude the download.
 [ -f "$WORK/p-default.yml" ] || curl -sfL https://semgrep.dev/c/p/default -o "$WORK/p-default.yml"
@@ -91,6 +101,14 @@ rm .larpcop.yaml
 semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/dvwa-semgrep.json" --quiet . || true
 python3 "$HERE/dvwa.py" "$OUT/dvwa-larpcop.json" "$OUT/dvwa-semgrep.json" > "$OUT/dvwa.md"
 
+# Juliet C#: Bad*/Good* methods are the answer key.
+cd "$WORK/juliet-web"
+printf "extends: ['%s/standards/recommended']\ndisable: [dependency-vulnerability]\n" "$REPO" > .larpcop.yaml
+"$LARPCOP" check --format json > "$OUT/juliet-cs-larpcop.json" || true
+rm .larpcop.yaml
+semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/juliet-cs-semgrep-default.json" --quiet . || true
+python3 "$HERE/juliet_cs.py" . "$OUT/juliet-cs-larpcop.json" "$OUT/juliet-cs-semgrep-default.json" > "$OUT/juliet-cs.md"
+
 # vulnerable-node: only sast/seeds/, scored by the project's own sast/tests/score.js.
 cd "$WORK/vulnerable-node"
 printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
@@ -98,4 +116,4 @@ printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
 semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/seeds-semgrep.json" --quiet sast/seeds || true
 python3 "$HERE/seeds.py" "$WORK/vulnerable-node" "$OUT/seeds-larpcop.json" "$OUT/seeds-semgrep.json" > "$OUT/seeds.md"
 
-cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/dvpwa.md" "$OUT/dvws-node.md" "$OUT/govwa.md" "$OUT/owasp-benchmark.md" "$OUT/dvwa.md" "$OUT/seeds.md"
+cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/dvpwa.md" "$OUT/dvws-node.md" "$OUT/govwa.md" "$OUT/owasp-benchmark.md" "$OUT/dvwa.md" "$OUT/juliet-cs.md" "$OUT/seeds.md"

@@ -1,0 +1,8 @@
+id: cs-taint-xpath
+file: Controllers/UsersController.cs
+valid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        var id = int.Parse(Request.Query[\"id\"]);\n        var n = doc.SelectSingleNode(\"/users/user[@id=\" + id\
+  \ + \"]\");\n        return Ok();\n    }\n}\n"
+invalid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        string name = Request.Query[\"name\"];\n        var n = doc.SelectNodes(\"/users/user[name='\" + name + \"\
+  ']\");\n        return Ok();\n    }\n}\n"

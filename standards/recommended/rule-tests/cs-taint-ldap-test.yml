@@ -1,0 +1,9 @@
+id: cs-taint-ldap
+file: Controllers/UsersController.cs
+valid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        var s = new DirectorySearcher(\"(&(objectClass=user)(sAMAccountName=\" + Encoder.LdapFilterEncode(Request.Query[\"\
+  u\"]) + \"))\");\n        return Ok();\n    }\n}\n"
+invalid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        string user = Request.Query[\"u\"];\n        var s = new DirectorySearcher(root);\n        s.Filter = \"(&(objectClass=user)(sAMAccountName=\"\
+  \ + user + \"))\";\n        return Ok();\n    }\n}\n"
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        var s = new DirectorySearcher(\"(cn=\" + Request.Form[\"name\"] + \")\");\n        return Ok();\n    }\n}\n"

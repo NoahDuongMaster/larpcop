@@ -50,7 +50,39 @@ pub fn callee<D: Doc>(call: &Node<D>) -> Option<String> {
     let plain = text
         .chars()
         .all(|c| c.is_alphanumeric() || c == '_' || c == '.' || c == '$');
-    plain.then_some(text)
+    if plain {
+        return Some(text);
+    }
+    constructed(call)
+}
+
+/// `new Helper().run(…)`, `(new Helper()).run(…)`: `Helper.run`.
+fn constructed<D: Doc>(call: &Node<D>) -> Option<String> {
+    let member = call.field("function");
+    let member = member.as_ref().unwrap_or(call);
+    let mut object = member
+        .field("expression")
+        .or_else(|| member.field("object"))?;
+    while object.kind() == "parenthesized_expression" {
+        let inner = object.children().find(|c| c.is_named())?;
+        object = inner;
+    }
+    if !matches!(
+        object.kind().as_ref(),
+        "object_creation_expression" | "new_expression"
+    ) {
+        return None;
+    }
+    let class = object
+        .field("type")
+        .or_else(|| object.field("constructor"))?;
+    let method = member.field("name").or_else(|| member.field("property"))?;
+    let class = class.text();
+    Some(format!(
+        "{}.{}",
+        class.split('<').next()?.trim(),
+        method.text()
+    ))
 }
 
 /// Positional arguments of a call (keyword arguments end the list).

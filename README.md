@@ -85,11 +85,11 @@ dependencies:
   exempt: ["npm:@acme/*"]    # package ở registry riêng: không có ngày phát hành công khai
 ```
 
-**`dependency-approval`**: dependency trực tiếp mới phải nằm trong `approved`. "Mới" nghĩa là chưa có trong bất kỳ manifest nào ở commit gốc, nên thêm `react` vào một package mới trong monorepo đã dùng `react` thì không tính. Agent không sửa được `.agentkit.yaml`, nên một dòng `approved` là một lần người duyệt và hiện rõ khi review. Đọc được `package.json`, `Cargo.toml`, `pyproject.toml` (PEP 621, dependency-groups, Poetry), `requirements*.txt` và `go.mod`.
+**`dependency-approval`**: dependency trực tiếp mới phải nằm trong `approved`. "Mới" nghĩa là chưa có trong bất kỳ manifest nào ở commit gốc, nên thêm `react` vào một package mới trong monorepo đã dùng `react` thì không tính. Agent không sửa được `.agentkit.yaml`, nên một dòng `approved` là một lần người duyệt và hiện rõ khi review. Đọc được `package.json`, `Cargo.toml`, `pyproject.toml` (PEP 621, dependency-groups, Poetry), `requirements*.txt`, `go.mod`, `Gemfile`, `composer.json`, `*.csproj`/`*.fsproj`, `pom.xml`, `build.gradle(.kts)` và `gradle/libs.versions.toml`.
 
 **`dependency-release-age`** chạy ở ba chỗ:
 
-1. **Lockfile** (pre-commit, CI, hook kết thúc lượt): mọi phiên bản, kể cả dependency bắc cầu, mà thay đổi này thêm vào hoặc đổi sang phải đủ `N` ngày tuổi. Ngày phát hành lấy từ [deps.dev](https://deps.dev), một API chung cho npm, PyPI, crates.io và Go, và được cache trên đĩa vì ngày phát hành không bao giờ đổi. Chỉ phiên bản *mới trong thay đổi* mới được tra, nên PR thường chỉ mất vài request. Lockfile đọc được: `package-lock.json` (v2/v3), `pnpm-lock.yaml` (v5–v9), `yarn.lock` (v1 và Berry), `bun.lock`, `Cargo.lock`, `uv.lock`, `poetry.lock` và `go.mod`. Khi chặn, thông báo đưa luôn một phiên bản cụ thể để pin, ví dụ: *"Use typescript@7.0.2 (published 2026-07-08)"*.
+1. **Lockfile** (pre-commit, CI, hook kết thúc lượt): mọi phiên bản, kể cả dependency bắc cầu, mà thay đổi này thêm vào hoặc đổi sang phải đủ `N` ngày tuổi. Ngày phát hành lấy từ [deps.dev](https://deps.dev), một API chung cho npm, PyPI, crates.io, Go, RubyGems, NuGet và Maven (Composer thì lấy từ API của Packagist), và được cache trên đĩa vì ngày phát hành không bao giờ đổi. Chỉ phiên bản *mới trong thay đổi* mới được tra, nên PR thường chỉ mất vài request. Lockfile đọc được: `package-lock.json` (v2/v3), `pnpm-lock.yaml` (v5–v9), `yarn.lock` (v1 và Berry), `bun.lock`, `Cargo.lock`, `uv.lock`, `poetry.lock`, `go.mod`, `Gemfile.lock`, `packages.lock.json` (NuGet), `gradle.lockfile`, `composer.lock`, cùng các phiên bản pin cứng trong `pom.xml` và `*.csproj`. Khi chặn, thông báo đưa luôn một phiên bản cụ thể để pin, ví dụ: *"Use typescript@7.0.2 (published 2026-07-08)"*.
 2. **Package manager**: npm, pnpm, yarn Berry và bun tự chặn được bản quá mới ngay lúc cài, trên máy dev, *trước khi* install script chạy. Lockfile chỉ thấy được sau khi đã cài, nên repo bắt buộc phải bật tính năng này:
 
    | Package manager | File | Thiết lập cho 14 ngày |
@@ -134,7 +134,15 @@ const sql = "SELECT * FROM users WHERE name = '" + name + "'";
 res.json(await db.query(sql));          // taint-sql
 ```
 
-Không theo vào hàm khác hay file khác. Hướng đi về sau: hỏi language server của dự án (tsserver, pyright, gopls, rust-analyzer) về kiểu và định nghĩa, thay vì tự viết type checker.
+Dữ liệu không được theo vào hàm khác hay file khác. Riêng **kiểu** thì hỏi được xuyên file, qua language server của chính dự án (typescript-language-server, pyright, gopls, rust-analyzer) thay vì tự viết type checker. `sink_types` yêu cầu metavariable của sink phải có kiểu khớp regex:
+
+```yaml
+    sinks: ["$DB.query($SQL)"]
+    sink_arg: SQL
+    sink_types: { DB: "\\bPool\\b" }   # pool.query(sql) bị bắt; searchIndex.query(text) thì không
+```
+
+Chỉ hỏi server về các ứng viên mà lớp cú pháp đã tìm thấy, nên chỉ trả giá khi có ứng viên (chạy thử: 1,9 s với tsserver, 0,5 s với pyright). Server không có, không khởi động được, hoặc không trả lời thì finding vẫn giữ nguyên, tức là fail closed. Lệnh chạy server đổi được bằng `language_servers: { typescript: [...] }`. Test chạy với typescript-language-server thật, cả trong CI.
 
 **3. Secrets.** `secrets: {}` bật 222 detector của [gitleaks](https://github.com/gitleaks/gitleaks) (MIT, nhúng nguyên `gitleaks.toml` vào binary, kèm license trong `assets/`): lọc theo keyword, regex, entropy, allowlist theo đúng ngữ nghĩa của gitleaks. Kết quả in ra đã che, chỉ giữ 4 ký tự đầu (`ghp_…[redacted]`). `exclude` để bỏ qua fixture có khoá giả; rule bị lock thì không thêm `exclude` được. Hook cũng chặn agent ghi secret vào file.
 
@@ -194,11 +202,12 @@ llm:
 
 | | agentkit | Semgrep OSS (`p/default`) | gitleaks |
 |---|---|---|---|
-| Thời gian | **2,91 s** | 33,44 s | 4,60 s |
-| Dòng lỗ hổng tìm thấy | **11/27** (8 nếu không tính quy ước validate) | 6/27 | – |
-| Secrets | 68/69 trùng khớp với gitleaks | – | 69 |
+| Juice Shop: thời gian | **3,58 s** | 34,91 s | 5,37 s |
+| Juice Shop: dòng lỗ hổng tìm thấy | **11/27** (8 nếu không tính quy ước validate) | 6/27 | – |
+| NodeGoat (bộ kiểm chứng, đáp án viết trước khi chạy): dòng tìm thấy | **8/14** (6 nếu không tính quy ước validate) | 4/14 | – |
+| Secrets | trùng khớp hoàn toàn với gitleaks | – | 69 + 3 |
 
-Chi tiết từng dòng, khác biệt phạm vi (Semgrep có Terraform và GitHub Actions) và các rule được thêm sau lần chạy đầu (lần đầu agentkit chỉ được 5/27) nằm trong [bench/README.md](bench/README.md).
+Chi tiết từng dòng, khác biệt phạm vi và các rule được thêm sau lần chạy Juice Shop đầu tiên (lần đầu agentkit chỉ được 5/27) nằm trong [bench/README.md](bench/README.md).
 
 ## Lệnh
 
@@ -393,12 +402,12 @@ Binary nặng 47 MB trên đĩa, nhưng chỉ khoảng **4 MB khi tải về** (
 
 ## Đã kiểm chứng
 
-`cargo test` có 81 test:
+`cargo test` có 93 test:
 
-- Unit: guard, tìm shell, path trong patch Codex; đọc lockfile thật của npm 11, pnpm 11, uv 0.11, cargo 1.98 (kèm yarn v1/Berry, Poetry, go.mod, và các entry registry riêng/git/workspace phải bị bỏ qua); manifest; nhận diện lệnh cài; thiết lập gate của 4 package manager.
+- Unit: guard, tìm shell, path trong patch Codex; đọc lockfile thật của npm 11, pnpm 11, uv 0.11, cargo 1.98, bun 1.4, bundler (kèm yarn v1/Berry, Poetry, go.mod, NuGet, Gradle, Composer, pom.xml, csproj, và các entry registry riêng/git/workspace phải bị bỏ qua); manifest; nhận diện lệnh cài; thiết lập gate của 4 package manager.
 - Dashboard: số mở/baseline theo rule, xu hướng nợ qua lịch sử git, trang không có script.
 - AI (model giả bằng shell script): review chỉ báo dòng đã đổi, bỏ rule lạ, cache câu trả lời; learn gửi lại rule fail kèm lỗi, chỉ giữ rule pass test, rule ghi ra chạy được như rule thường.
-- Bảo mật: taint qua biến/destructuring/sanitizer/gán lại (TS, Python), secrets bị che khi in ra, OSV giả: mã độc luôn chặn, lỗ hổng chỉ chặn bản mới, theo ngưỡng, hook chặn lệnh cài.
+- Bảo mật: taint qua biến/destructuring/sanitizer/gán lại (TS, Python), `sink_types` qua typescript-language-server thật (xuyên file), secrets bị che khi in ra, OSV giả: mã độc luôn chặn, lỗ hổng chỉ chặn bản mới, theo ngưỡng, hook chặn lệnh cài.
 - Integration: check, locked, git extends theo tag, staged, `--changed`/`--since`, linter delegation, format github, chống né rule, hook của 4 agent, sync idempotent, phát hiện drift, CRLF, pre-commit thật; dependency: tuổi phiên bản (qua cache và qua một server deps.dev giả), merge-base của PR, ngoại lệ bản vá bảo mật, gate package manager, duyệt dependency mới (cả monorepo), hook chặn lệnh cài, lock chỉ được siết thêm.
 
 Trên GitHub thật (repo private `NoahDuongMaster/agentkit`):
@@ -429,6 +438,7 @@ Ngoài ra đã chạy agent thật trong repo demo:
 
 ## Giới hạn
 
+- **Taint**: dữ liệu không được theo qua lời gọi hàm hay sang file khác; chỉ kiểu là hỏi được xuyên file (`sink_types`). Dự án phải cài đủ dependency thì language server mới trả lời đúng.
 - **Cursor và Gemini chưa chạy agent thật.** Cursor cần đăng nhập `cursor-agent login` (qua trình duyệt); Gemini CLI chưa được cài hay đăng nhập trên máy dev. Adapter được test bằng đúng schema payload ở trên.
 - **File agent ghi bằng shell**: `cat > f <<EOF`, `cat <<EOF >> f`, `tee f <<EOF` và `echo … > f` được hook đọc bằng tree-sitter-bash và kiểm nội dung *trước khi* lệnh chạy, kể cả sau `cd dir &&`. Các cách khác (`sed -i`, `cp`, script tự viết) thì không thấy trước được; chúng vẫn bị bắt ở hook kết thúc lượt, ở pre-commit và ở CI.
 - **Repo private** khiến installer `curl | sh`, Homebrew và npm chưa dùng được cho người ngoài (xem [Phân phối khi repo private](#phân-phối-khi-repo-private)). Repo khác muốn gọi `enforce.yml` thì cần quyền truy cập Actions; mục này đã được bật sẵn cho các repo cùng owner `NoahDuongMaster` (`access_level: user`). Repo gọi vẫn phải truyền secret `agentkit-token` để tải binary.
@@ -436,6 +446,6 @@ Ngoài ra đã chạy agent thật trong repo demo:
 - **Dependency**:
   - Rule tuổi phiên bản cần mạng tới deps.dev và fail closed khi không tra được. Package ở registry riêng phải được khai trong `exempt`.
   - Poetry, Cargo và Go không có thiết lập tuổi tối thiểu (uv thì có, từ 0.9, và đã bị bắt buộc). Với các hệ sinh thái này, bản quá mới của một package *đã duyệt* vẫn cài được lên máy dev, rồi mới bị chặn ở lượt kết thúc, pre-commit và CI. Yarn 1 cũng không có gate.
-  - Maven, Gradle, NuGet, RubyGems và Composer chưa hỗ trợ.
+  - Maven, Gradle, NuGet, RubyGems và Composer: lockfile của bundler được test bằng file do bundler thật sinh ra; NuGet, Gradle, Composer, pom.xml và csproj được test bằng file viết tay theo định dạng chính thức, vì máy dev không có dotnet, gradle hay composer. Các hệ sinh thái này cũng không có gate tuổi trong package manager.
   - Hook chỉ nhận ra lệnh cài gõ trực tiếp. Cài qua script hay Makefile thì không thấy trước, nhưng vẫn bị bắt ở lockfile và manifest.
   - Bộ standards mẫu bật dependency rules từ bản sau `v0.1.0`. Workflow `self-enforce` tải binary bản release mới nhất, nên PR chỉ dùng được các khóa `dependencies` sau khi có release mới.

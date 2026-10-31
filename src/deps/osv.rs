@@ -89,6 +89,18 @@ impl Osv {
     /// Advisory ids per package; a missing `version` asks about the package as a
     /// whole (what an unpinned `npm install x` would get, and typosquats).
     pub fn ids(&self, queries: &[(Ecosystem, &str, Option<&str>)]) -> Result<Vec<Vec<String>>> {
+        Ok(self
+            .ids_modified(queries)?
+            .into_iter()
+            .map(|l| l.into_iter().map(|(id, _)| id).collect())
+            .collect())
+    }
+
+    /// (id, `modified` timestamp) per package.
+    fn ids_modified(
+        &self,
+        queries: &[(Ecosystem, &str, Option<&str>)],
+    ) -> Result<Vec<Vec<(String, String)>>> {
         let mut out = Vec::with_capacity(queries.len());
         for chunk in queries.chunks(1000) {
             let body: Vec<Value> = chunk
@@ -108,7 +120,10 @@ impl Osv {
                     .as_array()
                     .into_iter()
                     .flatten()
-                    .filter_map(|v| v["id"].as_str().map(String::from))
+                    .filter_map(|v| {
+                        let modified = v["modified"].as_str().unwrap_or_default();
+                        Some((v["id"].as_str()?.to_string(), modified.to_string()))
+                    })
                     .collect()
             }));
         }
@@ -116,6 +131,40 @@ impl Osv {
     }
 
     pub fn advisory(&self, id: &str, eco: Ecosystem, name: &str) -> Result<Advisory> {
+        Ok(parse_advisory(id, &self.fetch(id)?, eco, name))
+    }
+
+    /// An advisory's JSON, from the disk cache when querybatch reports the same
+    /// `modified` time as when it was cached (edits always bump it). The batch
+    /// API rounds that time differently from the full record, so the batch's
+    /// own value is what gets stored.
+    fn cached(&self, id: &str, modified: &str) -> Result<Value> {
+        let file = (!modified.is_empty())
+            .then(|| crate::config::cache_root().ok())
+            .flatten()
+            .map(|d| {
+                d.join("osv")
+                    .join(format!("{}.json", id.replace(['/', '\\', ':'], "_")))
+            });
+        let hit = file
+            .as_ref()
+            .and_then(|f| std::fs::read_to_string(f).ok())
+            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+            .filter(|c| c["modified"] == modified);
+        if let Some(mut c) = hit {
+            return Ok(c["advisory"].take());
+        }
+        let advisory = self.fetch(id)?;
+        if let Some(f) = file {
+            // Best effort: a missing cache only costs another request.
+            let entry = json!({ "modified": modified, "advisory": advisory });
+            let _ = std::fs::create_dir_all(f.parent().unwrap_or(&f));
+            let _ = std::fs::write(&f, entry.to_string());
+        }
+        Ok(advisory)
+    }
+
+    fn fetch(&self, id: &str) -> Result<Value> {
         let mut res = self
             .agent
             .get(&format!("{}/vulns/{id}", self.api))
@@ -124,8 +173,7 @@ impl Osv {
         if res.status() != 200 {
             bail!("OSV: {id}: HTTP {}", res.status());
         }
-        let v: Value = serde_json::from_str(&res.body_mut().read_to_string()?)?;
-        Ok(parse_advisory(id, &v, eco, name))
+        Ok(serde_json::from_str(&res.body_mut().read_to_string()?)?)
     }
 
     fn post(&self, path: &str, body: &Value) -> Result<Value> {
@@ -147,23 +195,30 @@ impl Osv {
             .iter()
             .map(|p| (p.eco, p.name.as_str(), Some(p.version.as_str())))
             .collect();
-        let ids = self.ids(&queries)?;
-        let mut wanted: BTreeMap<&str, &Pinned> = BTreeMap::new();
+        let ids = self.ids_modified(&queries)?;
+        let mut wanted: BTreeMap<&str, (&str, &Pinned)> = BTreeMap::new();
         for (pin, ids) in pins.iter().zip(&ids) {
-            for id in ids {
-                wanted.entry(id).or_insert(pin);
+            for (id, modified) in ids {
+                wanted.entry(id).or_insert((modified, pin));
             }
         }
         let pool = rayon::ThreadPoolBuilder::new().num_threads(16).build()?;
         let details: BTreeMap<&str, Arc<Advisory>> = pool.install(|| {
             wanted
                 .par_iter()
-                .map(|(id, pin)| Ok((*id, Arc::new(self.advisory(id, pin.eco, &pin.name)?))))
+                .map(|(id, (modified, pin))| {
+                    let v = self.cached(id, modified)?;
+                    Ok((*id, Arc::new(parse_advisory(id, &v, pin.eco, &pin.name))))
+                })
                 .collect::<Result<_>>()
         })?;
         Ok(ids
             .iter()
-            .map(|list| list.iter().map(|id| details[id.as_str()].clone()).collect())
+            .map(|list| {
+                list.iter()
+                    .map(|(id, _)| details[id.as_str()].clone())
+                    .collect()
+            })
             .collect())
     }
 }

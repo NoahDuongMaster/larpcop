@@ -15,7 +15,7 @@
 | `app/routes/research.js:16` | SSRF (needle.get of req.query.url) | `validate-request-input` | – |
 | `package-lock.json:6742` | A9 vulnerable dependency (marked 0.3.5) | `dependency-vulnerability` | – |
 
-- agentkit: 8/14 lines; 227 security findings: dependency-vulnerability 204, validate-request-input 14, no-eval 3, secrets 3, no-shell-interpolation 1, no-mongo-where 1, taint-redirect 1
+- agentkit: 8/14 lines; 233 security findings: dependency-vulnerability 204, validate-request-input 14, gha-unpinned-action 6, no-eval 3, secrets 3, no-shell-interpolation 1, no-mongo-where 1, taint-redirect 1
 - Semgrep OSS: 4/14 lines; 35 security findings: github-actions-mutable-action-tag 6, plaintext-http-link 5, eval-detected 3, code-string-concat 3, django-no-csrf-token 3, detected-bcrypt-hash 3, express-open-redirect 1, detected-private-key 1, no-new-privileges 1, writable-filesystem-service 1, express-check-csurf-middleware-usage 1, express-cookie-session-default-name 1, express-cookie-session-no-domain 1, express-cookie-session-no-expires 1, express-cookie-session-no-httponly 1, express-cookie-session-no-path 1, express-cookie-session-no-secure 1, using-http-server 1
 
 Secrets vs gitleaks: 3 identical findings; 0 only in gitleaks, 0 only in agentkit.

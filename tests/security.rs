@@ -72,6 +72,38 @@ fn malware_always_blocks_vulnerabilities_block_new_versions() {
 }
 
 #[test]
+fn advisory_details_are_cached_until_osv_reports_an_edit() {
+    let batch = |modified: &str| {
+        json!({ "results": [{ "vulns": [{ "id": "GHSA-hhhh-0000-0000", "modified": modified }] }] })
+            .to_string()
+    };
+    let advisory = |summary: &str| {
+        json!({ "id": "GHSA-hhhh-0000-0000", "summary": summary,
+            "database_specific": { "severity": "HIGH" } })
+        .to_string()
+    };
+    let api = |modified: &str, summary: &str| {
+        fake_deps_dev(vec![
+            ("/v1/querybatch".into(), batch(modified)),
+            ("/v1/vulns/GHSA-hhhh-0000-0000".into(), advisory(summary)),
+        ])
+        .replace("/v3", "/v1")
+    };
+    let repo = repo("dependencies:\n  vulnerabilities: high\n");
+    repo.write("package-lock.json", &npm_lock(&[("bbb-old", "1.0.0")]));
+    let check = |osv: &str| {
+        repo.run_env(&["check"], &[("AGENTKIT_OSV_API", osv)])
+            .stdout()
+    };
+
+    assert!(check(&api("2026-01-01T00:00:00Z", "First text")).contains("First text"));
+    // Same `modified`: the cached copy, even though the server now says otherwise.
+    assert!(check(&api("2026-01-01T00:00:00Z", "Second text")).contains("First text"));
+    // Edited upstream: fetched again.
+    assert!(check(&api("2026-02-01T00:00:00Z", "Second text")).contains("Second text"));
+}
+
+#[test]
 fn installs_of_known_bad_packages_are_blocked_before_they_run() {
     let osv = fake_osv();
     let env = [("AGENTKIT_OSV_API", osv.as_str())];

@@ -20,14 +20,18 @@ Hook của agent chỉ để rút ngắn vòng phản hồi. Agent không có ho
 
 Mỗi release có binary cho macOS (arm64, x64), Linux (arm64, x64) và Windows (x64), dạng nén khoảng 4 MB. Có installer shell, PowerShell, công thức Homebrew và package npm `@noahduongmaster/agentkit`. Binary được cài vào `~/.local/bin`.
 
-Repo hiện **private**, nên phải tải bằng GitHub CLI đã đăng nhập:
+Repo hiện **private**, nên dùng GitHub CLI (`gh`, cần đăng nhập và có quyền đọc repo) để tải installer cùng các bản build về một thư mục, rồi trỏ installer vào thư mục đó. Lệnh sau đã chạy thật trên macOS:
 
 ```sh
-gh release download --repo NoahDuongMaster/agentkit --pattern 'agentkit-installer.sh' -O - \
-  | AGENTKIT_INSTALLER_GITHUB_BASE_URL=… sh   # xem mục "Phân phối khi repo private"
+d=$(mktemp -d)
+gh release download --repo NoahDuongMaster/agentkit --dir "$d" \
+  --pattern 'agentkit-installer.sh' --pattern '*.tar.xz' --pattern '*.tar.xz.sha256'
+AGENTKIT_DOWNLOAD_URL="file://$d" sh "$d/agentkit-installer.sh"
 ```
 
-Khi repo chuyển sang public thì chỉ cần:
+Trên Windows: `gh release download --repo NoahDuongMaster/agentkit --pattern '*windows-msvc.zip'`, giải nén rồi đặt `agentkit.exe` vào một thư mục có trong PATH.
+
+`AGENTKIT_GITHUB_TOKEN` của installer **không** dùng được cho repo private, vì GitHub không cho tải asset private qua URL `releases/download` (đã thử). Khi repo chuyển sang public thì chỉ cần:
 
 ```sh
 curl -LsSf https://github.com/NoahDuongMaster/agentkit/releases/latest/download/agentkit-installer.sh | sh
@@ -161,6 +165,15 @@ Binary nặng 47 MB trên đĩa, nhưng chỉ khoảng **4 MB khi tải về** (
 - Unit: guard, tìm shell, path trong patch Codex.
 - Integration: check, locked, git extends theo tag, staged, `--changed`/`--since`, linter delegation, format github, chống né rule, hook của 4 agent, sync idempotent, phát hiện drift, CRLF, pre-commit thật.
 
+Trên GitHub thật (repo private `NoahDuongMaster/agentkit`):
+
+- [`ci.yml`](.github/workflows/ci.yml) xanh trên ubuntu, macOS và **Windows**: fmt, clippy `-D warnings`, 29/29 test. Trên Windows có cả linter chạy qua `sh.exe` của Git, extends từ `file:///C:/…`, CRLF và pre-commit thật.
+- Release `v0.1.0`: [release.yml](.github/workflows/release.yml) build 5 target. Installer đã được cài thật vào `~/.local/bin` theo cách ở mục [Cài đặt](#cài-đặt).
+- Cổng CI, thử bằng PR #1 (đã đóng, không merge):
+  - Commit vi phạm bị pre-commit chặn ở máy local; được đẩy lên bằng `--no-verify`.
+  - `enforce` tải binary từ release, **fail** và gắn annotation `no-explicit-any` / `no-console` vào đúng dòng trong PR.
+  - Push bản sửa thì mọi check chuyển xanh.
+
 Ngoài ra đã chạy agent thật trong repo demo:
 
 - **Claude Code**:
@@ -176,3 +189,5 @@ Ngoài ra đã chạy agent thật trong repo demo:
 
 - **Cursor và Gemini chưa chạy agent thật.** Cursor cần đăng nhập `cursor-agent login` (qua trình duyệt); Gemini CLI chưa được cài hay đăng nhập trên máy dev. Adapter được test bằng đúng schema payload ở trên.
 - **File agent ghi bằng shell** (ví dụ `cat > f <<EOF`) không đi qua hook "sau khi sửa". Chúng vẫn bị bắt ở hook kết thúc lượt, ở pre-commit và ở CI.
+- **Repo private** khiến installer `curl | sh`, Homebrew và npm chưa dùng được cho người ngoài (xem [Phân phối khi repo private](#phân-phối-khi-repo-private)). Repo khác muốn gọi `enforce.yml` thì cần quyền truy cập Actions; mục này đã được bật sẵn cho các repo cùng owner `NoahDuongMaster` (`access_level: user`). Repo gọi vẫn phải truyền secret `agentkit-token` để tải binary.
+- **Chi phí CI**: GitHub Actions của repo private tính phút chạy, với runner macOS nhân 10 và Windows nhân 2. Repo public thì miễn phí.

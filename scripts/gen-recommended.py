@@ -11,11 +11,16 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from recommended import javascript, others  # noqa: E402
+from recommended.common import TESTS  # noqa: E402
 
 OUT = pathlib.Path("standards/recommended/rules")
 # Each: id, languages, severity, message, note, rule (dict), optional fix,
 # files and ignores. Specs live in scripts/recommended/.
 RULES = javascript.RULES + others.RULES
+# Code-quality rules hold in tests too; security rules do not (test code is not
+# served, and fixtures build SQL or skip TLS on purpose).
+QUALITY = {"no-suppression-comment", "no-explicit-any", "no-non-null-assertion", "no-debugger",
+           "no-empty-catch", "no-console", "py-no-bare-except", "rs-no-unwrap"}
 
 
 
@@ -28,6 +33,8 @@ def doc(spec, lang):
         d["files"] = spec["files"]
     if "ignores" in spec:
         d["ignores"] = spec["ignores"]
+    elif spec["id"] not in QUALITY and "files" not in spec:
+        d["ignores"] = TESTS
     # JSON is valid YAML: exact, and no YAML library needed to generate it.
     return json.dumps(d, indent=2, ensure_ascii=False)
 

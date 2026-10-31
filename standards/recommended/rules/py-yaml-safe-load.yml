@@ -8,5 +8,18 @@
   "rule": {
     "pattern": "yaml.load($DATA)"
   },
-  "fix": "yaml.safe_load($DATA)"
+  "fix": "yaml.safe_load($DATA)",
+  "ignores": [
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/spec/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/tests.py",
+    "**/conftest.py",
+    "**/*_test.go"
+  ]
 }

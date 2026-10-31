@@ -8,5 +8,18 @@
   "rule": {
     "kind": "keyed_element",
     "regex": "^InsecureSkipVerify\\s*:\\s*true"
-  }
+  },
+  "ignores": [
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/spec/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/tests.py",
+    "**/conftest.py",
+    "**/*_test.go"
+  ]
 }

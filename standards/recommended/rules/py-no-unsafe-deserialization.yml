@@ -11,5 +11,18 @@
       "field": "function",
       "regex": "^(pickle|cPickle|_pickle|marshal|dill|jsonpickle)\\.(loads?|decode|Unpickler)$|^shelve\\.open$"
     }
-  }
+  },
+  "ignores": [
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/spec/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/tests.py",
+    "**/conftest.py",
+    "**/*_test.go"
+  ]
 }

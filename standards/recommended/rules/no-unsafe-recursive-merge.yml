@@ -101,7 +101,20 @@
         }
       }
     ]
-  }
+  },
+  "ignores": [
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/spec/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/tests.py",
+    "**/conftest.py",
+    "**/*_test.go"
+  ]
 }
 ---
 {
@@ -206,7 +219,20 @@
         }
       }
     ]
-  }
+  },
+  "ignores": [
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/spec/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/tests.py",
+    "**/conftest.py",
+    "**/*_test.go"
+  ]
 }
 ---
 {
@@ -311,5 +337,18 @@
         }
       }
     ]
-  }
+  },
+  "ignores": [
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/spec/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/tests.py",
+    "**/conftest.py",
+    "**/*_test.go"
+  ]
 }

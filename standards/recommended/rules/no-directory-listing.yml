@@ -17,7 +17,20 @@
         "pattern": "import $X from 'serve-index'"
       }
     ]
-  }
+  },
+  "ignores": [
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/spec/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/tests.py",
+    "**/conftest.py",
+    "**/*_test.go"
+  ]
 }
 ---
 {
@@ -38,7 +51,20 @@
         "pattern": "import $X from 'serve-index'"
       }
     ]
-  }
+  },
+  "ignores": [
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/spec/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/tests.py",
+    "**/conftest.py",
+    "**/*_test.go"
+  ]
 }
 ---
 {
@@ -59,5 +85,18 @@
         "pattern": "import $X from 'serve-index'"
       }
     ]
-  }
+  },
+  "ignores": [
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/spec/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/tests.py",
+    "**/conftest.py",
+    "**/*_test.go"
+  ]
 }

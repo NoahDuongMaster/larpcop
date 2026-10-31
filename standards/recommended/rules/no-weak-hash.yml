@@ -14,7 +14,20 @@
         "regex": "^['\"](md5|sha1|md4|ripemd160)['\"]$"
       }
     }
-  }
+  },
+  "ignores": [
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/spec/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/tests.py",
+    "**/conftest.py",
+    "**/*_test.go"
+  ]
 }
 ---
 {
@@ -32,7 +45,20 @@
         "regex": "^['\"](md5|sha1|md4|ripemd160)['\"]$"
       }
     }
-  }
+  },
+  "ignores": [
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/spec/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/tests.py",
+    "**/conftest.py",
+    "**/*_test.go"
+  ]
 }
 ---
 {
@@ -50,5 +76,18 @@
         "regex": "^['\"](md5|sha1|md4|ripemd160)['\"]$"
       }
     }
-  }
+  },
+  "ignores": [
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/spec/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/tests.py",
+    "**/conftest.py",
+    "**/*_test.go"
+  ]
 }

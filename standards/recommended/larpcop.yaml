@@ -7,11 +7,12 @@
 rule_dirs: [rules]
 max_lines:
   max: 500
-  exclude: ["**/*.test.*", "**/*_test.*", "**/generated/**", "**/*.lock", "**/*-lock.*"]
+  exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.*", "**/test_*.py", "**/generated/**", "**/*.lock", "**/*-lock.*"]
 metrics:
   max_complexity: 15
   max_function_lines: 80
-  exclude: ["**/*.test.*", "**/*_test.*", "**/tests/**"]
+  # A describe() block is long by nature; test files are not measured.
+  exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.*", "**/test_*.py", "**/tests.py"]
 exclude: ["**/node_modules/**", "**/dist/**", "**/build/**", "**/vendor/**", "**/*.min.js"]
 # Leaked credentials: gitleaks' 222 detectors, findings redacted.
 secrets: {}
@@ -56,7 +57,7 @@ taint:
     sanitizers: ["jwt.verify($$$A)", "+$X", "Number($X)", "parseInt($$$X)", "parseFloat($X)", "$S.parse($X)"]
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
     resolver_args: true
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: taint-shell
     languages: [TypeScript, Tsx, JavaScript]
@@ -70,7 +71,7 @@ taint:
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
     resolver_args: true
     sanitizers: ["jwt.verify($$$A)"]
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: taint-redirect
     languages: [TypeScript, Tsx, JavaScript]
@@ -85,7 +86,7 @@ taint:
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
     resolver_args: true
     sanitizers: ["jwt.verify($$$A)"]
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: taint-code
     languages: [TypeScript, Tsx, JavaScript]
@@ -98,7 +99,7 @@ taint:
     param_types: { Request: req }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
     resolver_args: true
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: taint-xss
     languages: [TypeScript, Tsx, JavaScript]
@@ -111,7 +112,7 @@ taint:
     param_types: { Request: req, NextRequest: request }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
     resolver_args: true
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: taint-path
     languages: [TypeScript, Tsx, JavaScript]
@@ -125,7 +126,7 @@ taint:
     param_types: { Request: req, NextRequest: request }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
     resolver_args: true
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: taint-ssrf
     languages: [TypeScript, Tsx, JavaScript]
@@ -140,7 +141,7 @@ taint:
     param_types: { Request: req, NextRequest: request }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
     resolver_args: true
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: taint-nosql
     languages: [TypeScript, Tsx, JavaScript]
@@ -154,7 +155,7 @@ taint:
     param_types: { Request: req, NextRequest: request }
     param_decorators: [Body, Query, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
     resolver_args: true
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: taint-regex
     languages: [TypeScript, Tsx, JavaScript]
@@ -167,7 +168,7 @@ taint:
     param_types: { Request: req, NextRequest: request }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
     resolver_args: true
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: py-taint-path
     languages: [Python]
@@ -180,7 +181,7 @@ taint:
     guards: ["$P.is_relative_to($B)", "$P.startswith($B)", "$X in $L"]
     handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
     resolver_args: true
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: py-taint-ssrf
     languages: [Python]
@@ -195,7 +196,7 @@ taint:
     guards: ["$H in $L", "$U.startswith($P)"]
     handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
     resolver_args: true
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: py-taint-ssti
     languages: [Python]
@@ -207,7 +208,7 @@ taint:
     sanitizers: ["escape($X)", "markupsafe.escape($X)"]
     handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
     resolver_args: true
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: py-taint-code
     languages: [Python]
@@ -219,7 +220,7 @@ taint:
     sanitizers: ["int($X)", "float($X)", "shlex.quote($X)", "ast.literal_eval($X)"]
     handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
     resolver_args: true
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: taint-log
     languages: [TypeScript, Tsx, JavaScript]
@@ -232,7 +233,7 @@ taint:
     param_types: { Request: req }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
     resolver_args: true
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: py-taint-log
     languages: [Python]
@@ -244,7 +245,7 @@ taint:
     sanitizers: ["$S.replace($$$R)", "json.dumps($X)", "int($X)", "repr($X)"]
     handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
     resolver_args: true
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
 
   - id: py-taint-sql
     languages: [Python]
@@ -256,4 +257,4 @@ taint:
     sanitizers: ["int($X)", "float($X)", "uuid.UUID($X)"]
     handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
     resolver_args: true
-    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/conftest.py", "**/*_test.go"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]

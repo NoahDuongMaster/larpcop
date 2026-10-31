@@ -135,7 +135,7 @@ taint:
     safe_prefix: '^/[^/\\]'                          # "/products/" + id: phần đầu cố định là an toàn
 ```
 
-`guards` là phép kiểm trong điều kiện `if`: sau một nhánh `return`/`throw`, hoặc bên trong nhánh chạy khi phép kiểm đúng, biến được kiểm là sạch. `safe_prefix` là regex trên phần chuỗi cố định ở đầu đối số được ghép (`res.redirect("/p/" + id)` không thể dẫn ra ngoài site).
+`guards` là phép kiểm trong điều kiện `if`: sau một nhánh `return`/`throw`, hoặc bên trong nhánh chạy khi phép kiểm đúng, biến được kiểm là sạch. `safe_prefix` là regex trên phần chuỗi cố định ở đầu đối số được ghép (`res.redirect("/p/" + id)` không thể dẫn ra ngoài site); nó cũng quyết định một guard `x.startsWith("…")` có đáng tin không.
 
 Bộ `recommended` có sẵn 16 rule taint: SQL, shell, open redirect, code injection (`eval`, `vm`, `mathjs.eval`), XSS phản chiếu (`res.send` của chuỗi HTML, `innerHTML`), path traversal, SSRF, NoSQL injection (MongoDB/Mongoose; filter của Sequelize thì không), regex injection, log injection cho JS/TS; SQL, path traversal, SSRF, SSTI (`render_template_string`), code injection/deserialization, log injection cho Python (nguồn của Flask, Django, FastAPI/Starlette, aiohttp, Tornado). Lớp 1 bắt ``db.query(`…${id}`)`` ngay tại chỗ gọi; lớp 2 bắt trường hợp lớp 1 không thấy, khi chuỗi SQL được dựng ở biến hoặc ở hàm khác:
 
@@ -472,7 +472,7 @@ Ngoài ra đã chạy agent thật trong repo demo:
 ## Giới hạn
 
 - **Lỗi logic và phân quyền** (IDOR, thiếu kiểm quyền admin, trả thừa dữ liệu) không có dạng cú pháp chung: trên ba bộ benchmark, đây là phần không công cụ SAST nào bắt được. Rule `llm` (`larpcop review`) nhắm vào loại này nhưng chỉ cho warning, vì model không tất định; `larpcop learn` chuyển dần các nhận xét lặp lại thành rule tất định.
-- **Taint là xấp xỉ**: không theo dữ liệu qua field của object được gán ở hàm khác hay quá 2 tầng import (collection thì có: `push`, `set`, `append`, `Object.assign`…); giá trị trả về từ hàm không có summary (thư viện) được coi là bẩn nếu đối số bẩn. `guards` không phân biệt chiều của phép kiểm. Language server cần dự án đã cài đủ dependency mới trả lời đúng kiểu.
+- **Taint là xấp xỉ**: không theo dữ liệu qua field của object được gán ở hàm khác hay quá 2 tầng import (collection thì có: `push`, `set`, `append`, `Object.assign`…); giá trị trả về từ hàm không có summary (thư viện) được coi là bẩn nếu đối số bẩn. `guards` không phân biệt chiều của phép kiểm và không hiểu cấu trúc `&&`/`||` của điều kiện (`startsWith` với chuỗi cố định thì chỉ được tính khi chuỗi đó là phần đầu an toàn theo `safe_prefix`: `startsWith("/")` có, `startsWith("http")` không). Language server cần dự án đã cài đủ dependency mới trả lời đúng kiểu.
 - **Package uy tín bị chiếm quyền**: tuổi tối thiểu 14 ngày chặn được bản độc bị phát hiện trong 14 ngày (phần lớn: OSV ghi nhận mã độc với độ trễ trung vị khoảng 20 giờ). Bản độc tồn tại lâu hơn mà chưa ai báo thì không công cụ dựa trên advisory nào biết.
 - **Cursor và Gemini chưa chạy agent thật.** Cursor cần đăng nhập `cursor-agent login` (qua trình duyệt); Gemini CLI chưa được cài hay đăng nhập trên máy dev. Adapter được test bằng đúng schema payload ở trên.
 - **File agent ghi bằng shell**: `cat > f <<EOF`, `tee`, `echo … > f`, `cp`/`mv`/`install` và `sed -i` chỉ gồm lệnh thay thế (`s/…/…/`, chạy thử trên bản sao) được kiểm nội dung *trước khi* lệnh chạy. Script tự viết, Makefile hay `sed` có lệnh khác thì không thấy trước được; hook kiểm các file mà lệnh đã đổi ngay sau khi lệnh chạy, rồi lại ở lượt kết thúc, pre-commit và CI.

@@ -50,7 +50,12 @@ impl TaintRule {
         let base = Ctx {
             sources: ranges(sources),
             sanitizers: ranges(sanitizers),
-            guards: ranges(guards),
+            guards: ranges(
+                guards
+                    .into_iter()
+                    .filter(|m| prefix::guard_holds(m.get_node(), self.safe_prefix.as_ref()))
+                    .collect(),
+            ),
             summaries: Summaries::new(),
             source_texts: self.source_texts.clone(),
         };

@@ -9,3 +9,4 @@ invalid:
 - function r(req, res) { const next = req.query.next || '/'; res.redirect(302, next); }
 - app.get('/p', (req, res) => res.redirect('//' + req.query.host));
 - app.get('/p', (req, res) => res.redirect(`https://${req.query.host}/x`));
+- function r(req, res) { const t = req.query.next; if (t.startsWith('http')) { res.redirect(t); } }

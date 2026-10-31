@@ -23,3 +23,25 @@ pub(super) fn leading<D: Doc>(node: &Node<D>) -> Option<String> {
         _ => None,
     }
 }
+
+/// A guard `x.startsWith("<literal>")` only proves anything when the literal
+/// is (the beginning of) a safe start: `startsWith("/")` keeps a redirect on
+/// the site, `startsWith("http")` does not. Other guards are kept as they are.
+pub(super) fn guard_holds<D: Doc>(guard: &Node<D>, safe: Option<&regex::Regex>) -> bool {
+    let (Some(safe), true) = (safe, super::flow::CALLS.contains(&guard.kind().as_ref())) else {
+        return true;
+    };
+    let Some(name) = super::summary::callee(guard) else {
+        return true;
+    };
+    if !(name.ends_with(".startsWith") || name.ends_with(".startswith")) {
+        return true;
+    }
+    let first = super::summary::args(guard).into_iter().next();
+    match first.filter(|a| matches!(a.kind().as_ref(), "string" | "template_string")) {
+        // The checked start may end where the safe part begins (`"/"` + a path).
+        Some(lit) => leading(&lit)
+            .is_some_and(|start| safe.is_match(&start) || safe.is_match(&(start + "a"))),
+        None => true,
+    }
+}

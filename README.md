@@ -226,11 +226,11 @@ llm:
 
 | | larpcop | Semgrep OSS (`p/default`) | gitleaks |
 |---|---|---|---|
-| Juice Shop: thời gian | **5,47 s** | 34,37 s | 6,32 s |
+| Juice Shop: thời gian | **5,00 s** | 33,34 s | 4,83 s |
 | Juice Shop: dòng lỗ hổng tìm thấy | **11/27** | 6/27 | – |
 | NodeGoat: dòng tìm thấy | **12/14** | 4/14 | – |
 | DVNA: dòng tìm thấy | **12/14** | 7/14 | – |
-| vulnerable-node `sast/seeds` (chấm bằng script của dự án) | **11/12, 0 báo nhầm** | 10/12, 1 báo nhầm | – |
+| vulnerable-node `sast/seeds` (chấm bằng script của dự án) | **11/12**, 1 báo nhầm (0 nếu bỏ rule chung chung) | 10/12, 1 báo nhầm (8/12 nếu bỏ rule chung chung) | – |
 | Secrets | trùng khớp hoàn toàn với gitleaks | – | 69 + 3 |
 
 Mỗi bộ từng là bộ kiểm chứng ở lần chạy đầu, rồi được dùng để thêm rule: NodeGoat lần đầu 8/14, DVNA 5/14 (Semgrep 7/14), vulnerable-node 10/12 với 1 báo nhầm. Thứ tự đó và từng dòng bị bỏ sót nằm trong [bench/README.md](bench/README.md).

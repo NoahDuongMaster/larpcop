@@ -30,13 +30,13 @@ Kết quả dưới đây là sau bước 4: chỉ có ý nghĩa *không thụt 
 
 | | larpcop | Semgrep OSS | gitleaks |
 |---|---|---|---|
-| Juice Shop: thời gian | **5,47 s** | 34,37 s | 6,32 s |
+| Juice Shop: thời gian | **5,00 s** | 33,34 s | 4,83 s |
 | Juice Shop: dòng tìm thấy (/27) | **11** (8 nếu không tính `validate-request-input`) | 6 | – |
-| NodeGoat: thời gian | **3,35 s** | 9,53 s | 0,24 s |
+| NodeGoat: thời gian | **3,12 s** | 9,82 s | 0,21 s |
 | NodeGoat: dòng tìm thấy (/14) | **12** | 4 | – |
-| DVNA: thời gian | **1,22 s** | 12,60 s | 0,27 s |
+| DVNA: thời gian | **1,12 s** | 9,51 s | 0,23 s |
 | DVNA: dòng tìm thấy (/14) | **12** | 7 | – |
-| vulnerable-node seeds (/12 file, báo nhầm trên 2 file sạch) | **11, 0 báo nhầm** (cả hai cách chấm) | 10, 1 báo nhầm (8 nếu bỏ rule chung chung) | – |
+| vulnerable-node seeds (/12 file, báo nhầm trên 2 file sạch) | **11**, 1 báo nhầm (11 và 0 báo nhầm nếu bỏ rule chung chung) | 10, 1 báo nhầm (8 và 1 báo nhầm nếu bỏ rule chung chung) | – |
 | Secrets (so với gitleaks) | 69/69 và 3/3 trùng khớp | – | 69 và 3 |
 
 larpcop chạy cả bộ `recommended` (ast-grep, 16 rule taint, rule template, secrets, metric, lỗ hổng dependency). So với 3,58 s ở bản 0.2.1, Juice Shop chậm hơn vì thêm 12 rule taint và taint xuyên hàm; mỗi rule quét cây cú pháp một lần cho mọi pattern và mỗi phạm vi chỉ duyệt một lần cho mọi tham số và mọi vòng summary. Thời gian NodeGoat gần như toàn bộ là chờ mạng: OSV được hỏi về 1.480 package trong `package-lock.json`.

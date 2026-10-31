@@ -27,6 +27,13 @@ SECURITY = {
     "py-yaml-safe-load", "secrets", "validate-request-input", "dependency-vulnerability",
     "gha-script-injection", "gha-curl-pipe-shell", "gha-unpinned-action", "gha-pr-target-checkout",
     "tf-public-bucket-acl", "tf-open-ingress", "tf-publicly-accessible-db", "tf-iam-wildcard",
+    "no-regex-redos", "py-no-regex-redos", "no-template-autoescape-off", "py-no-template-autoescape-off",
+    "no-plaintext-password-compare", "py-no-plaintext-password-compare", "taint-log", "py-taint-log",
+    "no-hardcoded-session-secret", "py-no-hardcoded-secret-key", "no-xml-external-entities",
+    "py-no-xml-external-entities", "no-unsafe-deserialization", "py-no-unsafe-deserialization", "taint-code",
+    "no-unescaped-template-output", "pug-no-unescaped-output", "no-inner-html-in-templates",
+    "taint-xss", "taint-path", "taint-ssrf", "taint-nosql", "taint-regex", "no-unsafe-recursive-merge",
+    "py-taint-path", "py-taint-ssrf", "py-taint-ssti", "py-taint-code",
 }
 
 
@@ -106,4 +113,5 @@ def main():
         secrets_parity(ak, gl)
 
 
-main()
+if __name__ == "__main__":
+    main()

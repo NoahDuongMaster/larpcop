@@ -1,6 +1,6 @@
 [package]
 name = "larpcop"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 description = "Agent-agnostic coding-rule enforcement: one binary, every agent, every stack."
 repository = "https://github.com/NoahDuongMaster/larpcop"

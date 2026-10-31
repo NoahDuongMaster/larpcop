@@ -1,0 +1,19 @@
+{
+  "source": "OWASP-category solution write-ups in DVNA's own docs/solution/*.md (appsecco/dvna 9ba473a). Each documented vulnerable snippet mapped to its line in the vulnerable code. Fixed before any tool ran on DVNA; A10 (missing logging) and CSRF (missing middleware) name no line and are left out.",
+  "lines": [
+    {"file": "core/appHandler.js", "line": 10, "label": "A1 SQL injection (query built from req.body.login)"},
+    {"file": "core/appHandler.js", "line": 39, "label": "A1 command injection (exec of req.body.address)"},
+    {"file": "server.js", "line": 24, "label": "A2 hard-coded session secret"},
+    {"file": "core/appHandler.js", "line": 207, "label": "A3 every user's record returned by the API"},
+    {"file": "core/appHandler.js", "line": 235, "label": "A4 XXE (libxmljs noent:true)"},
+    {"file": "routes/app.js", "line": 42, "label": "A5 admin API without an authorization check"},
+    {"file": "core/appHandler.js", "line": 145, "label": "A5 IDOR (user edited by req.body.id)"},
+    {"file": "core/appHandler.js", "line": 197, "label": "A6/A9 mathjs.eval of req.body.eqn"},
+    {"file": "views/app/products.ejs", "line": 20, "label": "A7 reflected XSS (<%- searchTerm %>)"},
+    {"file": "views/app/products.ejs", "line": 50, "label": "A7 stored XSS (<%- product name %>)"},
+    {"file": "views/app/adminusers.ejs", "line": 41, "label": "A7 DOM XSS (innerHTML)"},
+    {"file": "core/appHandler.js", "line": 218, "label": "A8 insecure deserialization (node-serialize)"},
+    {"file": "package.json", "line": 25, "label": "A9 vulnerable component (mathjs 3.10.1)"},
+    {"file": "core/appHandler.js", "line": 188, "label": "Open redirect (req.query.url)"}
+  ]
+}

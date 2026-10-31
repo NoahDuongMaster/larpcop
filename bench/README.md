@@ -1,65 +1,60 @@
 # Benchmark: larpcop vs Semgrep OSS vs gitleaks
 
-Chạy lại được bằng một lệnh: `bench/run.sh` (cần git, python3, semgrep, gitleaks và một bản build release của larpcop). Kết quả thô nằm trong [`results/`](results): `juice-shop.md`, `NodeGoat.md`, `timing.txt`; các file JSON không được commit.
+Chạy lại được bằng một lệnh: `bench/run.sh` (cần git, python3, node, semgrep, gitleaks và một bản build release của larpcop). Kết quả thô nằm trong [`results/`](results): `juice-shop.md`, `NodeGoat.md`, `dvna.md`, `seeds.md`, `timing.txt`; các file JSON không được commit.
 
 ## Đối tượng và cách chấm
 
-| | Juice Shop | NodeGoat |
+| | Mã nguồn | Đáp án |
 |---|---|---|
-| Mã nguồn | [OWASP Juice Shop](https://github.com/juice-shop/juice-shop) tag `v20.3.0` (Express + Angular) | [OWASP NodeGoat](https://github.com/OWASP/NodeGoat) commit `c5cb68a` (Express + MongoDB) |
-| Đáp án | Comment `// vuln-code-snippet vuln-line <challenge>` do chính nhóm Juice Shop đặt: 27 dòng (bỏ `test/` và `data/static/codefixes/`) | [`nodegoat-truth.json`](nodegoat-truth.json): 14 dòng theo tutorial OWASP Top 10 của NodeGoat, viết ra **trước khi** chạy bất kỳ công cụ nào |
-| Vai trò | Bộ dùng để phát triển: một số rule được thêm sau khi đã thấy chỗ hổng | **Bộ kiểm chứng**: không rule nào được thêm hay sửa sau khi chạy |
+| Juice Shop | [OWASP Juice Shop](https://github.com/juice-shop/juice-shop) `v20.3.0` (Express + Angular) | Comment `// vuln-code-snippet vuln-line` do chính nhóm Juice Shop đặt: 27 dòng (bỏ `test/` và `data/static/codefixes/`) |
+| NodeGoat | [OWASP NodeGoat](https://github.com/OWASP/NodeGoat) `c5cb68a` (Express + MongoDB) | [`nodegoat-truth.json`](nodegoat-truth.json): 14 dòng theo tutorial của NodeGoat |
+| DVNA | [appsecco/dvna](https://github.com/appsecco/dvna) `9ba473a` (Express + Sequelize + EJS) | [`dvna-truth.json`](dvna-truth.json): 14 dòng theo `docs/solution/*.md` của DVNA |
+| vulnerable-node | [cr0hn/vulnerable-node](https://github.com/cr0hn/vulnerable-node) `d68f2a3`, thư mục `sast/seeds/` | Do chính dự án viết (`sast/ground-truth.yaml`) và chấm bằng script của dự án (`sast/tests/score.js`): 12 file, mỗi file một lỗ hổng, cộng 2 file sạch để đo báo nhầm |
 
-- **Một dòng tính là tìm thấy** khi có finding của công cụ phủ dòng đó, chấp nhận lệch ±3 dòng, áp dụng như nhau cho mọi công cụ.
-- **Công cụ**:
-  - larpcop với bộ [`standards/recommended`](../standards/recommended); chỉ tính rule bảo mật.
-  - Semgrep OSS 1.183.0 với gói `p/default` (1073 rule), tải về một lần trước khi đo.
-  - gitleaks 8.30.1, chỉ để so phần secrets.
+- **Một dòng tính là tìm thấy** khi có finding của công cụ phủ dòng đó, chấp nhận lệch ±3 dòng, áp dụng như nhau cho mọi công cụ. Với vulnerable-node, một file tính là tìm thấy khi công cụ báo bất kỳ finding nào trong file (cách chấm của dự án); cột thứ hai bỏ các rule báo cho mọi handler Express bất kể lỗi (`validate-request-input` của larpcop, kiểm middleware CSRF của Semgrep).
+- **Công cụ**: larpcop với bộ [`standards/recommended`](../standards/recommended), chỉ tính rule bảo mật; Semgrep OSS 1.183.0 với gói `p/default` (1073 rule), tải về một lần trước khi đo; gitleaks 8.30.1, chỉ để so phần secrets.
 - **Thời gian**: trung vị của 3 lần chạy trên MacBook arm64 8 nhân.
 
-## Kết quả (31/10/2026)
+## Bộ nào còn là bộ kiểm chứng
+
+Một bộ chỉ đo được độ tổng quát khi rule chưa được viết sau khi xem đáp án của nó. Thứ tự đã diễn ra:
+
+1. **Juice Shop** là bộ phát triển: lần đầu larpcop 5/27, Semgrep 6/27; `no-bypass-security-trust`, `no-directory-listing`, `no-weak-hash`, `no-mongo-where`, `taint-redirect` được thêm sau đó.
+2. **NodeGoat** được chấm lần đầu khi chưa ai xem đáp án: larpcop **8/14**, Semgrep 4/14. Bốn chỗ trống (ReDoS, log injection, tắt autoescape, so mật khẩu plain text) sau đó có rule, nên NodeGoat không còn là bộ kiểm chứng.
+3. **DVNA** đo bốn rule đó: chúng không bắt thêm dòng nào (DVNA không có các lỗi này). Lần chạy đầu: larpcop **5/14**, Semgrep **7/14**. Các chỗ trống (secret của session viết cứng, XXE, deserialization, `mathjs.eval`, output không escape trong template EJS) sau đó có rule, nên DVNA cũng hết là bộ kiểm chứng.
+4. **vulnerable-node** đo các rule của bước 3, lần đầu: larpcop 10/12 file, 1 báo nhầm (6/12 nếu bỏ rule chung chung), Semgrep 10/12, 1 báo nhầm (8/12). Các chỗ trống (XSS qua `res.send`, path traversal, SSRF, ReDoS, prototype pollution) và báo nhầm (redirect đã được kiểm bằng `startsWith`) sau đó được xử lý bằng rule taint mới, `guards` và `safe_prefix`.
+
+Kết quả dưới đây là sau bước 4: chỉ có ý nghĩa *không thụt lùi* trên cả bốn bộ. Rule mới cần một bộ thứ năm chưa ai nhìn.
+
+## Kết quả (01/11/2026)
 
 | | larpcop | Semgrep OSS | gitleaks |
 |---|---|---|---|
-| Juice Shop: thời gian | **3,58 s** | 33,00 s | 4,84 s |
+| Juice Shop: thời gian | **5,47 s** | 34,37 s | 6,32 s |
 | Juice Shop: dòng tìm thấy (/27) | **11** (8 nếu không tính `validate-request-input`) | 6 | – |
-| NodeGoat: thời gian | **3,16 s** | 10,67 s | 0,21 s |
-| NodeGoat: dòng tìm thấy (/14) | **8** (6 nếu không tính `validate-request-input`) | 4 | – |
+| NodeGoat: thời gian | **3,35 s** | 9,53 s | 0,24 s |
+| NodeGoat: dòng tìm thấy (/14) | **12** | 4 | – |
+| DVNA: thời gian | **1,22 s** | 12,60 s | 0,27 s |
+| DVNA: dòng tìm thấy (/14) | **12** | 7 | – |
+| vulnerable-node seeds (/12 file, báo nhầm trên 2 file sạch) | **11, 0 báo nhầm** (cả hai cách chấm) | 10, 1 báo nhầm (8 nếu bỏ rule chung chung) | – |
 | Secrets (so với gitleaks) | 69/69 và 3/3 trùng khớp | – | 69 và 3 |
 
-larpcop chạy cả bộ `recommended` (ast-grep, taint, secrets, metric, lỗ hổng dependency). Thời gian NodeGoat gần như toàn bộ là chờ mạng: OSV được hỏi về cả 1.480 package trong `package-lock.json` (khoảng 3 s cho một request querybatch từ máy đo); chi tiết advisory được cache theo trường `modified` của OSV nên chỉ tải lại khi advisory bị sửa. Lần chạy đầu, chưa có cache, mất 7,8 s.
+larpcop chạy cả bộ `recommended` (ast-grep, 16 rule taint, rule template, secrets, metric, lỗ hổng dependency). So với 3,58 s ở bản 0.2.1, Juice Shop chậm hơn vì thêm 12 rule taint và taint xuyên hàm; mỗi rule quét cây cú pháp một lần cho mọi pattern và mỗi phạm vi chỉ duyệt một lần cho mọi tham số và mọi vòng summary. Thời gian NodeGoat gần như toàn bộ là chờ mạng: OSV được hỏi về 1.480 package trong `package-lock.json`.
 
-### Juice Shop
+### Những gì không công cụ nào bắt được
 
-- **SQL injection** (`routes/login.ts:34`, `routes/search.ts:23`): cả hai đều bắt được. larpcop bắt bằng hai lớp độc lập: quy ước `no-sql-interpolation` và `taint-sql`.
-- **XSS qua `bypassSecurityTrustHtml`** (2 dòng): chỉ larpcop (`no-bypass-security-trust`).
-- **Directory listing** (4 dòng): cả hai.
-- **NoSQL injection / forged review** (`routes/updateProductReviews.ts`, 3 dòng): chỉ larpcop, nhờ quy ước `validate-request-input`. Quy ước này cấm cách viết gây ra lỗi chứ không truy vết lỗi, nên báo mọi chỗ dùng input chưa validate: 236 chỗ ở Juice Shop. Repo cũ dùng `baseline` để chỉ chặn code mới.
-- **16 dòng không công cụ nào bắt được**: lỗi logic, phân quyền, cấu hình (route admin lộ, allowlist redirect dùng `includes`, rate limit tin `X-Forwarded-For`, prompt injection chatbot…). SAST cú pháp không với tới loại này; rule `llm` (`larpcop review`) làm cho loại này nhưng không được tính vì không tất định.
+- Juice Shop: 16 dòng lỗi logic, phân quyền, cấu hình (route admin lộ, allowlist redirect dùng `includes`, rate limit tin `X-Forwarded-For`, prompt injection chatbot…).
+- NodeGoat: chính sách mật khẩu yếu (`session.js:144`), mật khẩu lưu plain text (`user-dao.js:25`, phép gán chứ không phải phép so sánh).
+- DVNA: API trả mọi bản ghi user (`appHandler.js:207`), route admin không kiểm quyền (`routes/app.js:42`).
+- vulnerable-node: NoSQL injection trong một hàm nhận filter làm tham số, không có nguồn request nào trong file.
 
-### NodeGoat (bộ kiểm chứng)
-
-| Dòng | Lỗ hổng | larpcop | Semgrep OSS |
-|---|---|---|---|
-| `contributions.js:32–34` | Server-side JS injection (`eval` của `req.body`) | ✓ `no-eval` | ✓ `eval-detected` |
-| `allocations-dao.js:78` | NoSQL injection (`$where`) | ✓ `no-mongo-where` | – |
-| `index.js:72` | Open redirect (`req.query.url`) | ✓ `taint-redirect` | ✓ `express-open-redirect` |
-| `package-lock.json:6742` | Dependency có lỗ hổng (`marked@0.3.5`) | ✓ `dependency-vulnerability` | – (cần Semgrep Supply Chain, bản trả phí) |
-| `allocations.js:18`, `research.js:16` | IDOR, SSRF | ✓ chỉ qua quy ước `validate-request-input` | – |
-| `session.js:64`, `profile.js:59`, `user-dao.js:25/61`, `session.js:144`, `server.js:137` | Log injection, ReDoS, mật khẩu plain text, chính sách mật khẩu yếu, tắt autoescape | – | – |
-
-Bộ này cho thấy chỗ trống thật: ReDoS, log injection và tắt template autoescape chưa có rule. Chúng **không** được thêm sau khi xem kết quả, để bộ này còn giá trị kiểm chứng; nếu thêm thì phải đo trên một bộ thứ ba (ví dụ DVNA).
+SAST cú pháp không với tới lỗi logic và phân quyền; rule `llm` (`larpcop review`) nhắm vào loại này nhưng không được tính vì không tất định.
 
 ### Phạm vi khác nhau
 
 - Cả hai có rule GitHub Actions và Terraform. larpcop trước đây bỏ qua thư mục ẩn khi quét toàn repo, nên không thấy `.github/workflows`; benchmark lộ ra lỗi này và đã sửa.
-- Semgrep báo lỗi cú pháp và bỏ qua các file snippet trong `data/static/codefixes/` của Juice Shop. tree-sitter chịu lỗi nên larpcop vẫn đọc được, vì vậy có thêm finding ở đó (ví dụ 28 trên 34 lần `no-directory-listing`).
+- Semgrep báo lỗi cú pháp và bỏ qua các file snippet trong `data/static/codefixes/` của Juice Shop. tree-sitter chịu lỗi nên larpcop vẫn đọc được, vì vậy có thêm finding ở đó.
+- `[innerHTML]` của Angular không bị tính là XSS: Angular tự sanitize binding này; lỗ hổng thật nằm ở `bypassSecurityTrust*`.
+- Filter của Sequelize (`where:`, `include:`) không bị tính là NoSQL injection: Sequelize không nhận operator từ JSON.
 
-**Secrets**: larpcop nhúng nguyên bộ rule của gitleaks và giải mã base64/JWT như gitleaks, nên kết quả trùng khớp hoàn toàn. Các lần chạy trước lộ ra 3 bug đã sửa: công thức entropy (đếm ký tự, chia cho số byte), gộp finding `generic-*` nằm trong finding cụ thể hơn, và secret nằm trong payload JWT.
-
-## Những gì đã thay đổi vì benchmark
-
-Juice Shop lần đầu: larpcop **5/27**, Semgrep 6/27. Sau đó bộ `recommended` được thêm các rule dưới đây, đều là mẫu lỗ hổng phổ biến nhưng được thêm *sau khi* đã thấy chỗ hổng:
-
-- `no-bypass-security-trust` (Angular), `no-directory-listing` (`serve-index`): đưa kết quả lên 11/27.
-- `no-weak-hash`, `py-no-weak-hash`, `no-mongo-where`, `taint-redirect`: không đổi điểm Juice Shop. `no-mongo-where` và `taint-redirect` bắt được 2 dòng của NodeGoat, bộ mà chúng chưa từng thấy.
+**Secrets**: larpcop nhúng nguyên bộ rule của gitleaks và giải mã base64/JWT như gitleaks, nên kết quả trùng khớp hoàn toàn. Các lần chạy trước lộ ra 3 bug đã sửa: công thức entropy, gộp finding `generic-*` nằm trong finding cụ thể hơn, và secret nằm trong payload JWT.

@@ -104,8 +104,11 @@ dependencies:
    | bun | `bunfig.toml` | `[install] minimumReleaseAge = 1209600` |
    | uv ≥ 0.9 | `pyproject.toml` (`[tool.uv]`) hoặc `uv.toml` | `exclude-newer = "14 days"` |
 
-   Đã chạy thật: npm 11.19 với `min-release-age=14`, khi được yêu cầu `typescript@next` thì tự chọn `7.0.2`. pnpm 11.2 chọn bản dev `20261017`, đúng 14 ngày tuổi.
-3. **Hook của agent**: chặn mọi lệnh ghi đè gate (`--min-release-age=0`, `npm config set min-release-age …`, `npm_config_min_release_age=…`, `uv … --exclude-newer`, `UV_EXCLUDE_NEWER=…`).
+   Đã chạy thật: npm 11.19 với `min-release-age=14`, khi được yêu cầu `typescript@next` thì tự chọn `7.0.2`. pnpm 11.2 chọn bản dev `20261017`, đúng 14 ngày tuổi. `pip install` phải kèm `--uploaded-prior-to`.
+3. **Hook của agent**:
+   - Chặn lệnh *nới* gate (`--min-release-age=0`, `npm config set min-release-age …`, `npm_config_min_release_age=…`, `uv … --exclude-newer "1 day"`, `UV_EXCLUDE_NEWER=…`). Giá trị được đọc thật, nên thiết lập *chặt hơn* (`--exclude-newer "30 days"`) vẫn qua.
+   - Package manager không có gate gốc (Cargo, Go, Poetry, Bundler, RubyGems, Composer, NuGet, Yarn 1, nhận ra vì không có `.yarnrc.yml`) và tool runner chạy package ngay (`npx`, `pnpm dlx`, `yarn dlx`, `bunx`, `uvx`, `pipx run`, `cargo install`): hook hỏi registry xem lệnh sẽ tải **phiên bản nào** và chặn nếu chưa đủ tuổi, trước khi lệnh chạy. Chỗ nào cài xong là chạy code dependency ngay (`bundle install`, `poetry update`) thì bắt buộc dạng chỉ resolve (`bundle lock`, `poetry lock`) để lockfile qua kiểm trước.
+   - Khi lockfile đang chứa phiên bản không qua kiểm, mọi lệnh có thể chạy code dự án hay dependency bị chặn (`npm test`, `make`, `node script.js`…), mặc định là chặn; chỉ các lệnh chỉ đọc/di chuyển file (`git`, `ls`, `cat`, `grep`, `sed`, `cp`…) được chạy để sửa lockfile.
 
 Phiên bản không có trên deps.dev hoặc không tra được vì lỗi mạng đều bị chặn (fail closed). **Ngoại lệ là bản vá bảo mật**: một bản quá mới vẫn được cho qua, ở mức warning, nếu bản đủ tuổi mới nhất cùng dòng có advisory còn bản mới thì không, theo trường `advisoryKeys` của deps.dev. Không có ngoại lệ này thì rule sẽ ép hạ về bản có lỗ hổng: chính repo larpcop gặp trường hợp này với `rustls-webpki` 0.103.16 và `webpki-roots` 1.0.11, vì bản đủ tuổi trước đó dính RUSTSEC-2026-0382 và RUSTSEC-2026-0381.
 
@@ -117,7 +120,7 @@ Bốn lớp, xếp theo mức chắc chắn. Lớp đầu tất định 100%, c�
 
 **1. Quy ước cú pháp (bộ `recommended`).** Không đi truy vết lỗi mà cấm luôn cách viết dẫn tới lỗi: SQL chỉ qua tham số, lệnh shell chỉ qua mảng tham số, dữ liệu request chỉ được dùng sau khi qua schema (`validate-request-input`: `req.body`, `req.query`, `req.params`, `request.json()` phải nằm trong `X.parse(…)`/`safeParse`/`validate`…). Khi đó lỗi không viết ra được ngay từ đầu, và ast-grep bắt đúng 100%, cùng một kết quả ở mọi lần chạy.
 
-**2. Taint trong phạm vi một hàm** (cùng phạm vi với Semgrep OSS). Theo dữ liệu từ `sources` tới đối số của `sinks` qua các phép gán trong cùng hàm, theo thứ tự dòng code; đi qua `sanitizers` thì sạch, gán lại giá trị sạch thì hết taint, destructuring cũng được theo. Pattern viết bằng cú pháp ast-grep:
+**2. Taint xuyên hàm và xuyên file.** Theo dữ liệu từ `sources` tới đối số của `sinks` qua các phép gán theo thứ tự dòng code; đi qua `sanitizers` thì sạch, gán lại giá trị sạch thì hết taint, destructuring cũng được theo. Mỗi hàm có một *summary* (tham số nào tới sink, tham số nào được trả về, hàm có trả về dữ liệu nguồn không), nên dữ liệu được theo qua lời gọi hàm trong cùng file, qua `import`/`require`/alias của tsconfig, `from … import` của Python và các package trong cùng module Go; callback và closure thấy các biến bẩn mà chúng bắt được. Pattern viết bằng cú pháp ast-grep:
 
 ```yaml
 taint:
@@ -128,9 +131,13 @@ taint:
     sinks: ["$DB.query($SQL)", "$DB.query($SQL, $$$REST)"]
     sink_arg: SQL                 # chỉ đối số này phải sạch
     sanitizers: ["Number($X)", "$S.parse($X)"]
+    guards: ["$U.startsWith($P)", "$L.includes($U)"]   # if (!ok(x)) return …; → x sạch phía sau
+    safe_prefix: '^/[^/\\]'                          # "/products/" + id: phần đầu cố định là an toàn
 ```
 
-Bộ `recommended` có sẵn `taint-sql`, `taint-shell`, `taint-redirect` (JS/TS: Express, Next.js) và `py-taint-sql` (Flask, Django, FastAPI). Lớp 1 bắt ``db.query(`…${id}`)`` ngay tại chỗ gọi; lớp 2 bắt trường hợp lớp 1 không thấy, khi chuỗi SQL được dựng ở biến trước đó:
+`guards` là phép kiểm trong điều kiện `if`: sau một nhánh `return`/`throw`, hoặc bên trong nhánh chạy khi phép kiểm đúng, biến được kiểm là sạch. `safe_prefix` là regex trên phần chuỗi cố định ở đầu đối số được ghép (`res.redirect("/p/" + id)` không thể dẫn ra ngoài site).
+
+Bộ `recommended` có sẵn 16 rule taint: SQL, shell, open redirect, code injection (`eval`, `vm`, `mathjs.eval`), XSS phản chiếu (`res.send` của chuỗi HTML, `innerHTML`), path traversal, SSRF, NoSQL injection (MongoDB/Mongoose; filter của Sequelize thì không), regex injection, log injection cho JS/TS; SQL, path traversal, SSRF, SSTI (`render_template_string`), code injection/deserialization, log injection cho Python. Lớp 1 bắt ``db.query(`…${id}`)`` ngay tại chỗ gọi; lớp 2 bắt trường hợp lớp 1 không thấy, khi chuỗi SQL được dựng ở biến hoặc ở hàm khác:
 
 ```ts
 const name = req.query.name as string;
@@ -138,7 +145,7 @@ const sql = "SELECT * FROM users WHERE name = '" + name + "'";
 res.json(await db.query(sql));          // taint-sql
 ```
 
-Dữ liệu không được theo vào hàm khác hay file khác. Riêng **kiểu** thì hỏi được xuyên file, qua language server của chính dự án (typescript-language-server, pyright, gopls, rust-analyzer) thay vì tự viết type checker. `sink_types` yêu cầu metavariable của sink phải có kiểu khớp regex:
+**Kiểu** thì hỏi language server của chính dự án (typescript-language-server, pyright, gopls, rust-analyzer) thay vì tự viết type checker. `sink_types` yêu cầu metavariable của sink phải có kiểu khớp regex:
 
 ```yaml
     sinks: ["$DB.query($SQL)"]
@@ -146,7 +153,20 @@ Dữ liệu không được theo vào hàm khác hay file khác. Riêng **kiểu
     sink_types: { DB: "\\bPool\\b" }   # pool.query(sql) bị bắt; searchIndex.query(text) thì không
 ```
 
-Chỉ hỏi server về các ứng viên mà lớp cú pháp đã tìm thấy, nên chỉ trả giá khi có ứng viên (chạy thử: 1,9 s với tsserver, 0,5 s với pyright). Server không có, không khởi động được, hoặc không trả lời thì finding vẫn giữ nguyên, tức là fail closed. Lệnh chạy server đổi được bằng `language_servers: { typescript: [...] }`. Test chạy với typescript-language-server thật, cả trong CI.
+Chỉ hỏi server về các ứng viên mà lớp cú pháp đã tìm thấy, mỗi vị trí một lần, nên chỉ trả giá khi có ứng viên (chạy thử: 1,9 s với tsserver, 0,5 s với pyright, 0,7 s với gopls, 6 s với rust-analyzer vì phải nạp workspace; larpcop chờ rust-analyzer báo xong qua `experimental/serverStatus`). Server không có, không khởi động được, hoặc không trả lời thì finding vẫn giữ nguyên, tức là fail closed. Lệnh chạy server đổi được bằng `language_servers: { typescript: [...] }`; `LARPCOP_DEBUG_TYPES=1` in ra câu trả lời của server. Test chạy với cả bốn server thật, cả trong CI.
+
+**Template và file không có grammar.** Rule `text:` là regex trên file theo glob (template, HTML, config):
+
+```yaml
+text:
+  - id: no-unescaped-template-output
+    files: ["**/*.ejs", "**/*.hbs", "**/*.njk", "**/*.html", "**/*.vue"]
+    regex: '<%-[^%]*%>|\{\{\{|\|\s*safe\b|\bv-html\s*='
+    not: '^<%-\s*include\b'          # match nào khớp `not` thì bỏ qua
+    message: Template output written without HTML escaping (XSS).
+```
+
+Bộ `recommended` có 3 rule loại này: output không escape (EJS `<%-`, Handlebars `{{{`, Jinja/Nunjucks `|safe` và `autoescape false`, Blade `{!!`, ERB `raw`/`html_safe`, Svelte `{@html}`, Vue `v-html`, Razor `Html.Raw`), Pug `!=`/`!{}`, và `innerHTML`/`document.write` trong script của template.
 
 **3. Secrets.** `secrets: {}` bật 222 detector của [gitleaks](https://github.com/gitleaks/gitleaks) (MIT, nhúng nguyên `gitleaks.toml` vào binary, kèm license trong `assets/`): lọc theo keyword, regex, entropy, allowlist theo đúng ngữ nghĩa của gitleaks. Kết quả in ra đã che, chỉ giữ 4 ký tự đầu (`ghp_…[redacted]`). `exclude` để bỏ qua fixture có khoá giả; rule bị lock thì không thêm `exclude` được. Hook cũng chặn agent ghi secret vào file.
 
@@ -202,16 +222,18 @@ llm:
 
 `--json` xuất cùng dữ liệu đó cho dashboard khác dùng.
 
-**Benchmark công khai**: [`bench/`](bench) (chạy lại bằng `bench/run.sh`). Đối tượng là OWASP Juice Shop, đáp án là 27 dòng mà chính nhóm Juice Shop đánh dấu là có lỗ hổng:
+**Benchmark công khai**: [`bench/`](bench) (chạy lại bằng `bench/run.sh`), trên bốn ứng dụng cố ý có lỗ hổng, mỗi bộ có đáp án từ chính dự án đó:
 
 | | larpcop | Semgrep OSS (`p/default`) | gitleaks |
 |---|---|---|---|
-| Juice Shop: thời gian | **3,58 s** | 33,00 s | 4,84 s |
-| Juice Shop: dòng lỗ hổng tìm thấy | **11/27** (8 nếu không tính quy ước validate) | 6/27 | – |
-| NodeGoat (bộ kiểm chứng, đáp án viết trước khi chạy): dòng tìm thấy | **8/14** (6 nếu không tính quy ước validate) | 4/14 | – |
+| Juice Shop: thời gian | **5,47 s** | 34,37 s | 6,32 s |
+| Juice Shop: dòng lỗ hổng tìm thấy | **11/27** | 6/27 | – |
+| NodeGoat: dòng tìm thấy | **12/14** | 4/14 | – |
+| DVNA: dòng tìm thấy | **12/14** | 7/14 | – |
+| vulnerable-node `sast/seeds` (chấm bằng script của dự án) | **11/12, 0 báo nhầm** | 10/12, 1 báo nhầm | – |
 | Secrets | trùng khớp hoàn toàn với gitleaks | – | 69 + 3 |
 
-Chi tiết từng dòng, khác biệt phạm vi và các rule được thêm sau lần chạy Juice Shop đầu tiên (lần đầu larpcop chỉ được 5/27) nằm trong [bench/README.md](bench/README.md).
+Mỗi bộ từng là bộ kiểm chứng ở lần chạy đầu, rồi được dùng để thêm rule: NodeGoat lần đầu 8/14, DVNA 5/14 (Semgrep 7/14), vulnerable-node 10/12 với 1 báo nhầm. Thứ tự đó và từng dòng bị bỏ sót nằm trong [bench/README.md](bench/README.md).
 
 ## Lệnh
 
@@ -246,7 +268,7 @@ Exit code: `0` sạch, `1` có vi phạm mức error, `3` lỗi nội bộ/confi
 
 Rule ast-grep có `fix:` thì vi phạm kèm gợi ý `larpcop fix <file>`. Fix lặp tối đa 5 lượt, bỏ qua các sửa đè lên nhau trong cùng lượt.
 
-`larpcop test` đọc fixture theo định dạng của ast-grep (`rule-tests/<id>-test.yml` với `valid`/`invalid`), thêm `fixed: [{before, after}]` để kiểm `fix:`. `--require-all` làm CI fail khi có rule chưa có fixture.
+`larpcop test` đọc fixture theo định dạng của ast-grep (`rule-tests/<id>-test.yml` với `valid`/`invalid`), thêm `fixed: [{before, after}]` để kiểm `fix:`. Rule taint và rule `text:` dùng cùng định dạng: mỗi đoạn được kiểm như một file của từng ngôn ngữ của rule (rule `text:` thì khai `file: views/page.ejs`). `--require-all` làm CI fail khi có rule, của bất kỳ loại nào, chưa có fixture.
 
 ### Guard đọc lệnh shell bằng parser
 
@@ -258,12 +280,12 @@ Hook phân tích lệnh bằng tree-sitter-bash: quote, pipe, `&&`/`;`/`&`, redi
 
 ```yaml
 extends:
-  - https://github.com/NoahDuongMaster/larpcop.git#v0.2.1//standards/recommended
+  - https://github.com/NoahDuongMaster/larpcop.git#v0.3.0//standards/recommended
 ```
 
-(`URL#tag//thư-mục` lấy một thư mục con của repo standards.) Bộ này có 26 rule ast-grep (cộng 4 rule taint, secrets và `dependency-vulnerability`), mỗi rule kèm fixture và `larpcop test standards/recommended --require-all` chạy trong `cargo test`:
+(`URL#tag//thư-mục` lấy một thư mục con của repo standards.) Bộ này có 47 rule ast-grep, 16 rule taint, 3 rule `text:`, cùng secrets và `dependency-vulnerability`. Mọi rule kèm fixture, và `larpcop test standards/recommended --require-all` chạy trong `cargo test`:
 
-- **Biến lỗi bảo mật thành quy ước cú pháp** (không cần taint): SQL chỉ qua tham số (`no-sql-interpolation`, `py-no-sql-interpolation`, `go-no-sql-sprintf`), lệnh shell chỉ qua mảng tham số (`no-shell-interpolation`, `py-no-shell-true`), không `eval`/`new Function`/`exec`, không gán HTML từ biến vào `innerHTML`, không `dangerouslySetInnerHTML` hay `bypassSecurityTrust*` (Angular), không `serve-index`, không MD5/SHA-1, không `$where` của MongoDB, input của request phải qua schema (`validate-request-input`), không tắt kiểm chứng chỉ TLS (`py-no-tls-verify-off`, `go-no-insecure-tls`), `yaml.safe_load` (có auto-fix).
+- **Biến lỗi bảo mật thành quy ước cú pháp** (không cần taint): SQL chỉ qua tham số (`no-sql-interpolation`, `py-no-sql-interpolation`, `go-no-sql-sprintf`), lệnh shell chỉ qua mảng tham số (`no-shell-interpolation`, `py-no-shell-true`), không `eval`/`new Function`/`exec`, không gán HTML từ biến vào `innerHTML`, không `dangerouslySetInnerHTML` hay `bypassSecurityTrust*` (Angular), không `serve-index`, không MD5/SHA-1, không `$where` của MongoDB, input của request phải qua schema (`validate-request-input`), không tắt kiểm chứng chỉ TLS (`py-no-tls-verify-off`, `go-no-insecure-tls`), `yaml.safe_load` (có auto-fix), regex có lượng từ lồng nhau (ReDoS), tắt autoescape của template, so sánh mật khẩu dạng plain text, secret của session/JWT viết cứng, XML bật external entity (XXE), thư viện deserialize chạy được code (`node-serialize`, `pickle`), hàm merge đệ quy không chặn `__proto__` (prototype pollution).
 - **Không tắt kiểm tra**: `@ts-ignore`, `@ts-expect-error`, `eslint-disable`, `biome-ignore` là vi phạm; `any`, catch rỗng, `debugger` (có auto-fix).
 - **Kích thước và độ phức tạp**: hàm tối đa 80 dòng, độ phức tạp vòng (McCabe) tối đa 15, file tối đa 500 dòng.
 
@@ -372,7 +394,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write   # comment trên PR; thêm security-events: write nếu bật sarif
-    uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.2.1
+    uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.3.0
     with:
       standards: https://github.com/<org>/standards.git#v1.0.0
     secrets:
@@ -411,18 +433,18 @@ Binary nặng 47 MB trên đĩa, nhưng chỉ khoảng **4 MB khi tải về** (
 
 ## Đã kiểm chứng
 
-`cargo test` có 93 test:
+`cargo test` có 109 test:
 
 - Unit: guard, tìm shell, path trong patch Codex; đọc lockfile thật của npm 11, pnpm 11, uv 0.11, cargo 1.98, bun 1.4, bundler (kèm yarn v1/Berry, Poetry, go.mod, NuGet, Gradle, Composer, pom.xml, csproj, và các entry registry riêng/git/workspace phải bị bỏ qua); manifest; nhận diện lệnh cài; thiết lập gate của 4 package manager.
 - Dashboard: số mở/baseline theo rule, xu hướng nợ qua lịch sử git, trang không có script.
 - AI (model giả bằng shell script): review chỉ báo dòng đã đổi, bỏ rule lạ, cache câu trả lời; learn gửi lại rule fail kèm lỗi, chỉ giữ rule pass test, rule ghi ra chạy được như rule thường.
-- Bảo mật: taint qua biến/destructuring/sanitizer/gán lại (TS, Python), `sink_types` qua typescript-language-server thật (xuyên file), secrets bị che khi in ra, OSV giả: mã độc luôn chặn, lỗ hổng chỉ chặn bản mới, theo ngưỡng, hook chặn lệnh cài.
+- Bảo mật: taint qua biến/destructuring/sanitizer/gán lại (TS, Python, Go, Rust), qua lời gọi hàm và import, callback, guard; `sink_types` qua typescript-language-server, gopls và rust-analyzer thật (xuyên file); secrets bị che khi in ra; OSV giả: mã độc luôn chặn, lỗ hổng chỉ chặn bản mới, theo ngưỡng, hook chặn lệnh cài.
 - Integration: check, locked, git extends theo tag, staged, `--changed`/`--since`, linter delegation, format github, chống né rule, hook của 4 agent, sync idempotent, phát hiện drift, CRLF, pre-commit thật; dependency: tuổi phiên bản (qua cache và qua một server deps.dev giả), merge-base của PR, ngoại lệ bản vá bảo mật, gate package manager, duyệt dependency mới (cả monorepo), hook chặn lệnh cài, lock chỉ được siết thêm.
 
 Trên GitHub thật (repo private `NoahDuongMaster/larpcop`):
 
 - [`ci.yml`](.github/workflows/ci.yml) xanh trên ubuntu, macOS và **Windows**: fmt, clippy `-D warnings`, 29/29 test. Trên Windows có cả linter chạy qua `sh.exe` của Git, extends từ `file:///C:/…`, CRLF và pre-commit thật.
-- Release `v0.2.1`: [release.yml](.github/workflows/release.yml) build 5 target. Installer đã được cài thật vào `~/.local/bin` theo cách ở mục [Cài đặt](#cài-đặt).
+- Release `v0.3.0`: [release.yml](.github/workflows/release.yml) build 5 target. Installer đã được cài thật vào `~/.local/bin` theo cách ở mục [Cài đặt](#cài-đặt).
 - Cổng CI, thử bằng PR #1 (đã đóng, không merge):
   - Commit vi phạm bị pre-commit chặn ở máy local; được đẩy lên bằng `--no-verify`.
   - `enforce` tải binary từ release, **fail** và gắn annotation `no-explicit-any` / `no-console` vào đúng dòng trong PR.
@@ -441,19 +463,18 @@ Ngoài ra đã chạy agent thật trong repo demo:
 - **Claude Code với dependency rules**: hai phiên được yêu cầu "dùng package `slugify`, cài bằng npm", một phiên có AGENTS.md, một phiên chỉ có hook:
   - Cả hai đều bị hook chặn `npm install slugify` *trước khi* lệnh chạy. Không có gì được cài, không file nào bị tạo, và agent dừng lại hỏi người duyệt (tổng cộng $0.43).
   - Lần chạy này lộ ra bug: `2>&1` trong `npm install slugify 2>&1 | tail -5` bị đọc thành tên package. Đã sửa, kèm test hồi quy.
+- **Lockfile do công cụ thật sinh ra**, lấy từ repo công khai (máy dev không có composer, dotnet hay gradle): `composer.lock` của symfony/demo đọc đủ 153/153 package và có 4 advisory OSV thật (`league/commonmark`, `symfony/http-foundation`, `symfony/yaml`); `packages.lock.json` của dorssel/usbipd-win đọc đủ 40 package (46 entry, trùng giữa các target framework); `gradle.lockfile` của Netflix/maestro đọc đủ 100 dòng, 11 advisory OSV.
 - **Dependency với dữ liệu thật**:
   - `typescript@next` (phát hành cách đó 2 giờ) bị chặn cùng 7 binary nền tảng của nó. Mỗi lỗi kèm gợi ý `7.0.2`; 8 lần tra deps.dev hết 0,58 giây.
   - Chính `Cargo.lock` của larpcop bị chặn 3 crate mới 9–13 ngày tuổi; đã hạ theo đúng phiên bản được gợi ý. 2 crate khác được cho qua vì là bản vá RUSTSEC.
 
 ## Giới hạn
 
-- **Taint**: dữ liệu không được theo qua lời gọi hàm hay sang file khác; chỉ kiểu là hỏi được xuyên file (`sink_types`). Dự án phải cài đủ dependency thì language server mới trả lời đúng.
+- **Lỗi logic và phân quyền** (IDOR, thiếu kiểm quyền admin, trả thừa dữ liệu) không có dạng cú pháp chung: trên ba bộ benchmark, đây là phần không công cụ SAST nào bắt được. Rule `llm` (`larpcop review`) nhắm vào loại này nhưng chỉ cho warning, vì model không tất định; `larpcop learn` chuyển dần các nhận xét lặp lại thành rule tất định.
+- **Taint là xấp xỉ**: không theo dữ liệu qua field của object được gán ở hàm khác, qua collection, hay quá 2 tầng import; giá trị trả về từ hàm không có summary (thư viện) được coi là bẩn nếu đối số bẩn. `guards` không phân biệt chiều của phép kiểm. Language server cần dự án đã cài đủ dependency mới trả lời đúng kiểu.
+- **Package uy tín bị chiếm quyền**: tuổi tối thiểu 14 ngày chặn được bản độc bị phát hiện trong 14 ngày (phần lớn: OSV ghi nhận mã độc với độ trễ trung vị khoảng 20 giờ). Bản độc tồn tại lâu hơn mà chưa ai báo thì không công cụ dựa trên advisory nào biết.
 - **Cursor và Gemini chưa chạy agent thật.** Cursor cần đăng nhập `cursor-agent login` (qua trình duyệt); Gemini CLI chưa được cài hay đăng nhập trên máy dev. Adapter được test bằng đúng schema payload ở trên.
-- **File agent ghi bằng shell**: `cat > f <<EOF`, `cat <<EOF >> f`, `tee f <<EOF` và `echo … > f` được hook đọc bằng tree-sitter-bash và kiểm nội dung *trước khi* lệnh chạy, kể cả sau `cd dir &&`. Các cách khác (`sed -i`, `cp`, script tự viết) thì không thấy trước được; chúng vẫn bị bắt ở hook kết thúc lượt, ở pre-commit và ở CI.
+- **File agent ghi bằng shell**: `cat > f <<EOF`, `tee`, `echo … > f` được kiểm nội dung *trước khi* lệnh chạy. `sed -i`, `cp`, script tự viết thì không thấy trước được nội dung; hook kiểm các file mà lệnh đã đổi ngay sau khi lệnh chạy, rồi lại ở lượt kết thúc, pre-commit và CI.
 - **Repo private** khiến installer `curl | sh`, Homebrew và npm chưa dùng được cho người ngoài (xem [Phân phối khi repo private](#phân-phối-khi-repo-private)). Repo khác muốn gọi `enforce.yml` thì cần quyền truy cập Actions; mục này đã được bật sẵn cho các repo cùng owner `NoahDuongMaster` (`access_level: user`). Repo gọi vẫn phải truyền secret `larpcop-token` để tải binary.
 - **Chi phí CI**: GitHub Actions của repo private tính phút chạy, với runner macOS nhân 10 và Windows nhân 2. Repo public thì miễn phí.
-- **Dependency**:
-  - Rule tuổi phiên bản cần mạng tới deps.dev và fail closed khi không tra được. Package ở registry riêng phải được khai trong `exempt`.
-  - Poetry, Cargo và Go không có thiết lập tuổi tối thiểu (uv thì có, từ 0.9, và đã bị bắt buộc). Với các hệ sinh thái này, bản quá mới của một package *đã duyệt* vẫn cài được lên máy dev, rồi mới bị chặn ở lượt kết thúc, pre-commit và CI. Yarn 1 cũng không có gate.
-  - Maven, Gradle, NuGet, RubyGems và Composer: lockfile của bundler được test bằng file do bundler thật sinh ra; NuGet, Gradle, Composer, pom.xml và csproj được test bằng file viết tay theo định dạng chính thức, vì máy dev không có dotnet, gradle hay composer. Các hệ sinh thái này cũng không có gate tuổi trong package manager.
-  - Hook chỉ nhận ra lệnh cài gõ trực tiếp. Cài qua script hay Makefile thì không thấy trước, nhưng vẫn bị bắt ở lockfile và manifest.
+- **Dependency**: rule tuổi phiên bản cần mạng tới deps.dev và fail closed khi không tra được; package ở registry riêng phải được khai trong `exempt`.

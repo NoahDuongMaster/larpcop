@@ -1,8 +1,8 @@
 #!/bin/sh
 # Reproducible benchmark: larpcop (standards/recommended) vs Semgrep OSS
-# (p/default) vs gitleaks, on OWASP Juice Shop and OWASP NodeGoat. Writes
-# results/ next to this script. Needs: git, python3, semgrep, gitleaks and an
-# larpcop release build.
+# (p/default) vs gitleaks, on OWASP Juice Shop, OWASP NodeGoat, DVNA and
+# vulnerable-node's SAST seeds. Writes results/ next to this script. Needs:
+# git, python3, node, semgrep, gitleaks and a larpcop release build.
 #
 #   bench/run.sh [path/to/larpcop]
 set -eu
@@ -22,6 +22,8 @@ clone() { # name url ref
 }
 clone juice-shop https://github.com/juice-shop/juice-shop.git v20.3.0
 clone NodeGoat https://github.com/OWASP/NodeGoat.git c5cb68a
+clone dvna https://github.com/appsecco/dvna.git 9ba473a
+clone vulnerable-node https://github.com/cr0hn/vulnerable-node.git d68f2a3
 # Semgrep's registry pack, fetched once so timings exclude the download.
 [ -f "$WORK/p-default.yml" ] || curl -sfL https://semgrep.dev/c/p/default -o "$WORK/p-default.yml"
 
@@ -36,7 +38,7 @@ time_it() {
 
 echo "larpcop $("$LARPCOP" --version | cut -d' ' -f2) | semgrep $(semgrep --version) | gitleaks $(gitleaks version) | $(uname -sm) $(sysctl -n hw.ncpu 2>/dev/null || nproc) cpus" > "$OUT/timing.txt"
 
-for target in juice-shop NodeGoat; do
+for target in juice-shop NodeGoat dvna; do
   cd "$WORK/$target"
   printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
   "$LARPCOP" check --format json > "$OUT/$target-larpcop.json" || true
@@ -53,4 +55,14 @@ python3 "$HERE/score.py" "$WORK/juice-shop" "$OUT/juice-shop-larpcop.json" "$OUT
   "$OUT/juice-shop-gitleaks.json" > "$OUT/juice-shop.md"
 python3 "$HERE/score.py" "$WORK/NodeGoat" "$OUT/NodeGoat-larpcop.json" "$OUT/NodeGoat-semgrep.json" \
   "$OUT/NodeGoat-gitleaks.json" --truth "$HERE/nodegoat-truth.json" > "$OUT/NodeGoat.md"
-cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md"
+python3 "$HERE/score.py" "$WORK/dvna" "$OUT/dvna-larpcop.json" "$OUT/dvna-semgrep.json" \
+  "$OUT/dvna-gitleaks.json" --truth "$HERE/dvna-truth.json" > "$OUT/dvna.md"
+
+# vulnerable-node: only sast/seeds/, scored by the project's own sast/tests/score.js.
+cd "$WORK/vulnerable-node"
+printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
+"$LARPCOP" check --format json sast/seeds > "$OUT/seeds-larpcop.json" || true
+semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/seeds-semgrep.json" --quiet sast/seeds || true
+python3 "$HERE/seeds.py" "$WORK/vulnerable-node" "$OUT/seeds-larpcop.json" "$OUT/seeds-semgrep.json" > "$OUT/seeds.md"
+
+cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/seeds.md"

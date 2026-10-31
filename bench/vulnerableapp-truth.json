@@ -1,0 +1,875 @@
+[
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/commandInjection/CommandInjection.java",
+  "start": 79,
+  "end": 88,
+  "method": "getVulnerablePayloadLevel1",
+  "route": "getVulnerablePayloadLevel1",
+  "category": "shell",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/commandInjection/CommandInjection.java",
+  "start": 105,
+  "end": 121,
+  "method": "getVulnerablePayloadLevel2",
+  "route": "getVulnerablePayloadLevel2",
+  "category": "shell",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/commandInjection/CommandInjection.java",
+  "start": 139,
+  "end": 157,
+  "method": "getVulnerablePayloadLevel3",
+  "route": "getVulnerablePayloadLevel3",
+  "category": "shell",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/commandInjection/CommandInjection.java",
+  "start": 176,
+  "end": 194,
+  "method": "getVulnerablePayloadLevel4",
+  "route": "getVulnerablePayloadLevel4",
+  "category": "shell",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/commandInjection/CommandInjection.java",
+  "start": 212,
+  "end": 230,
+  "method": "getVulnerablePayloadLevel5",
+  "route": "getVulnerablePayloadLevel5",
+  "category": "shell",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/commandInjection/CommandInjection.java",
+  "start": 232,
+  "end": 249,
+  "method": "getVulnerablePayloadLevel6",
+  "route": "getVulnerablePayloadLevel6",
+  "category": "shell",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/deserialization/InsecureDeserializationVulnerability.java",
+  "start": 71,
+  "end": 99,
+  "method": "getVulnerablePayloadLevel1",
+  "route": "getVulnerablePayloadLevel1",
+  "category": "deserialization",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/deserialization/InsecureDeserializationVulnerability.java",
+  "start": 118,
+  "end": 134,
+  "method": "getVulnerablePayloadLevel2",
+  "route": "getVulnerablePayloadLevel2",
+  "category": "deserialization",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/deserialization/InsecureDeserializationVulnerability.java",
+  "start": 140,
+  "end": 157,
+  "method": "getSecurePayloadLevel3",
+  "route": "getSecurePayloadLevel3",
+  "category": "deserialization",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/deserialization/InsecureDeserializationVulnerability.java",
+  "start": 176,
+  "end": 201,
+  "method": "getVulnerablePayloadLevel4",
+  "route": "getVulnerablePayloadLevel4",
+  "category": "deserialization",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/ldapInjection/LDAPInjectionVulnerability.java",
+  "start": 117,
+  "end": 139,
+  "method": "level1",
+  "route": "level1",
+  "category": "ldap",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/ldapInjection/LDAPInjectionVulnerability.java",
+  "start": 156,
+  "end": 178,
+  "method": "level2",
+  "route": "level2",
+  "category": "ldap",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/ldapInjection/LDAPInjectionVulnerability.java",
+  "start": 196,
+  "end": 244,
+  "method": "level3",
+  "route": "level3",
+  "category": "ldap",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/ldapInjection/LDAPInjectionVulnerability.java",
+  "start": 251,
+  "end": 286,
+  "method": "level4",
+  "route": "level4",
+  "category": "ldap",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/ldapInjection/LDAPInjectionVulnerability.java",
+  "start": 304,
+  "end": 334,
+  "method": "level5",
+  "route": "level5",
+  "category": "ldap",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/ldapInjection/LDAPInjectionVulnerability.java",
+  "start": 341,
+  "end": 374,
+  "method": "level6",
+  "route": "level6",
+  "category": "ldap",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/Http3xxStatusCodeBasedInjection.java",
+  "start": 103,
+  "end": 109,
+  "method": "getVulnerablePayloadLevel1",
+  "route": "getVulnerablePayloadLevel1",
+  "category": "redirect",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/Http3xxStatusCodeBasedInjection.java",
+  "start": 130,
+  "end": 146,
+  "method": "getVulnerablePayloadLevel2",
+  "route": "getVulnerablePayloadLevel2",
+  "category": "redirect",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/Http3xxStatusCodeBasedInjection.java",
+  "start": 166,
+  "end": 183,
+  "method": "getVulnerablePayloadLevel3",
+  "route": "getVulnerablePayloadLevel3",
+  "category": "redirect",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/Http3xxStatusCodeBasedInjection.java",
+  "start": 201,
+  "end": 219,
+  "method": "getVulnerablePayloadLevel4",
+  "route": "getVulnerablePayloadLevel4",
+  "category": "redirect",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/Http3xxStatusCodeBasedInjection.java",
+  "start": 240,
+  "end": 259,
+  "method": "getVulnerablePayloadLevel5",
+  "route": "getVulnerablePayloadLevel5",
+  "category": "redirect",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/Http3xxStatusCodeBasedInjection.java",
+  "start": 278,
+  "end": 291,
+  "method": "getVulnerablePayloadLevel6",
+  "route": "getVulnerablePayloadLevel6",
+  "category": "redirect",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/Http3xxStatusCodeBasedInjection.java",
+  "start": 308,
+  "end": 329,
+  "method": "getVulnerablePayloadLevel7",
+  "route": "getVulnerablePayloadLevel7",
+  "category": "redirect",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/Http3xxStatusCodeBasedInjection.java",
+  "start": 332,
+  "end": 339,
+  "method": "getVulnerablePayloadLevel8",
+  "route": "getVulnerablePayloadLevel8",
+  "category": "redirect",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/Http3xxStatusCodeBasedInjection.java",
+  "start": 357,
+  "end": 363,
+  "method": "getVulnerablePayloadLevel9",
+  "route": "getVulnerablePayloadLevel9",
+  "category": "redirect",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/Http3xxStatusCodeBasedInjection.java",
+  "start": 382,
+  "end": 388,
+  "method": "getVulnerablePayloadLevel10",
+  "route": "getVulnerablePayloadLevel10",
+  "category": "redirect",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/Http3xxStatusCodeBasedInjection.java",
+  "start": 393,
+  "end": 408,
+  "method": "getVulnerablePayloadLevel11",
+  "route": "getVulnerablePayloadLevel11",
+  "category": "redirect",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/openRedirect/Http3xxStatusCodeBasedInjection.java",
+  "start": 413,
+  "end": 428,
+  "method": "getVulnerablePayloadLevel12",
+  "route": "getVulnerablePayloadLevel12",
+  "category": "redirect",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 111,
+  "end": 118,
+  "method": "getVulnerablePayloadLevel1",
+  "route": "getVulnerablePayloadLevel1",
+  "category": "path",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 133,
+  "end": 142,
+  "method": "getVulnerablePayloadLevel2",
+  "route": "getVulnerablePayloadLevel2",
+  "category": "path",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 157,
+  "end": 166,
+  "method": "getVulnerablePayloadLevel3",
+  "route": "getVulnerablePayloadLevel3",
+  "category": "path",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 182,
+  "end": 194,
+  "method": "getVulnerablePayloadLevel4",
+  "route": "getVulnerablePayloadLevel4",
+  "category": "path",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 210,
+  "end": 222,
+  "method": "getVulnerablePayloadLevel5",
+  "route": "getVulnerablePayloadLevel5",
+  "category": "path",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 239,
+  "end": 246,
+  "method": "getVulnerablePayloadLevel6",
+  "route": "getVulnerablePayloadLevel6",
+  "category": "path",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 273,
+  "end": 295,
+  "method": "getVulnerablePayloadLevel7",
+  "route": "getVulnerablePayloadLevel7",
+  "category": "path",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 311,
+  "end": 334,
+  "method": "getVulnerablePayloadLevel8",
+  "route": "getVulnerablePayloadLevel8",
+  "category": "path",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 350,
+  "end": 373,
+  "method": "getVulnerablePayloadLevel9",
+  "route": "getVulnerablePayloadLevel9",
+  "category": "path",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 389,
+  "end": 413,
+  "method": "getVulnerablePayloadLevel10",
+  "route": "getVulnerablePayloadLevel10",
+  "category": "path",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 429,
+  "end": 453,
+  "method": "getVulnerablePayloadLevel11",
+  "route": "getVulnerablePayloadLevel11",
+  "category": "path",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 470,
+  "end": 493,
+  "method": "getVulnerablePayloadLevel12",
+  "route": "getVulnerablePayloadLevel12",
+  "category": "path",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 505,
+  "end": 514,
+  "method": "getVulnerablePayloadLevel13",
+  "route": "getVulnerablePayloadLevel13",
+  "category": "path",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 532,
+  "end": 554,
+  "method": "getVulnerablePayloadLevel14",
+  "route": "getVulnerablePayloadLevel14",
+  "category": "path",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/pathTraversal/PathTraversalVulnerability.java",
+  "start": 571,
+  "end": 581,
+  "method": "getVulnerablePayloadLevel15",
+  "route": "getVulnerablePayloadLevel15",
+  "category": "path",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/rfi/UrlParamBasedRFI.java",
+  "start": 36,
+  "end": 54,
+  "method": "getVulnerablePayloadLevelUnsecure",
+  "route": "getVulnerablePayloadLevelUnsecure",
+  "category": "ssrf",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/rfi/UrlParamBasedRFI.java",
+  "start": 56,
+  "end": 74,
+  "method": "getVulnerablePayloadLevelUnsecureLevel2",
+  "route": "getVulnerablePayloadLevelUnsecureLevel2",
+  "category": "ssrf",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/BlindSQLInjectionVulnerability.java",
+  "start": 85,
+  "end": 101,
+  "method": "getCarInformationLevel1",
+  "route": "getCarInformationLevel1",
+  "category": "sql",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/BlindSQLInjectionVulnerability.java",
+  "start": 126,
+  "end": 143,
+  "method": "getCarInformationLevel2",
+  "route": "getCarInformationLevel2",
+  "category": "sql",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/BlindSQLInjectionVulnerability.java",
+  "start": 145,
+  "end": 166,
+  "method": "getCarInformationLevel3",
+  "route": "getCarInformationLevel3",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/BlindSQLInjectionVulnerability.java",
+  "start": 169,
+  "end": 193,
+  "method": "getCarInformationLevel4",
+  "route": "getCarInformationLevel4",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/BlindSQLInjectionVulnerability.java",
+  "start": 196,
+  "end": 212,
+  "method": "getCarInformationLevel5",
+  "route": "getCarInformationLevel5",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/ErrorBasedSQLInjectionVulnerability.java",
+  "start": 73,
+  "end": 111,
+  "method": "doesCarInformationExistsLevel1",
+  "route": "doesCarInformationExistsLevel1",
+  "category": "sql",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/ErrorBasedSQLInjectionVulnerability.java",
+  "start": 133,
+  "end": 171,
+  "method": "doesCarInformationExistsLevel2",
+  "route": "doesCarInformationExistsLevel2",
+  "category": "sql",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/ErrorBasedSQLInjectionVulnerability.java",
+  "start": 194,
+  "end": 236,
+  "method": "doesCarInformationExistsLevel3",
+  "route": "doesCarInformationExistsLevel3",
+  "category": "sql",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/ErrorBasedSQLInjectionVulnerability.java",
+  "start": 259,
+  "end": 303,
+  "method": "doesCarInformationExistsLevel4",
+  "route": "doesCarInformationExistsLevel4",
+  "category": "sql",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/ErrorBasedSQLInjectionVulnerability.java",
+  "start": 305,
+  "end": 353,
+  "method": "doesCarInformationExistsLevel5",
+  "route": "doesCarInformationExistsLevel5",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/UnionBasedSQLInjectionVulnerability.java",
+  "start": 78,
+  "end": 86,
+  "method": "getCarInformationLevel1",
+  "route": "getCarInformationLevel1",
+  "category": "sql",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/UnionBasedSQLInjectionVulnerability.java",
+  "start": 108,
+  "end": 116,
+  "method": "getCarInformationLevel2",
+  "route": "getCarInformationLevel2",
+  "category": "sql",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/UnionBasedSQLInjectionVulnerability.java",
+  "start": 122,
+  "end": 131,
+  "method": "getCarInformationLevel3",
+  "route": "getCarInformationLevel3",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/UnionBasedSQLInjectionVulnerability.java",
+  "start": 133,
+  "end": 145,
+  "method": "getCarInformationLevel4",
+  "route": "getCarInformationLevel4",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/UnionBasedSQLInjectionVulnerability.java",
+  "start": 147,
+  "end": 161,
+  "method": "getCarInformationLevel5",
+  "route": "getCarInformationLevel5",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/UnionBasedSQLInjectionVulnerability.java",
+  "start": 163,
+  "end": 176,
+  "method": "getCarInformationLevel6",
+  "route": "getCarInformationLevel6",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/UnionBasedSQLInjectionVulnerability.java",
+  "start": 178,
+  "end": 194,
+  "method": "getCarInformationLevel7",
+  "route": "getCarInformationLevel7",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/UnionBasedSQLInjectionVulnerability.java",
+  "start": 196,
+  "end": 208,
+  "method": "getCarInformationLevel8",
+  "route": "getCarInformationLevel8",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/sqlInjection/UnionBasedSQLInjectionVulnerability.java",
+  "start": 210,
+  "end": 222,
+  "method": "getCarInformationLevel9",
+  "route": "getCarInformationLevel9",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/ssrf/SSRFVulnerability.java",
+  "start": 112,
+  "end": 120,
+  "method": "getVulnerablePayloadLevel1",
+  "route": "getVulnerablePayloadLevel1",
+  "category": "ssrf",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/ssrf/SSRFVulnerability.java",
+  "start": 136,
+  "end": 146,
+  "method": "getVulnerablePayloadLevel2",
+  "route": "getVulnerablePayloadLevel2",
+  "category": "ssrf",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/ssrf/SSRFVulnerability.java",
+  "start": 163,
+  "end": 174,
+  "method": "getVulnerablePayloadLevel3",
+  "route": "getVulnerablePayloadLevel3",
+  "category": "ssrf",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/ssrf/SSRFVulnerability.java",
+  "start": 191,
+  "end": 202,
+  "method": "getVulnerablePayloadLevel4",
+  "route": "getVulnerablePayloadLevel4",
+  "category": "ssrf",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/ssrf/SSRFVulnerability.java",
+  "start": 207,
+  "end": 218,
+  "method": "getVulnerablePayloadLevel5",
+  "route": "getVulnerablePayloadLevel5",
+  "category": "ssrf",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/persistent/PersistentXSSInHTMLTagVulnerability.java",
+  "start": 108,
+  "end": 116,
+  "method": "getVulnerablePayloadLevel1",
+  "route": "getVulnerablePayloadLevel1",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/persistent/PersistentXSSInHTMLTagVulnerability.java",
+  "start": 132,
+  "end": 143,
+  "method": "getVulnerablePayloadLevel2",
+  "route": "getVulnerablePayloadLevel2",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/persistent/PersistentXSSInHTMLTagVulnerability.java",
+  "start": 160,
+  "end": 174,
+  "method": "getVulnerablePayloadLevel3",
+  "route": "getVulnerablePayloadLevel3",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/persistent/PersistentXSSInHTMLTagVulnerability.java",
+  "start": 191,
+  "end": 207,
+  "method": "getVulnerablePayloadLevel4",
+  "route": "getVulnerablePayloadLevel4",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/persistent/PersistentXSSInHTMLTagVulnerability.java",
+  "start": 223,
+  "end": 240,
+  "method": "getVulnerablePayloadLevel5",
+  "route": "getVulnerablePayloadLevel5",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/persistent/PersistentXSSInHTMLTagVulnerability.java",
+  "start": 257,
+  "end": 275,
+  "method": "getVulnerablePayloadLevel6",
+  "route": "getVulnerablePayloadLevel6",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/persistent/PersistentXSSInHTMLTagVulnerability.java",
+  "start": 288,
+  "end": 300,
+  "method": "getVulnerablePayloadLevel7",
+  "route": "getVulnerablePayloadLevel7",
+  "category": "xss",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/persistent/PersistentXSSInHTMLTagVulnerability.java",
+  "start": 313,
+  "end": 328,
+  "method": "getSecurePayloadLevel8",
+  "route": "getSecurePayloadLevel8",
+  "category": "xss",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/persistent/PersistentXSSInHTMLTagVulnerability.java",
+  "start": 341,
+  "end": 351,
+  "method": "getSecurePayloadLevel9",
+  "route": "getSecurePayloadLevel9",
+  "category": "xss",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSInImgTagAttribute.java",
+  "start": 61,
+  "end": 69,
+  "method": "getVulnerablePayloadLevel1",
+  "route": "getVulnerablePayloadLevel1",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSInImgTagAttribute.java",
+  "start": 86,
+  "end": 95,
+  "method": "getVulnerablePayloadLevel2",
+  "route": "getVulnerablePayloadLevel2",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSInImgTagAttribute.java",
+  "start": 112,
+  "end": 124,
+  "method": "getVulnerablePayloadLevel3",
+  "route": "getVulnerablePayloadLevel3",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSInImgTagAttribute.java",
+  "start": 143,
+  "end": 158,
+  "method": "getVulnerablePayloadLevel4",
+  "route": "getVulnerablePayloadLevel4",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSInImgTagAttribute.java",
+  "start": 176,
+  "end": 200,
+  "method": "getVulnerablePayloadLevel5",
+  "route": "getVulnerablePayloadLevel5",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSInImgTagAttribute.java",
+  "start": 217,
+  "end": 236,
+  "method": "getVulnerablePayloadLevel6",
+  "route": "getVulnerablePayloadLevel6",
+  "category": "xss",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSInImgTagAttribute.java",
+  "start": 241,
+  "end": 263,
+  "method": "getVulnerablePayloadLevelSecure",
+  "route": "getVulnerablePayloadLevelSecure",
+  "category": "xss",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSWithHtmlTagInjection.java",
+  "start": 46,
+  "end": 55,
+  "method": "getVulnerablePayloadLevel1",
+  "route": "getVulnerablePayloadLevel1",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSWithHtmlTagInjection.java",
+  "start": 74,
+  "end": 87,
+  "method": "getVulnerablePayloadLevel2",
+  "route": "getVulnerablePayloadLevel2",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSWithHtmlTagInjection.java",
+  "start": 106,
+  "end": 121,
+  "method": "getVulnerablePayloadLevel3",
+  "route": "getVulnerablePayloadLevel3",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSWithHtmlTagInjection.java",
+  "start": 137,
+  "end": 151,
+  "method": "getSecurePayloadLevel4",
+  "route": "getSecurePayloadLevel4",
+  "category": "xss",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xss/reflected/XSSWithHtmlTagInjection.java",
+  "start": 167,
+  "end": 181,
+  "method": "getSecurePayloadLevel5",
+  "route": "getSecurePayloadLevel5",
+  "category": "xss",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xxe/XXEVulnerability.java",
+  "start": 101,
+  "end": 125,
+  "method": "getVulnerablePayloadLevel1",
+  "route": "getVulnerablePayloadLevel1",
+  "category": "xxe",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xxe/XXEVulnerability.java",
+  "start": 205,
+  "end": 222,
+  "method": "getVulnerablePayloadLevel2",
+  "route": "getVulnerablePayloadLevel2",
+  "category": "xxe",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xxe/XXEVulnerability.java",
+  "start": 239,
+  "end": 259,
+  "method": "getVulnerablePayloadLevel3",
+  "route": "getVulnerablePayloadLevel3",
+  "category": "xxe",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xxe/XXEVulnerability.java",
+  "start": 276,
+  "end": 298,
+  "method": "getVulnerablePayloadLevel4",
+  "route": "getVulnerablePayloadLevel4",
+  "category": "xxe",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xxe/XXEVulnerability.java",
+  "start": 314,
+  "end": 338,
+  "method": "getVulnerablePayloadLevel5",
+  "route": "getVulnerablePayloadLevel5",
+  "category": "xxe",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xxe/XXEVulnerability.java",
+  "start": 343,
+  "end": 376,
+  "method": "getVulnerablePayloadLevel6",
+  "route": "getVulnerablePayloadLevel6",
+  "category": "xxe",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/sasanlabs/service/vulnerability/xxe/XXEVulnerability.java",
+  "start": 381,
+  "end": 405,
+  "method": "getVulnerablePayloadLevel7",
+  "route": "getVulnerablePayloadLevel7",
+  "category": "xxe",
+  "vulnerable": false
+ }
+]

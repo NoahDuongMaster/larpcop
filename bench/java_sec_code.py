@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scores scanners on java-sec-code: an endpoint counts as reported when a
+"""Scores scanners on Java endpoint truths (java-sec-code, VulnerableApp): an endpoint counts as reported when a
 finding of its category lies in its line range (a call-site finding of an
 interprocedural flow sits there too). Score per category = TPR - FPR.
 
@@ -16,7 +16,7 @@ CATEGORIES = [
     ("objectinputstream", "deserialization"), ("snakeyaml", "deserialization"), ("yaml", "deserialization"),
     ("ssti", "ssti"), ("template", "ssti"), ("velocity", "ssti"),
     ("xxe", "xxe"), ("doctype", "xxe"), ("external-entit", "xxe"), ("xml-parser", "xxe"),
-    ("sql", "sql"), ("ssrf", "ssrf"), ("tainted-url", "ssrf"), ("url-host", "ssrf"),
+    ("ldap", "ldap"), ("sql", "sql"), ("ssrf", "ssrf"), ("tainted-url", "ssrf"), ("url-host", "ssrf"),
     ("redirect", "redirect"), ("xss", "xss"),
     ("spel", "code"), ("script-engine", "code"), ("scriptengine", "code"), ("groovy", "code"), ("ognl", "code"),
     ("el-injection", "code"), ("expression", "code"), ("eval", "code"), ("-code", "code"), ("reflection", "code"),

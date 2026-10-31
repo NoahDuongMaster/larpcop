@@ -53,11 +53,18 @@ pub fn run(cli: Cli) -> Result<u8> {
             standards,
             require_all,
         } => {
-            let rule_dirs = match standards {
-                Some(dir) => crate::config::rule_dirs_of(&dir)?,
-                None => ctx()?.load()?.0.rule_dirs,
+            let defined = match standards {
+                Some(dir) => crate::config::rules_of(&dir)?,
+                None => {
+                    let cfg = ctx()?.load()?.0;
+                    crate::rules::testing::Defined {
+                        rule_dirs: cfg.rule_dirs,
+                        taint: cfg.taint,
+                        text: cfg.text,
+                    }
+                }
             };
-            let report = crate::rules::testing::run(&rule_dirs)?;
+            let report = crate::rules::testing::run(&defined)?;
             print!("{}", report.text);
             if !report.untested.is_empty() {
                 println!("untested rule(s): {}", report.untested.join(", "));

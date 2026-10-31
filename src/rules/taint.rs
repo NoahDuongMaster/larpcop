@@ -1,20 +1,26 @@
-//! Intraprocedural taint tracking (the scope Semgrep OSS covers): data from a
-//! `source` must not reach a `sink` argument inside the same function unless it
-//! went through a `sanitizer`. Flow-sensitive along straight-line code:
-//! assignments taint or clean their targets in source order, and a sink is
-//! judged with the variables' state at that point. Calls into other functions
-//! and other files are not followed.
+//! Taint tracking: data from a `source` must not reach a `sink` argument
+//! unless it went through a `sanitizer`. Flow-sensitive along straight-line
+//! code within a function (assignments taint or clean their targets in source
+//! order), and across functions through summaries: a call passes taint only
+//! where the callee does, a callee that sinks a parameter makes the call a
+//! sink, a callee returning source data makes the call a source. Callees are
+//! resolved in the same file and through imports (JS/TS, Python, Go).
 
-use super::complexity::is_function;
 use super::{Level, RuleInfo, Violation};
 use crate::config::TaintConfig;
 use crate::files::SourceFile;
 use anyhow::{Context, Result};
 use ast_grep_core::{Doc, Language, Node, Pattern};
 use ast_grep_language::{LanguageExt, SupportLang};
-use std::collections::HashSet;
-use std::ops::Range;
+use flow::Reached;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
+use summary::Summaries;
+
+/// How many imports deep summaries are followed.
+const IMPORT_DEPTH: usize = 2;
 
 pub struct TaintRule {
     id: String,
@@ -22,25 +28,18 @@ pub struct TaintRule {
     message: String,
     note: Option<String>,
     sink_arg: Option<String>,
+    safe_prefix: Option<regex::Regex>,
     /// Sources as written, without whitespace (`req.query`), for destructuring.
     source_texts: Vec<String>,
     param_types: std::collections::BTreeMap<String, String>,
     /// `sink_types`: metavariables whose type the project's language server must confirm.
     typed: typed::Typed,
-    /// Per language: (sources, sinks, sanitizers), compiled for that grammar.
-    langs: Vec<(SupportLang, [Vec<Pattern>; 3])>,
+    /// Per language: (sources, sinks, sanitizers, guards), compiled for that grammar.
+    langs: Vec<(SupportLang, scan::Indexed)>,
+    root: PathBuf,
+    /// Summaries of imported files, computed once per run.
+    imported: Mutex<HashMap<PathBuf, Arc<Summaries>>>,
 }
-
-/// Targets (left) and value (right) of the assignment kinds we follow.
-const ASSIGNMENTS: [(&str, &str, &str); 7] = [
-    ("variable_declarator", "name", "value"),
-    ("assignment_expression", "left", "right"),
-    ("augmented_assignment_expression", "left", "right"),
-    ("assignment", "left", "right"),
-    ("augmented_assignment", "left", "right"),
-    ("short_var_declaration", "left", "right"),
-    ("assignment_statement", "left", "right"),
-];
 
 const VARIABLES: [&str; 3] = [
     "identifier",
@@ -49,12 +48,12 @@ const VARIABLES: [&str; 3] = [
 ];
 
 impl TaintRule {
-    pub fn new(cfg: &TaintConfig, typed: typed::Typed) -> Result<Self> {
+    pub fn new(cfg: &TaintConfig, typed: typed::Typed, root: PathBuf) -> Result<Self> {
         let compile = |lang: SupportLang, list: &[String]| -> Result<Vec<Pattern>> {
             list.iter()
+                .flat_map(|p| super::pattern_fixes::variants(p))
                 .map(|p| {
-                    Pattern::try_new(p, lang)
-                        .with_context(|| format!("taint `{}`: pattern `{p}`", cfg.id))
+                    pattern(&p, lang).with_context(|| format!("taint `{}`: pattern `{p}`", cfg.id))
                 })
                 .collect()
         };
@@ -64,11 +63,12 @@ impl TaintRule {
                 .map_err(|_| anyhow::anyhow!("taint `{}`: unknown language `{name}`", cfg.id))?;
             langs.push((
                 lang,
-                [
+                scan::Indexed::new([
                     compile(lang, &cfg.sources)?,
                     compile(lang, &cfg.sinks)?,
                     compile(lang, &cfg.sanitizers)?,
-                ],
+                    compile(lang, &cfg.guards)?,
+                ]),
             ));
         }
         Ok(Self {
@@ -77,6 +77,12 @@ impl TaintRule {
             message: cfg.message.clone(),
             note: cfg.note.clone(),
             sink_arg: cfg.sink_arg.clone(),
+            safe_prefix: cfg
+                .safe_prefix
+                .as_deref()
+                .map(regex::Regex::new)
+                .transpose()
+                .with_context(|| format!("taint `{}`: safe_prefix", cfg.id))?,
             source_texts: cfg
                 .sources
                 .iter()
@@ -85,7 +91,13 @@ impl TaintRule {
             param_types: cfg.param_types.clone(),
             typed,
             langs,
+            root,
+            imported: Mutex::default(),
         })
+    }
+
+    pub fn languages(&self) -> Vec<SupportLang> {
+        self.langs.iter().map(|(l, _)| *l).collect()
     }
 
     pub fn info(&self) -> RuleInfo {
@@ -103,94 +115,42 @@ impl TaintRule {
         let Some(lang) = SupportLang::from_path(&file.rel) else {
             return Vec::new();
         };
-        let Some((_, [sources, sinks, sanitizers])) = self.langs.iter().find(|(l, _)| *l == lang)
-        else {
+        if self.patterns(lang).is_none() {
             return Vec::new();
-        };
+        }
         let grep = lang.ast_grep(&file.content);
         let root = grep.root();
-        let ranges = |ps: &[Pattern]| -> Vec<Range<usize>> {
-            ps.iter()
-                .flat_map(|p| root.find_all(p).map(|m| m.range()))
-                .collect()
-        };
-        let ctx = Ctx {
-            sources: ranges(sources),
-            sanitizers: ranges(sanitizers),
-        };
-        // Without a source in sight, only destructuring (`{ query }`) can bring one in.
-        let property = |s: &String| s.rsplit('.').next().map(|p| file.content.contains(p));
-        if ctx.sources.is_empty() && !self.source_texts.iter().any(|s| property(s) == Some(true)) {
+        let Some((ctx, hits)) = self.prepare(lang, &root, file, 0) else {
             return Vec::new();
-        }
-        // (position, sink argument, typed metavariables): judged when the walk reaches it.
-        let mut hits: Vec<Hit<_>> = Vec::new();
-        for p in sinks {
-            for m in root.find_all(p) {
-                let arg = self
-                    .sink_arg
-                    .as_deref()
-                    .and_then(|v| m.get_env().get_match(v).cloned());
-                let node = arg.unwrap_or_else(|| m.get_node().clone());
-                let typed = self.typed.metavariables(m.get_env());
-                hits.push((m.range().start, node, typed));
-            }
-        }
+        };
         let mut out = Vec::new();
-        for scope in std::iter::once(root.clone()).chain(root.dfs().filter(|n| is_function(n))) {
-            let mut events: Vec<(usize, Event<_>)> = Vec::new();
-            walk(&scope, &mut |n| {
-                if let Some((_, l, r)) = ASSIGNMENTS.iter().find(|(k, ..)| n.kind() == *k)
-                    && let (Some(left), Some(right)) = (n.field(l), n.field(r))
-                {
-                    events.push((n.range().end, Event::Assign(left, right)));
-                }
-            });
-            for (at, sink, typed) in &hits {
-                if enclosing(sink, &root).range() == scope.range() {
-                    events.push((*at, Event::Sink(sink.clone(), typed.clone())));
-                }
+        let own = |n: &Node<_>| destructure::from_params(n, &self.param_types, &self.source_texts);
+        ctx.run(&root, &root, own(&root), &hits, &own, &mut |r| match r {
+            Reached::Sink(arg, typed) if self.typed.holds(lang, file, &typed) => {
+                out.push(self.violation(file, &arg, None))
             }
-            events.sort_by_key(|(at, _)| *at);
-            let mut names: HashSet<String> =
-                destructure::from_params(&scope, &self.param_types, &self.source_texts);
-            for (_, e) in events {
-                match e {
-                    Event::Assign(left, right) => {
-                        let tainted = ctx.tainted(&right, &names);
-                        for v in left
-                            .dfs()
-                            .filter(|n| VARIABLES.contains(&n.kind().as_ref()))
-                        {
-                            if tainted {
-                                names.insert(v.text().to_string());
-                            } else if left.kind() == "identifier" {
-                                names.remove(v.text().as_ref());
-                            }
-                        }
-                        if !tainted && right.kind() == "identifier" {
-                            let object = right.text();
-                            names.extend(destructure::from_object(
-                                &left,
-                                &object,
-                                &self.source_texts,
-                            ));
-                        }
-                    }
-                    Event::Sink(arg, typed)
-                        if ctx.tainted(&arg, &names) && self.typed.holds(lang, file, &typed) =>
-                    {
-                        out.push(self.violation(file, &arg))
-                    }
-                    Event::Sink(..) => {}
-                }
-            }
-        }
+            Reached::Call(arg, into) => out.push(self.violation(file, &arg, Some(into))),
+            _ => {}
+        });
         out
     }
 
-    fn violation<D: Doc>(&self, file: &SourceFile, at: &Node<D>) -> Violation {
+    fn patterns(&self, lang: SupportLang) -> Option<&scan::Indexed> {
+        self.langs.iter().find(|(l, _)| *l == lang).map(|(_, p)| p)
+    }
+
+    fn violation<D: Doc>(
+        &self,
+        file: &SourceFile,
+        at: &Node<D>,
+        into: Option<String>,
+    ) -> Violation {
         let pos = at.start_pos();
+        let note = match (into, &self.note) {
+            (Some(into), Some(n)) => Some(format!("Reaches the sink through {into}. {n}")),
+            (Some(into), None) => Some(format!("Reaches the sink through {into}.")),
+            (None, n) => n.clone(),
+        };
         Violation {
             rule: self.id.clone(),
             level: self.level,
@@ -198,7 +158,7 @@ impl TaintRule {
             line: pos.line() + 1,
             column: pos.column(at) + 1,
             message: self.message.clone(),
-            note: self.note.clone(),
+            note,
             snippet: file
                 .content
                 .lines()
@@ -208,58 +168,27 @@ impl TaintRule {
     }
 }
 
-/// A sink match: (position, sink argument, typed metavariables).
-type Hit<'a, D> = (usize, Node<'a, D>, Vec<(usize, Node<'a, D>)>);
-
-enum Event<'a, D: Doc> {
-    Assign(Node<'a, D>, Node<'a, D>),
-    Sink(Node<'a, D>, Vec<(usize, Node<'a, D>)>),
-}
-
-struct Ctx {
-    sources: Vec<Range<usize>>,
-    sanitizers: Vec<Range<usize>>,
-}
-
-fn within(r: &Range<usize>, outer: &Range<usize>) -> bool {
-    outer.start <= r.start && r.end <= outer.end
-}
-
-impl Ctx {
-    /// Does `node` carry source data (not passed through a sanitizer)?
-    fn tainted<D: Doc>(&self, node: &Node<D>, names: &HashSet<String>) -> bool {
-        let r = node.range();
-        if self.sanitizers.iter().any(|s| within(&r, s)) {
-            return false;
-        }
-        if self.sources.iter().any(|s| within(&r, s)) {
-            return true;
-        }
-        if VARIABLES[..2].contains(&node.kind().as_ref()) && names.contains(node.text().as_ref()) {
-            return true;
-        }
-        node.children().any(|c| self.tainted(&c, names))
+/// Go calls written alone (`db.Query($X)`) need a function body as context.
+fn pattern(p: &str, lang: SupportLang) -> Result<Pattern> {
+    if lang == SupportLang::Go
+        && let Some((context, selector)) = super::pattern_fixes::context(p)
+    {
+        return Ok(Pattern::contextual(&context, &selector, lang)?);
     }
-}
-
-/// Nodes of a scope in order, not descending into nested functions.
-fn walk<'a, D: Doc>(scope: &Node<'a, D>, f: &mut impl FnMut(&Node<'a, D>)) {
-    for c in scope.children() {
-        if is_function(&c) {
-            continue;
-        }
-        f(&c);
-        walk(&c, f);
-    }
-}
-
-fn enclosing<'a, D: Doc>(node: &Node<'a, D>, root: &Node<'a, D>) -> Node<'a, D> {
-    node.ancestors()
-        .find(|a| is_function(a))
-        .unwrap_or_else(|| root.clone())
+    Ok(Pattern::try_new(p, lang)?)
 }
 
 mod destructure;
+mod events;
+mod flow;
+mod guards;
+mod imports;
+mod prefix;
+mod prepare;
+mod scan;
+mod summary;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_calls;
 pub mod typed;

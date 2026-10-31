@@ -34,9 +34,46 @@ static SERVERS: LazyLock<Mutex<Servers>> = LazyLock::new(Default::default);
 /// (project root, server command) → running server.
 type Servers = HashMap<(PathBuf, Vec<String>), Option<Client>>;
 
+/// Answers already given: summaries ask about the same sink once per round.
+static ANSWERS: LazyLock<Mutex<HashMap<Question, Option<String>>>> =
+    LazyLock::new(Default::default);
+
+/// (root, file, hash of its content, line, character).
+type Question = (PathBuf, String, u64, usize, usize);
+
 /// Hover text for the 0-based position in `rel`, or `None` when no server
 /// answers for this language.
 pub fn hover(
+    root: &Path,
+    overrides: &BTreeMap<String, Vec<String>>,
+    lang: SupportLang,
+    rel: &str,
+    content: &str,
+    (line, character): (usize, usize),
+) -> Option<String> {
+    let question = (
+        root.to_path_buf(),
+        rel.to_string(),
+        digest(content),
+        line,
+        character,
+    );
+    if let Some(known) = ANSWERS.lock().ok()?.get(&question) {
+        return known.clone();
+    }
+    let answer = ask(root, overrides, lang, rel, content, (line, character));
+    ANSWERS.lock().ok()?.insert(question, answer.clone());
+    answer
+}
+
+fn digest(content: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    content.hash(&mut h);
+    h.finish()
+}
+
+fn ask(
     root: &Path,
     overrides: &BTreeMap<String, Vec<String>>,
     lang: SupportLang,
@@ -52,7 +89,7 @@ pub fn hover(
     let mut servers = SERVERS.lock().ok()?;
     let client = servers
         .entry((root.to_path_buf(), argv.clone()))
-        .or_insert_with(|| Client::start(&argv, root).ok());
+        .or_insert_with(|| Client::start(&argv, root, key == "rust").ok());
     let client = client.as_mut()?;
     client
         .hover(&root.join(rel), language_id, content, line, character)

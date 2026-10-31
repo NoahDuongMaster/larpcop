@@ -22,12 +22,12 @@ impl Deps {
         let Some(content) = view.current(rel) else {
             return Vec::new();
         };
-        let Some(Ok(pins)) = lockfile::parse(name, &content) else {
+        let Some(Ok(pins)) = view.pins(rel, name, &content) else {
             return Vec::new();
         };
         let before: BTreeSet<Pinned> = view
             .old(rel)
-            .and_then(|old| lockfile::parse(name, &old)?.ok())
+            .and_then(|old| view.pins(rel, name, &old)?.ok())
             .unwrap_or_default()
             .into_iter()
             .collect();

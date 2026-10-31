@@ -19,10 +19,13 @@ fn rule(
             sinks: s(sinks),
             sink_arg: arg.map(String::from),
             sanitizers: s(sanitizers),
+            safe_prefix: None,
+            guards: Vec::new(),
             param_types: [("Request".to_string(), "req".to_string())].into(),
             sink_types: Default::default(),
         },
         typed::Typed::default(),
+        std::env::temp_dir(),
     )
     .unwrap()
 }

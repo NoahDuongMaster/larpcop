@@ -2,6 +2,7 @@
 //! private registries, git, path and workspace entries have no public publish date.
 
 mod js;
+mod manifest_pins;
 mod other;
 #[cfg(test)]
 mod tests;
@@ -36,6 +37,26 @@ pub fn parse(file_name: &str, content: &str) -> Option<Result<Vec<Pinned>>> {
     Some(parsed.with_context(|| format!("reading {file_name}")))
 }
 
+/// Exact pins of a manifest read as a lockfile when the project has none
+/// (`superseded` = a lockfile governs this manifest).
+pub fn manifest_pins(
+    file_name: &str,
+    content: &str,
+    superseded: impl Fn(&[&str]) -> bool,
+) -> Option<Result<Vec<Pinned>>> {
+    let parsed = match file_name {
+        "package.json" => manifest_pins::package_json(content),
+        n if n.starts_with("requirements") && n.ends_with(".txt") => {
+            Ok(manifest_pins::requirements(content))
+        }
+        _ => return None,
+    };
+    if superseded(manifest_pins::superseded_by(file_name)) {
+        return None;
+    }
+    Some(parsed.with_context(|| format!("reading {file_name}")))
+}
+
 /// .NET project files (`App.csproj`, `Lib.fsproj`, `X.vbproj`).
 pub fn is_project_file(name: &str) -> bool {
     [".csproj", ".fsproj", ".vbproj"]
@@ -53,6 +74,19 @@ pub fn line_of(file_name: &str, content: &str, p: &Pinned) -> usize {
         "Gemfile.lock" => vec![format!("    {} (", p.name)],
         "gradle.lockfile" => vec![format!("{}:{}", p.name, p.version)],
         "composer.lock" => vec![format!("\"name\": \"{}\"", p.name)],
+        "package.json" => vec![format!("\"{}\"", p.name)],
+        n if n.starts_with("requirements") => {
+            let lower = p.name.to_ascii_lowercase();
+            return content
+                .lines()
+                .position(|l| {
+                    l.trim()
+                        .to_ascii_lowercase()
+                        .replace('_', "-")
+                        .starts_with(&lower)
+                })
+                .map_or(0, |i| i + 1);
+        }
         "pom.xml" => vec![format!(
             "<artifactId>{}</artifactId>",
             p.name.rsplit(':').next().unwrap_or("")

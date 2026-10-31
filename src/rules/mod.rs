@@ -5,9 +5,11 @@ mod complexity;
 mod linters;
 mod max_lines;
 pub mod metrics;
+mod pattern_fixes;
 pub mod secrets;
 mod taint;
 pub mod testing;
+mod text;
 
 /// ast-grep rules defined in `dirs` (for `larpcop learn`).
 pub fn ast_rules(
@@ -77,6 +79,7 @@ pub struct Engine {
     metrics: Option<metrics::Metrics>,
     secrets: Option<(secrets::Secrets, globset::GlobSet)>,
     taint: Vec<taint::TaintRule>,
+    text: Vec<text::TextRule>,
     ast: ast::AstRules,
     linters: Vec<linters::Linter>,
     deps: Option<crate::deps::Deps>,
@@ -114,14 +117,21 @@ impl Engine {
                 let servers = cfg.language_servers.clone();
                 let typed =
                     taint::typed::Typed::new(&t.id, &t.sink_types, cfg.root.clone(), servers)?;
-                taint::TaintRule::new(t, typed)
+                taint::TaintRule::new(t, typed, cfg.root.clone())
             })
+            .collect::<Result<_>>()?;
+        let text = cfg
+            .text
+            .iter()
+            .filter(|t| !cfg.disabled.contains(&t.id))
+            .map(text::TextRule::new)
             .collect::<Result<_>>()?;
         Ok(Self {
             max_lines,
             metrics,
             secrets,
             taint,
+            text,
             ast,
             linters,
             deps: crate::deps::Deps::new(cfg)?,
@@ -133,6 +143,7 @@ impl Engine {
             && self.metrics.is_none()
             && self.secrets.is_none()
             && self.taint.is_empty()
+            && self.text.is_empty()
             && self.ast.is_empty()
             && self.linters.is_empty()
             && self.deps.is_none()
@@ -151,6 +162,7 @@ impl Engine {
                 v.extend(self.metrics.iter().flat_map(|m| m.check(file)));
                 v.extend(self.secrets(file));
                 v.extend(self.taint.iter().flat_map(|t| t.check(file)));
+                v.extend(self.text.iter().flat_map(|t| t.check(file)));
                 v
             })
             .collect();
@@ -168,6 +180,7 @@ impl Engine {
         v.extend(self.metrics.iter().flat_map(|m| m.check(file)));
         v.extend(self.secrets(file));
         v.extend(self.taint.iter().flat_map(|t| t.check(file)));
+        v.extend(self.text.iter().flat_map(|t| t.check(file)));
         sort(&mut v);
         v
     }
@@ -193,6 +206,12 @@ impl Engine {
         out.extend(self.metrics.iter().flat_map(|m| m.infos()));
         out.extend(self.secrets.iter().map(|_| secrets::Secrets::info()));
         out.extend(self.taint.iter().map(|t| t.info()));
+        out.extend(
+            self.text
+                .iter()
+                .filter(|t| t.applies_to(rel))
+                .map(|t| t.info()),
+        );
         out.extend(self.ast.infos_for(rel));
         out.extend(self.linters.iter().map(|l| l.info()));
         out
@@ -203,6 +222,7 @@ impl Engine {
         out.extend(self.metrics.iter().flat_map(|m| m.infos()));
         out.extend(self.secrets.iter().map(|_| secrets::Secrets::info()));
         out.extend(self.taint.iter().map(|t| t.info()));
+        out.extend(self.text.iter().map(|t| t.info()));
         out.extend(self.ast.infos().iter().cloned());
         out.extend(self.linters.iter().map(|l| l.info()));
         out.extend(self.deps.iter().flat_map(|d| d.rules()));

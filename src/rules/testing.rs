@@ -1,11 +1,16 @@
 //! `larpcop test`: rule fixtures in ast-grep's format (`rule-tests/<id>-test.yml`
 //! with `valid` / `invalid` snippets), plus `fixed` pairs for rules with a `fix:`.
+//! Taint and text rules use the same format (see `flow_rules`).
 //! A rule that only ever matched what its author imagined is how a standard rots.
 
+mod flow_rules;
+
 use super::ast::{self, TESTS_DIR};
+use crate::config::{TaintConfig, TextRuleConfig};
 use anyhow::{Context, Result, anyhow};
 use ast_grep_config::RuleConfig;
 use ast_grep_language::{LanguageExt, SupportLang};
+use flow_rules::FlowRule;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -21,6 +26,8 @@ struct Fixture {
     invalid: Vec<String>,
     #[serde(default)]
     fixed: Vec<Fixed>,
+    /// File name the snippets are checked as (taint and text rules).
+    file: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -36,10 +43,27 @@ pub struct Report {
     pub untested: Vec<String>,
 }
 
-pub fn run(rule_dirs: &[PathBuf]) -> Result<Report> {
+/// The rules a standards layer defines, for `larpcop test`.
+#[derive(Default)]
+pub struct Defined {
+    pub rule_dirs: Vec<PathBuf>,
+    pub taint: Vec<TaintConfig>,
+    pub text: Vec<TextRuleConfig>,
+}
+
+pub fn run(defined: &Defined) -> Result<Report> {
+    let rule_dirs = &defined.rule_dirs;
     let mut rules: BTreeMap<String, Vec<RuleConfig<SupportLang>>> = BTreeMap::new();
     for r in ast::load_all(rule_dirs)? {
         rules.entry(r.id.clone()).or_default().push(r);
+    }
+    let root = tempfile::tempdir()?;
+    let mut flow: BTreeMap<String, FlowRule> = BTreeMap::new();
+    for t in &defined.taint {
+        flow.insert(t.id.clone(), FlowRule::taint(t, root.path())?);
+    }
+    for t in &defined.text {
+        flow.insert(t.id.clone(), FlowRule::text(t)?);
     }
     let mut text = String::new();
     let mut failures = 0;
@@ -48,19 +72,23 @@ pub fn run(rule_dirs: &[PathBuf]) -> Result<Report> {
         let raw = fs::read_to_string(&path)?;
         let fixture: Fixture = serde_saphyr::from_str(&raw)
             .with_context(|| format!("invalid fixture {}", path.display()))?;
-        let variants = rules
-            .get(&fixture.id)
-            .ok_or_else(|| anyhow!("{}: no rule with id `{}`", path.display(), fixture.id))?;
-        // The fixture holds for every language variant of the rule.
-        let errors: Vec<String> = variants
-            .iter()
-            .flat_map(|rule| {
-                let lang = (variants.len() > 1).then(|| format!("[{}] ", rule.language));
-                check(rule, &fixture)
-                    .into_iter()
-                    .map(move |e| format!("{}{e}", lang.clone().unwrap_or_default()))
-            })
-            .collect();
+        let errors = if let Some(f) = flow.get(&fixture.id) {
+            check_flow(f, &fixture).with_context(|| path.display().to_string())?
+        } else {
+            let variants = rules
+                .get(&fixture.id)
+                .ok_or_else(|| anyhow!("{}: no rule with id `{}`", path.display(), fixture.id))?;
+            // The fixture holds for every language variant of the rule.
+            variants
+                .iter()
+                .flat_map(|rule| {
+                    let lang = (variants.len() > 1).then(|| format!("[{}] ", rule.language));
+                    check(rule, &fixture)
+                        .into_iter()
+                        .map(move |e| format!("{}{e}", lang.clone().unwrap_or_default()))
+                })
+                .collect()
+        };
         let cases = fixture.valid.len() + fixture.invalid.len() + fixture.fixed.len();
         if errors.is_empty() {
             let _ = writeln!(text, "✓ {:<28} {cases} case(s)", fixture.id);
@@ -80,6 +108,7 @@ pub fn run(rule_dirs: &[PathBuf]) -> Result<Report> {
     }
     let untested = rules
         .keys()
+        .chain(flow.keys())
         .filter(|id| !tested.contains(id))
         .cloned()
         .collect();
@@ -120,6 +149,29 @@ fn check(rule: &RuleConfig<SupportLang>, fixture: &Fixture) -> Vec<String> {
         }
     }
     errors
+}
+
+fn check_flow(rule: &FlowRule, fixture: &Fixture) -> Result<Vec<String>> {
+    let files = rule.files(fixture.file.as_deref())?;
+    let mut errors = Vec::new();
+    for rel in &files {
+        let tag = if files.len() > 1 {
+            format!("[{rel}] ")
+        } else {
+            String::new()
+        };
+        for case in &fixture.invalid {
+            if rule.hits(rel, case) == 0 {
+                errors.push(format!("{tag}invalid but not reported: {}", one_line(case)));
+            }
+        }
+        for case in &fixture.valid {
+            if rule.hits(rel, case) > 0 {
+                errors.push(format!("{tag}valid but reported: {}", one_line(case)));
+            }
+        }
+    }
+    Ok(errors)
 }
 
 /// Valid / invalid snippets of one rule's fixture, for explaining it to an agent.

@@ -160,3 +160,31 @@ fn installs_check_the_version_they_would_fetch() {
     );
     assert_eq!(pinned.code(), 0, "{}", pinned.stderr());
 }
+
+#[test]
+fn yarn_1_has_no_age_gate_so_its_installs_are_checked() {
+    let new = (jiff::Timestamp::now() - jiff::SignedDuration::from_hours(24)).to_string();
+    let versions = json!({ "versions": [
+        { "versionKey": { "version": "2.0.0" }, "publishedAt": new, "isDefault": true },
+    ]});
+    let api = fake_deps_dev(vec![(
+        "/v3/systems/npm/packages/left-pad".into(),
+        versions.to_string(),
+    )]);
+    let repo = repo("dependencies:\n  min_release_age: 14\n");
+    repo.write("yarn.lock", "# yarn lockfile v1\n");
+    repo.commit_all("base");
+    let dir = repo.path();
+    let env = [("LARPCOP_DEPS_API", api.as_str())];
+    let run = repo.run_stdin_env(
+        &["hook", "claude-code"],
+        &bash("PreToolUse", &dir, "c", "yarn add left-pad"),
+        &env,
+    );
+    assert_eq!(run.code(), 2, "{}", run.stdout());
+    assert!(
+        run.stderr().contains("`left-pad@2.0.0`"),
+        "{}",
+        run.stderr()
+    );
+}

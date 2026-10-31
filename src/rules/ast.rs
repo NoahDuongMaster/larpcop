@@ -31,6 +31,7 @@ pub fn load_all(dirs: &[PathBuf]) -> Result<Vec<RuleConfig<SupportLang>>> {
     for file in rule_files(dirs)? {
         let text =
             fs::read_to_string(&file).with_context(|| format!("reading {}", file.display()))?;
+        let text = super::pattern_fixes::rewrite_rule_file(&text).unwrap_or(text);
         let parsed = from_yaml_string::<SupportLang>(&text, &GlobalRules::default())
             .map_err(|e| anyhow!("invalid rule file {}: {}", file.display(), chain(&e)))?;
         for rule in parsed {

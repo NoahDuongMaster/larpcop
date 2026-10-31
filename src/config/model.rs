@@ -37,6 +37,9 @@ pub struct RawConfig {
     /// Intraprocedural taint rules: sources must not reach sinks unsanitized.
     #[serde(default)]
     pub taint: Vec<TaintConfig>,
+    /// Regex rules for files without a grammar (templates, HTML, config).
+    #[serde(default)]
+    pub text: Vec<TextRuleConfig>,
     /// Rules in plain language, judged by a model (`larpcop review`).
     pub llm: Option<LlmConfig>,
     /// Language server commands by language (typescript, python, go, rust),
@@ -90,9 +93,17 @@ pub struct TaintConfig {
     pub sinks: Vec<String>,
     /// Metavariable of the sink argument that must stay clean (default: the whole call).
     pub sink_arg: Option<String>,
+    /// Regex over the literal start of a built sink argument (`"/p/" + id`)
+    /// that makes it safe, e.g. `^/[^/\\]` for redirects.
+    pub safe_prefix: Option<String>,
     /// ast-grep patterns that make data safe, e.g. `Number($X)`.
     #[serde(default)]
     pub sanitizers: Vec<String>,
+    /// ast-grep patterns of checks in `if` conditions, e.g. `$X.startsWith($P)`:
+    /// a checked name is clean after a branch that returns or throws, and
+    /// inside a branch taken when the check passes.
+    #[serde(default)]
+    pub guards: Vec<String>,
     /// Destructured parameters by type: with `Request: req`, the parameter
     /// `{ query }: Request` reads `req.query`.
     #[serde(default)]
@@ -101,6 +112,20 @@ pub struct TaintConfig {
     /// shows it (`DB: "Pool|PoolClient"`). Without a server the sink counts.
     #[serde(default)]
     pub sink_types: std::collections::BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TextRuleConfig {
+    pub id: String,
+    /// Globs of the files it reads, e.g. `**/*.ejs`.
+    pub files: Vec<String>,
+    pub regex: String,
+    /// Matches whose text also matches this are not reported.
+    pub not: Option<String>,
+    pub severity: Option<Level>,
+    pub message: String,
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

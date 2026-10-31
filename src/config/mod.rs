@@ -6,7 +6,7 @@ mod model;
 pub use fetch::cache_root;
 pub use model::{
     DependenciesConfig, ExtendSpec, LinterConfig, LlmCommand, LlmConfig, LlmRule, MaxLinesConfig,
-    MetricsConfig, RawConfig, SecretsConfig, TaintConfig,
+    MetricsConfig, RawConfig, SecretsConfig, TaintConfig, TextRuleConfig,
 };
 
 use anyhow::{Context, Result, bail};
@@ -35,6 +35,7 @@ pub struct Config {
     pub metrics: Option<MetricsConfig>,
     pub secrets: Option<SecretsConfig>,
     pub taint: Vec<TaintConfig>,
+    pub text: Vec<TextRuleConfig>,
     pub llm: LlmConfig,
     pub language_servers: BTreeMap<String, Vec<String>>,
     /// Layers in application order, for traceability.
@@ -78,17 +79,19 @@ pub fn resolve(root: &Path, forced: &[String], refresh: bool) -> Result<Config> 
 }
 
 /// Rule directories declared by one standards directory (for `larpcop test DIR`).
-pub fn rule_dirs_of(dir: &Path) -> Result<Vec<PathBuf>> {
+/// The rules one standards directory defines itself (not what it extends).
+pub fn rules_of(dir: &Path) -> Result<crate::rules::testing::Defined> {
     let file = STANDARDS_CONFIG
         .iter()
         .map(|name| dir.join(name))
         .find(|p| p.is_file())
         .with_context(|| format!("no larpcop.yaml in {}", dir.display()))?;
-    Ok(read_raw(&file)?
-        .rule_dirs
-        .iter()
-        .map(|d| dir.join(d))
-        .collect())
+    let raw = read_raw(&file)?;
+    Ok(crate::rules::testing::Defined {
+        rule_dirs: raw.rule_dirs.iter().map(|d| dir.join(d)).collect(),
+        taint: raw.taint,
+        text: raw.text,
+    })
 }
 
 fn read_raw(path: &Path) -> Result<RawConfig> {
@@ -198,6 +201,13 @@ impl Config {
             }
             self.taint.retain(|t| t.id != rule.id);
             self.taint.push(rule);
+        }
+        for rule in raw.text {
+            if self.text.iter().any(|t| t.id == rule.id) {
+                self.ensure_unlocked(&rule.id, source, "override")?;
+            }
+            self.text.retain(|t| t.id != rule.id);
+            self.text.push(rule);
         }
         self.language_servers.extend(raw.language_servers);
         if let Some(llm) = raw.llm {

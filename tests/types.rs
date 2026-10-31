@@ -65,22 +65,89 @@ fn without_a_language_server_every_syntactic_sink_counts() {
     assert_eq!(lines(&repo(Some("no-such-language-server"))), [6, 11]);
 }
 
+/// The server runs (a rustup proxy without the component does not).
+fn installed(bin: &str) -> bool {
+    let ok = std::process::Command::new(bin)
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success());
+    if !ok {
+        eprintln!("skipped: {bin} is not installed");
+    }
+    ok
+}
+
 #[test]
 fn the_language_server_resolves_types_across_files() {
-    let on_path = std::env::var_os("PATH").is_some_and(|p| {
-        std::env::split_paths(&p).any(|d| {
-            [
-                "typescript-language-server",
-                "typescript-language-server.cmd",
-            ]
-            .iter()
-            .any(|b| d.join(b).is_file())
-        })
-    });
-    if !on_path {
-        eprintln!("skipped: typescript-language-server is not installed");
+    if !installed("typescript-language-server") {
         return;
     }
     // `pool` is a Pool imported from db.ts; `index` is a SearchIndex.
     assert_eq!(lines(&repo(None)), [6]);
+}
+
+/// A Go or Rust project where `pool.Query(sql)` and `index.Query(sql)` take
+/// the same tainted string; only `Pool` is a database.
+fn typed_repo(lang: &str, source: &str, files: &[(&str, &str)]) -> Repo {
+    let repo = Repo::new();
+    repo.write(
+        ".larpcop.yaml",
+        &format!(
+            "taint:\n  - id: taint-sql\n    languages: [{lang}]\n    message: Input reaches SQL.\n    \
+             sources: [\"{source}\"]\n    sinks: [\"$DB.$Q($SQL)\"]\n    sink_arg: SQL\n    sink_types: {{ DB: \"\\\\bPool\\\\b\" }}\n"
+        ),
+    );
+    for (path, text) in files {
+        repo.write(path, text);
+    }
+    repo
+}
+
+#[test]
+fn gopls_resolves_go_types() {
+    if !installed("gopls") {
+        return;
+    }
+    let repo = typed_repo(
+        "Go",
+        "$R.URL.Query()",
+        &[
+            ("go.mod", "module example.com/t\n\ngo 1.22\n"),
+            (
+                "db/db.go",
+                "package db\n\ntype Pool struct{}\ntype Index struct{}\n\nfunc (Pool) Query(sql string)   {}\nfunc (Index) Query(text string) {}\n",
+            ),
+            (
+                "main.go",
+                "package main\n\nimport (\n\t\"net/http\"\n\n\t\"example.com/t/db\"\n)\n\nfunc handler(w http.ResponseWriter, r *http.Request) {\n\tpool := db.Pool{}\n\tindex := db.Index{}\n\tsql := \"select \" + r.URL.Query().Get(\"name\")\n\tpool.Query(sql)\n\tindex.Query(sql)\n}\n\nfunc main() { http.HandleFunc(\"/\", handler) }\n",
+            ),
+        ],
+    );
+    assert_eq!(lines(&repo), [13]);
+}
+
+#[test]
+fn rust_analyzer_resolves_rust_types() {
+    if !installed("rust-analyzer") {
+        return;
+    }
+    let repo = typed_repo(
+        "Rust",
+        "std::env::args",
+        &[
+            (
+                "Cargo.toml",
+                "[package]\nname = \"t\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            ),
+            (
+                "src/db.rs",
+                "pub struct Pool;\npub struct Index;\nimpl Pool {\n    pub fn query(&self, _sql: &str) {}\n}\nimpl Index {\n    pub fn query(&self, _text: &str) {}\n}\n",
+            ),
+            (
+                "src/main.rs",
+                "mod db;\nuse db::{Index, Pool};\n\nfn main() {\n    let arg = std::env::args().nth(1).unwrap_or_default();\n    let sql = String::from(\"select \") + &arg;\n    Pool.query(&sql);\n    Index.query(&sql);\n}\n",
+            ),
+        ],
+    );
+    assert_eq!(lines(&repo), [7]);
 }

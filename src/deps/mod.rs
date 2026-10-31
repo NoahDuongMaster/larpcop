@@ -60,6 +60,34 @@ impl View<'_> {
     fn old(&self, rel: &str) -> Option<String> {
         files::show(self.root, self.base.as_deref()?, rel)
     }
+
+    /// What a dependency file pins: a lockfile's entries, or a manifest's exact
+    /// pins when no lockfile governs it.
+    fn pins(&self, rel: &str, name: &str, content: &str) -> Option<Result<Vec<ecosystem::Pinned>>> {
+        lockfile::parse(name, content)
+            .or_else(|| lockfile::manifest_pins(name, content, |locks| self.governed(rel, locks)))
+    }
+
+    /// One of `locks` sits next to `rel` or in a directory above it.
+    fn governed(&self, rel: &str, locks: &[&str]) -> bool {
+        let mut dir = dir_of(rel);
+        loop {
+            let at = |l: &str| {
+                if dir.is_empty() {
+                    l.to_string()
+                } else {
+                    format!("{dir}/{l}")
+                }
+            };
+            if locks.iter().any(|l| self.current(&at(l)).is_some()) {
+                return true;
+            }
+            if dir.is_empty() {
+                return false;
+            }
+            dir = dir_of(dir);
+        }
+    }
 }
 
 /// Lockfiles, manifests and package-manager configs: what the dependency rules read.

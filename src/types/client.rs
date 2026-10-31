@@ -19,10 +19,14 @@ pub(super) struct Client {
     inbox: Receiver<Message>,
     next: i32,
     opened: std::collections::HashSet<String>,
+    /// rust-analyzer answers hovers with nothing until it has loaded the
+    /// workspace; it says when it has (`experimental/serverStatus`).
+    wait_for_quiescence: bool,
+    quiescent: bool,
 }
 
 impl Client {
-    pub(super) fn start(argv: &[String], root: &Path) -> Result<Self> {
+    pub(super) fn start(argv: &[String], root: &Path, wait_for_quiescence: bool) -> Result<Self> {
         let (bin, args) = argv
             .split_first()
             .context("empty language server command")?;
@@ -50,6 +54,8 @@ impl Client {
             inbox,
             next: 1,
             opened: Default::default(),
+            wait_for_quiescence,
+            quiescent: false,
         };
         let uri = url(root);
         client.request(
@@ -58,7 +64,10 @@ impl Client {
                 "processId": std::process::id(),
                 "rootUri": uri,
                 "workspaceFolders": [{ "uri": uri, "name": "root" }],
-                "capabilities": { "textDocument": { "hover": { "contentFormat": ["plaintext", "markdown"] } } },
+                "capabilities": {
+                    "textDocument": { "hover": { "contentFormat": ["plaintext", "markdown"] } },
+                    "experimental": { "serverStatusNotification": true },
+                },
                 // typescript-language-server answers early requests from a syntax-only
                 // server (`import pool`, `any`); the semantic one waits for the project.
                 "initializationOptions": { "tsserver": { "useSyntaxServer": "never" } },
@@ -77,6 +86,13 @@ impl Client {
         line: usize,
         character: usize,
     ) -> Result<Option<String>> {
+        while self.wait_for_quiescence && !self.quiescent {
+            let msg = self
+                .inbox
+                .recv_timeout(TIMEOUT)
+                .context("language server never got ready")?;
+            self.handle(msg)?;
+        }
         let uri = url(path);
         if self.opened.insert(uri.clone()) {
             let doc = json!({ "uri": uri, "languageId": language_id, "version": 1, "text": text });
@@ -109,17 +125,29 @@ impl Client {
                         .response_result
                         .map_err(|e| anyhow::anyhow!("{method}: {}", e.message));
                 }
-                Message::Request(r) => {
-                    let empty = if r.method == "workspace/configuration" {
-                        json!([])
-                    } else {
-                        Value::Null
-                    };
-                    Message::Response(Response::new_ok(r.id, empty)).write(&mut self.stdin)?;
-                }
-                _ => {}
+                other => self.handle(other)?,
             }
         }
+    }
+
+    /// Answers the server's own requests (configuration, progress) with empty
+    /// results and notes when it reports being idle.
+    fn handle(&mut self, msg: Message) -> Result<()> {
+        match msg {
+            Message::Request(r) => {
+                let empty = if r.method == "workspace/configuration" {
+                    json!([])
+                } else {
+                    Value::Null
+                };
+                Message::Response(Response::new_ok(r.id, empty)).write(&mut self.stdin)?;
+            }
+            Message::Notification(n) if n.method == "experimental/serverStatus" => {
+                self.quiescent |= n.params["quiescent"].as_bool() == Some(true);
+            }
+            _ => {}
+        }
+        Ok(())
     }
 }
 

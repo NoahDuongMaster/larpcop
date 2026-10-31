@@ -115,7 +115,10 @@ fn validate(p: &Value, known: &[String], kept: &[Learned]) -> Result<usize> {
     }
     let tmp = tempfile::tempdir()?;
     write(tmp.path(), p)?;
-    let report = crate::rules::testing::run(&[tmp.path().join("rules")])?;
+    let report = crate::rules::testing::run(&crate::rules::testing::Defined {
+        rule_dirs: vec![tmp.path().join("rules")],
+        ..Default::default()
+    })?;
     if report.failures > 0 {
         bail!("{}", report.text.trim());
     }

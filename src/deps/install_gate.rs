@@ -130,9 +130,11 @@ poetry.lock check pass, then `poetry install`."
                 }
             }
         }
+        let berry = yarn_berry(cwd);
         for r in requests.iter().chain(&resolved) {
             let Some(name) = &r.name else { continue };
-            if r.version.is_none() && NATIVELY_GATED.contains(&r.via) {
+            let gated = NATIVELY_GATED.contains(&r.via) && (r.via != "yarn add" || berry);
+            if r.version.is_none() && gated {
                 continue;
             }
             if self.exempt.matches(r.eco, name) {
@@ -252,4 +254,10 @@ fn ago(d: SignedDuration) -> String {
     } else {
         format!("{} days", hours / 24)
     }
+}
+
+/// Yarn ≥ 2 (Berry) reads `.yarnrc.yml` and has `npmMinimalAgeGate`; Yarn 1
+/// has neither, so its installs are checked like any ungated one.
+fn yarn_berry(cwd: &std::path::Path) -> bool {
+    cwd.ancestors().any(|d| d.join(".yarnrc.yml").is_file())
 }

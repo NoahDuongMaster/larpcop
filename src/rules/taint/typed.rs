@@ -72,6 +72,15 @@ impl Typed {
                 &file.content,
                 at,
             );
+            if std::env::var_os("LARPCOP_DEBUG_TYPES").is_some() {
+                eprintln!(
+                    "larpcop: type of `{}` at {}:{}:{} → {answer:?}",
+                    node.text(),
+                    file.rel,
+                    at.0 + 1,
+                    at.1 + 1
+                );
+            }
             answer.is_none_or(|text| self.constraints[*i].1.is_match(&text))
         })
     }

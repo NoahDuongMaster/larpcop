@@ -78,12 +78,10 @@ const CARGO_FLAGS: &[&str] = &[
 ];
 
 pub fn requests(command: &str) -> Vec<Request> {
-    static SEPARATOR: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"&&|\|\||[;|&\n]").expect("static regex"));
-    SEPARATOR
-        .split(command)
-        .filter_map(shlex::split)
-        .flat_map(|tokens| parse(&tokens))
+    crate::shell_ast::parse(command)
+        .commands
+        .iter()
+        .flat_map(|c| parse(&c.words))
         .collect()
 }
 
@@ -99,11 +97,7 @@ pub fn weakens_age_gate(command: &str) -> bool {
 }
 
 fn parse(tokens: &[String]) -> Vec<Request> {
-    let mut t: Vec<&str> = tokens
-        .iter()
-        .map(String::as_str)
-        .skip_while(|s| is_assignment(s) || matches!(*s, "sudo" | "command" | "exec" | "time"))
-        .collect();
+    let mut t: Vec<&str> = tokens.iter().map(String::as_str).collect();
     if t.len() > 2 && t[0].starts_with("python") && t[1] == "-m" {
         t.drain(..2); // python -m pip install …
     }
@@ -123,12 +117,6 @@ fn parse(tokens: &[String]) -> Vec<Request> {
     let mut out = Vec::new();
     let mut args = args.iter();
     while let Some(arg) = args.next() {
-        if let Some(takes_target) = redirect(arg) {
-            if takes_target {
-                args.next(); // `> log.txt`: the file is not a package
-            }
-            continue;
-        }
         if arg.starts_with('-') {
             if !arg.contains('=') && value_flags.contains(arg) {
                 args.next();
@@ -145,25 +133,6 @@ fn parse(tokens: &[String]) -> Vec<Request> {
         });
     }
     out
-}
-
-/// Shell redirections (`2>&1`, `>log`, `>`, `&>`): `Some(true)` when the target
-/// is the next token.
-fn redirect(token: &str) -> Option<bool> {
-    let rest = token
-        .trim_start_matches(|c: char| c.is_ascii_digit())
-        .trim_start_matches('&');
-    let target = rest
-        .strip_prefix(">>")
-        .or_else(|| rest.strip_prefix('>'))
-        .or_else(|| rest.strip_prefix('<'))?;
-    Some(target.is_empty())
-}
-
-fn is_assignment(token: &str) -> bool {
-    token.split_once('=').is_some_and(|(k, _)| {
-        !k.is_empty() && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-    })
 }
 
 fn registry_name(eco: Ecosystem, spec: &str) -> Option<String> {

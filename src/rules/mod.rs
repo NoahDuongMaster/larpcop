@@ -3,6 +3,7 @@
 mod ast;
 mod linters;
 mod max_lines;
+pub mod testing;
 
 pub use max_lines::ID as MAX_LINES_ID;
 
@@ -111,6 +112,14 @@ impl Engine {
             found.extend(linter.run(root, files)?);
         }
         Ok(found)
+    }
+
+    /// Auto-fixes from ast-grep rules: `(file, new content, fixes applied)`.
+    pub fn fix(&self, files: &[SourceFile]) -> Vec<(String, String, usize)> {
+        files
+            .par_iter()
+            .filter_map(|f| self.ast.fix(f).map(|(text, n)| (f.rel.clone(), text, n)))
+            .collect()
     }
 
     pub fn rules(&self) -> Vec<RuleInfo> {

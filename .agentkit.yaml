@@ -8,7 +8,6 @@ dependencies:
   approved:
     - cargo:jiff
     - cargo:percent-encoding
-    - cargo:shlex
     - cargo:toml
     - cargo:ureq
     - cargo:yarn-lock-parser

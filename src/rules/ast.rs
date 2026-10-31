@@ -19,32 +19,42 @@ pub struct AstRules {
     infos: Vec<RuleInfo>,
 }
 
+/// Rule fixtures directory (ast-grep's convention), inside or next to a rule dir.
+pub const TESTS_DIR: &str = "rule-tests";
+
+/// Every rule defined in `dirs`, enabled or not (`agentkit test` checks them all).
+pub fn load_all(dirs: &[PathBuf]) -> Result<Vec<RuleConfig<SupportLang>>> {
+    let mut out = Vec::new();
+    let mut origin: BTreeMap<String, PathBuf> = BTreeMap::new();
+    for file in rule_files(dirs)? {
+        let text =
+            fs::read_to_string(&file).with_context(|| format!("reading {}", file.display()))?;
+        let parsed = from_yaml_string::<SupportLang>(&text, &GlobalRules::default())
+            .map_err(|e| anyhow!("invalid rule file {}: {}", file.display(), chain(&e)))?;
+        for rule in parsed {
+            if rule.id.is_empty() {
+                bail!("rule without `id` in {}", file.display());
+            }
+            if let Some(prev) = origin.insert(rule.id.clone(), file.clone()) {
+                bail!(
+                    "duplicate rule id `{}` in {} and {}",
+                    rule.id,
+                    prev.display(),
+                    file.display()
+                );
+            }
+            out.push(rule);
+        }
+    }
+    Ok(out)
+}
+
 impl AstRules {
     pub fn load(dirs: &[PathBuf], disabled: &BTreeSet<String>) -> Result<Self> {
-        let mut configs = Vec::new();
-        let mut origin: BTreeMap<String, PathBuf> = BTreeMap::new();
-        for file in rule_files(dirs)? {
-            let text =
-                fs::read_to_string(&file).with_context(|| format!("reading {}", file.display()))?;
-            let parsed = from_yaml_string::<SupportLang>(&text, &GlobalRules::default())
-                .map_err(|e| anyhow!("invalid rule file {}: {}", file.display(), chain(&e)))?;
-            for rule in parsed {
-                if rule.id.is_empty() {
-                    bail!("rule without `id` in {}", file.display());
-                }
-                if let Some(prev) = origin.insert(rule.id.clone(), file.clone()) {
-                    bail!(
-                        "duplicate rule id `{}` in {} and {}",
-                        rule.id,
-                        prev.display(),
-                        file.display()
-                    );
-                }
-                if !disabled.contains(&rule.id) && !matches!(rule.severity, Severity::Off) {
-                    configs.push(rule);
-                }
-            }
-        }
+        let configs: Vec<_> = load_all(dirs)?
+            .into_iter()
+            .filter(|r| !disabled.contains(&r.id) && !matches!(r.severity, Severity::Off))
+            .collect();
         let infos = configs.iter().map(info).collect();
         let collection =
             RuleCollection::try_new(configs).context("invalid files/ignores glob in rules")?;
@@ -70,6 +80,16 @@ impl AstRules {
         let grep = lang.ast_grep(&file.content);
         let mut out = Vec::new();
         for rule in rules {
+            let note = match (&rule.note, rule.fixer.is_empty()) {
+                (note, true) => note.clone(),
+                (note, false) => Some(format!(
+                    "{}Auto-fixable: run `agentkit fix {}`.",
+                    note.as_deref()
+                        .map(|n| format!("{n}\n"))
+                        .unwrap_or_default(),
+                    file.rel
+                )),
+            };
             for m in grep.root().find_all(&rule.matcher) {
                 let pos = m.start_pos();
                 out.push(Violation {
@@ -79,13 +99,65 @@ impl AstRules {
                     line: pos.line() + 1,
                     column: pos.column(m.get_node()) + 1,
                     message: rule.get_message(&m),
-                    note: rule.note.clone(),
+                    note: note.clone(),
                     snippet: Some(snippet(&file.content, pos.line())),
                 });
             }
         }
         out
     }
+
+    /// Applies every `fix:` of the rules matching `file`; `None` if nothing changed.
+    pub fn fix(&self, file: &SourceFile) -> Option<(String, usize)> {
+        let lang = SupportLang::from_path(&file.rel)?;
+        let rules: Vec<_> = self.collection.for_path(&file.rel);
+        let (text, total) = apply_fixes(lang, &file.content, &rules);
+        (total > 0).then_some((text, total))
+    }
+}
+
+/// Fixes can expose new matches, so this repeats (bounded); overlapping edits
+/// wait for the next pass. Returns the new text and how many fixes were applied.
+pub fn apply_fixes(
+    lang: SupportLang,
+    source: &str,
+    rules: &[&RuleConfig<SupportLang>],
+) -> (String, usize) {
+    let mut text = source.to_string();
+    let mut total = 0;
+    for _ in 0..5 {
+        let grep = lang.ast_grep(&text);
+        let mut edits: Vec<_> = rules
+            .iter()
+            .filter(|r| !r.fixer.is_empty())
+            .flat_map(|rule| {
+                grep.root()
+                    .find_all(&rule.matcher)
+                    .map(|m| m.make_edit(&rule.matcher, &rule.fixer[0]))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        if edits.is_empty() {
+            break;
+        }
+        edits.sort_by_key(|e| e.position);
+        let mut bytes = text.clone().into_bytes();
+        let mut next_start = usize::MAX;
+        for e in edits.iter().rev() {
+            if e.position + e.deleted_length > next_start {
+                continue;
+            }
+            let range = e.position..e.position + e.deleted_length;
+            bytes.splice(range, e.inserted_text.iter().copied());
+            next_start = e.position;
+            total += 1;
+        }
+        match String::from_utf8(bytes) {
+            Ok(t) => text = t,
+            Err(_) => break,
+        }
+    }
+    (text, total)
 }
 
 fn rule_files(dirs: &[PathBuf]) -> Result<Vec<PathBuf>> {
@@ -106,6 +178,10 @@ fn collect_yaml(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
     entries.sort();
     for path in entries {
         if path.is_dir() {
+            // Fixtures for `agentkit test`, not rules.
+            if path.file_name().is_some_and(|n| n == TESTS_DIR) {
+                continue;
+            }
             collect_yaml(&path, out)?;
         } else if path.extension().is_some_and(|e| e == "yml" || e == "yaml") {
             out.push(path);

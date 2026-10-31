@@ -109,7 +109,10 @@ Cả hai rule được lock trong standards mẫu. Một rule đã lock chỉ đ
 ## Lệnh
 
 ```sh
-agentkit check [paths…] [--staged | --changed | --since REF] [--format text|json|github]
+agentkit check [paths…] [--staged | --changed | --since REF] [--format text|json|github] [--output FORMAT=FILE]
+agentkit fix [paths…] [--changed | --since REF] [--dry-run]   # áp `fix:` của rule rồi check lại
+agentkit baseline [--prune]    # ghi nhận vi phạm cũ; --prune chỉ xoá entry đã sửa
+agentkit test [--require-all]  # chạy fixture trong rule-tests/ (valid, invalid, fixed)
 agentkit rules                 # rule hiệu lực, nguồn, rule nào bị lock
 agentkit sync [--check]        # AGENTS.md + file hook cho mọi agent (xem bảng dưới)
 agentkit install [--force]     # git pre-commit hook (tôn trọng core.hooksPath, monorepo)
@@ -117,6 +120,24 @@ agentkit hook <claude-code|codex|gemini|cursor>   # entrypoint cho hook của ag
 ```
 
 Exit code: `0` sạch, `1` có vi phạm mức error, `3` lỗi nội bộ/config. Không dùng `2`, vì giao thức hook của agent dành nó cho nghĩa "chặn và báo cho model". Nhờ vậy config hỏng không bao giờ chặn agent.
+
+### Baseline
+
+Để áp rule mới lên codebase cũ mà không phải sửa hết ngay: người chạy `agentkit baseline`, commit `.agentkit-baseline.json`. `check` ẩn đúng các vi phạm đã ghi nhận và vẫn báo mọi vi phạm mới.
+
+- Entry khớp theo rule, file và **nội dung dòng**, không theo số dòng: sửa chỗ khác trong file không làm vi phạm cũ hiện lại, còn viết thêm một vi phạm giống hệt thì vẫn bị bắt (đếm theo số lần).
+- Agent không chạy được `agentkit baseline` và không sửa được file baseline (hook chặn). `agentkit baseline --prune` thì được, vì nó chỉ xoá entry đã sửa.
+- Với rule bị lock, baseline của repo không được phình ra: ở `--changed`/`--staged`/`--since`, số entry của rule lock tăng so với base là lỗi. Lần ghi nhận đầu tiên (rule chưa có entry nào) vẫn được phép, để org triển khai rule mới.
+
+### Fix và test rule
+
+Rule ast-grep có `fix:` thì vi phạm kèm gợi ý `agentkit fix <file>`. Fix lặp tối đa 5 lượt, bỏ qua các sửa đè lên nhau trong cùng lượt.
+
+`agentkit test` đọc fixture theo định dạng của ast-grep (`rule-tests/<id>-test.yml` với `valid`/`invalid`), thêm `fixed: [{before, after}]` để kiểm `fix:`. `--require-all` làm CI fail khi có rule chưa có fixture.
+
+### Guard đọc lệnh shell bằng parser
+
+Hook phân tích lệnh bằng tree-sitter-bash: quote, pipe, `&&`/`;`/`&`, redirect, `bash -c '…'`, `eval`, `sudo`/`env` đều được giải theo cấu trúc. Nhờ vậy `bash -c 'rm .agentkit.yaml'`, `--no-ver""ify`, `git push --no-veri`, `sudo env SKIP=all git commit` bị chặn, còn `cp .agentkit.yaml /tmp/bak`, `git config --get core.hooksPath` hay `echo 'never rm .agentkit.yaml' > notes.txt` thì không.
 
 ## Adapter agent
 

@@ -1,5 +1,6 @@
 //! Locates the project root and runs a full check.
 
+use crate::baseline::{self, Baseline};
 use crate::config::{self, Config, REPO_CONFIG};
 use crate::files::{self, Scope};
 use crate::rules::{Engine, Level, Violation};
@@ -14,11 +15,14 @@ pub struct Ctx {
     pub refresh: bool,
 }
 
+#[derive(Default)]
 pub struct Outcome {
     pub files: usize,
     pub violations: Vec<Violation>,
     /// No config and no forced standards: nothing is enforced here.
     pub unconfigured: bool,
+    /// Known violations hidden by `.agentkit-baseline.json`.
+    pub baselined: usize,
 }
 
 impl Outcome {
@@ -45,15 +49,8 @@ impl Ctx {
         Ok((cfg, engine))
     }
 
-    pub fn check(&self, scope: &Scope) -> Result<Outcome> {
-        let (cfg, engine) = self.load()?;
-        if engine.is_empty() {
-            return Ok(Outcome {
-                files: 0,
-                violations: Vec::new(),
-                unconfigured: true,
-            });
-        }
+    /// Every violation in scope, before the baseline is applied.
+    pub fn raw(&self, cfg: &Config, engine: &Engine, scope: &Scope) -> Result<Outcome> {
         let exclude = files::globset(&cfg.exclude)?;
         let files = files::collect(&cfg.root, scope, &exclude)?;
         let mut violations = engine.check(&cfg.root, &files)?;
@@ -64,8 +61,31 @@ impl Ctx {
         Ok(Outcome {
             files: files.len(),
             violations,
-            unconfigured: false,
+            ..Outcome::default()
         })
+    }
+
+    pub fn check(&self, scope: &Scope) -> Result<Outcome> {
+        let (cfg, engine) = self.load()?;
+        if engine.is_empty() {
+            return Ok(Outcome {
+                unconfigured: true,
+                ..Outcome::default()
+            });
+        }
+        let mut outcome = self.raw(&cfg, &engine, scope)?;
+        let staged = matches!(scope, Scope::Staged);
+        if let Some(known) = Baseline::load(&cfg.root, staged)? {
+            outcome.baselined = known.apply(&mut outcome.violations);
+            let before = files::base(&cfg.root, scope)
+                .filter(|_| !matches!(scope, Scope::All | Scope::Paths(_)))
+                .and_then(|rev| files::show(&cfg.root, &rev, baseline::FILE));
+            if let Some(before) = before {
+                let before = Baseline::parse(&before).unwrap_or_default();
+                outcome.violations.extend(known.grown(&before, &cfg.locked));
+            }
+        }
+        Ok(outcome)
     }
 }
 

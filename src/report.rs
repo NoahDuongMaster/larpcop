@@ -43,11 +43,12 @@ pub fn text(outcome: &Outcome) -> String {
     }
     if outcome.violations.is_empty() {
         return format!(
-            "agentkit: ✓ no violations in {} checked file(s)\n",
-            outcome.files
+            "agentkit: ✓ no violations in {} checked file(s){}\n",
+            outcome.files,
+            hidden(outcome)
         );
     }
-    let mut out = format!("agentkit: ✗ {}\n", summary(outcome));
+    let mut out = format!("agentkit: ✗ {}{}\n", summary(outcome), hidden(outcome));
     let mut current: Option<&str> = None;
     for v in &outcome.violations {
         if current != Some(v.file.as_str()) {
@@ -65,6 +66,16 @@ pub fn text(outcome: &Outcome) -> String {
         let _ = write!(out, "\n{NO_BYPASS}\n");
     }
     out
+}
+
+fn hidden(outcome: &Outcome) -> String {
+    match outcome.baselined {
+        0 => String::new(),
+        n => format!(
+            " ({n} known violation(s) hidden by {})",
+            crate::baseline::FILE
+        ),
+    }
 }
 
 fn write_violation(out: &mut String, v: &Violation) {
@@ -95,6 +106,7 @@ fn json(outcome: &Outcome) -> String {
     let value = serde_json::json!({
         "files_checked": outcome.files,
         "errors": outcome.errors(),
+        "baselined": outcome.baselined,
         "violations": outcome.violations,
     });
     serde_json::to_string_pretty(&value).unwrap_or_default() + "\n"

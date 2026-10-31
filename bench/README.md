@@ -43,7 +43,9 @@ Một bộ chỉ đo được độ tổng quát khi rule chưa được viết 
 
 12. **java-sec-code (Java, Spring)** đo các rule taint Java viết ở commit cc74e2e (SSRF, code injection, deserialization mới thêm) với đáp án 76 endpoint lấy từ route (`/vuln`, `/sec`) và comment của dự án (`java-sec-code-truth.json`, commit 643b158 trước khi chạy). Lần đầu: larpcop **+6,6%**, Semgrep p/default **+20,8%**, p/java +11,3%. larpcop thua. Nguyên nhân: không theo import Java khác package (`org.joychou.util.HttpUtils`), không có rule XXE Java, không có SSTI, thiếu redirect `return "redirect:" + url` và XSS khi handler `@ResponseBody` trả về chuỗi, validator của dự án (`SecurityUtil.cmdFilter`) không được hiểu. Sau khi sửa engine (import Java, validator suy ra từ hàm trả `null`/`false`, kiểu khai báo cho `sink_types`, `response_returns`) và thêm rule (`java-no-xxe`, `java-taint-ssti`, MyBatis `${}`, Jackson default typing): **+50,6%** (`results/java-sec-code.md`). Chạy trên app thật (spring-petclinic, macrozheng/mall, halo, shiro, microblog, djangoproject.com) lộ báo nhầm và đã sửa: `Page.getContent()` khớp sink `URL.getContent()`, Elasticsearch `search()` khớp sink LDAP, 692 chỗ `${criterion.condition}` của MyBatis Generator, mixin Jackson của Spring Security, `redirect(next)` sau `urlsplit(next).netloc != ''`, `url = reverse(…); url += "?q=" + q`. mall còn 3 finding (2 là luồng request → HTML thật của Alipay).
 
-Kết quả dưới đây là sau bước 12: chỉ có ý nghĩa *không thụt lùi* trên cả mười hai bộ. Rule mới cần một bộ chưa ai nhìn.
+13. **VulnerableApp (Java, Spring)** đo các rule Java viết ở bước 12 (XXE, SSTI, MyBatis, Jackson, XSS khi handler trả chuỗi, redirect) và engine mới, commit e913760 trước khi chạy. Đáp án (`vulnerableapp-truth.json`, commit 4b055e8 trước khi chạy): 97 handler, nhãn là `variant = Variant.SECURE` của chính dự án. Lần đầu: larpcop **+7,2%**, Semgrep p/default và p/java **+16,5%**. larpcop lại thua. Nguyên nhân chính: dự án dùng meta-annotation riêng (`@VulnerableAppRequestMapping`, `@VulnerableAppRestController`) nên regex handler Spring không khớp; `getResourceAsStream(base + name)` không phải sink path; LDAP qua UnboundID (`connection.search(base, scope, filter)`); redirect qua `HttpHeaders` và `new ResponseEntity<>(headers, HttpStatus.FOUND)`; guard `$L.contains($H)` làm sạch cả chuỗi bẩn trong `url.contains(NULL_BYTE)`. Sau khi sửa (regex nhận meta-annotation, sink mới, guard membership chỉ làm sạch đối số, guard so bằng `equals` chỉ làm sạch toán hạng là tên trơn, `HtmlUtils.htmlEscapeHex`, `Filter.encodeValue`, container `h.get(k).add(x)`, kiểu khai báo trong try-with-resources): **+46,4%** (`results/vulnerableapp.md`). OWASP Benchmark Java lên +46,8%.
+
+Kết quả dưới đây là sau bước 13: chỉ có ý nghĩa *không thụt lùi* trên cả mười ba bộ. Rule mới cần một bộ chưa ai nhìn.
 
 ## Kết quả (01/11/2026)
 
@@ -66,6 +68,7 @@ Kết quả dưới đây là sau bước 12: chỉ có ý nghĩa *không thụt
 | Juliet C# (1.443 ca web): thời gian | **4,96 s** | 16,1 s (`p/default`) | – |
 | RailsGoat (Ruby): dòng tìm thấy (/14) | **13** (lần đầu 10) | 9 | – |
 | java-sec-code (76 endpoint): điểm trung bình (TPR − FPR) | **+50,6%** (lần đầu +6,6%) | +20,8% (p/default) | – |
+| VulnerableApp (97 handler): điểm trung bình (TPR − FPR) | **+46,4%** (lần đầu +7,2%) | +16,5% | – |
 | Juliet C# (1.443 ca web): điểm trung bình (TPR − FPR) | **+86,5%** (lần đầu +43,9%) | +0,8% (`p/default`, `p/csharp`) | – |
 | OWASP Benchmark Java: điểm trung bình (TPR − FPR) | **+46,2%** (lần đầu +37,5%) | +34,9% (`p/default`), +17,7% (`p/java`) | – |
 | vulnerable-node seeds (/12 file, báo nhầm trên 2 file sạch) | **11**, 1 báo nhầm (11 và 0 báo nhầm nếu bỏ rule chung chung) | 10, 1 báo nhầm (8 và 1 báo nhầm nếu bỏ rule chung chung) | – |

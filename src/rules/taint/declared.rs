@@ -16,8 +16,15 @@ const DECLARATIONS: [&str; 7] = [
     "property_declaration",
 ];
 /// Parameter lists, and the parameters in them.
-const PARAMETER_LISTS: [&str; 3] = ["formal_parameters", "parameter_list", "parameters"];
-const PARAMETERS: [&str; 5] = [
+/// Java's try-with-resources declares its resources like parameters.
+const PARAMETER_LISTS: [&str; 4] = [
+    "formal_parameters",
+    "parameter_list",
+    "parameters",
+    "resource_specification",
+];
+const PARAMETERS: [&str; 6] = [
+    "resource",
     "formal_parameter",
     "spread_parameter",
     "parameter",

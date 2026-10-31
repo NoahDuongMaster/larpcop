@@ -144,11 +144,13 @@ pub(super) fn safe<D: Doc>(n: &Node<D>, checks: &[Check]) -> Sets {
         .filter(|(r, ..)| *r == range)
         .max_by_key(|(_, safe, weight)| (*weight, !*safe));
     if let Some((_, safe, _)) = exact {
-        let names = names(n);
         return if *safe {
-            (names, HashSet::new())
+            (
+                super::membership::members(n).unwrap_or_else(|| names(n)),
+                HashSet::new(),
+            )
         } else {
-            (HashSet::new(), names)
+            (HashSet::new(), names(n))
         };
     }
     if !checks
@@ -234,7 +236,7 @@ fn swap((a, b): Sets) -> Sets {
     (b, a)
 }
 
-fn names<D: Doc>(n: &Node<D>) -> HashSet<String> {
+pub(super) fn names<D: Doc>(n: &Node<D>) -> HashSet<String> {
     n.dfs()
         .filter(|c| NAMES.contains(&c.kind().as_ref()))
         .map(|c| c.text().to_string())

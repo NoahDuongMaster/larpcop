@@ -3,9 +3,15 @@ valid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    response.sendRedirect(\"/account/\" + request.getParameter(\"\
   tab\"));\n  }\n}\n"
 - "@Controller\npublic class R {\n  @GetMapping(\"/r\")\n  public String r(@RequestParam String url, HttpServletResponse response) {\n    return \"redirect:/home\";\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    HttpHeaders h = new HttpHeaders();\n    h.setLocation(URI.create(\"\
+  /home\"));\n  }\n}\n"
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String next = request.getParameter(\"next\");\n    response.sendRedirect(next);\n\
   \  }\n}\n"
 - "@Controller\npublic class R {\n  @GetMapping(\"/r\")\n  public String r(@RequestParam String url, HttpServletResponse response) {\n    return \"redirect:\" + url;\n  }\n}\n"
 - "@Controller\npublic class R {\n  @GetMapping(\"/r\")\n  public String r(@RequestParam String url, HttpServletResponse response) {\n    response.setHeader(\"Location\", url);\n    return null;\n  }\n\
   }\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    HttpHeaders h = new HttpHeaders();\n    h.add(HttpHeaders.LOCATION,\
+  \ request.getParameter(\"to\"));\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    MultiValueMap<String, String> h = new HttpHeaders();\n\
+  \    h.put(\"Location\", new ArrayList<>());\n    h.get(\"Location\").add(request.getParameter(\"to\"));\n    ResponseEntity<?> r = new ResponseEntity<>(h, HttpStatus.FOUND);\n  }\n}\n"

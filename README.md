@@ -238,7 +238,7 @@ llm:
 
 `--json` xuất cùng dữ liệu đó cho dashboard khác dùng.
 
-**Benchmark công khai**: [`bench/`](bench) (chạy lại bằng `bench/run.sh`), trên mười hai bộ cố ý có lỗ hổng, mỗi bộ có đáp án từ chính dự án đó:
+**Benchmark công khai**: [`bench/`](bench) (chạy lại bằng `bench/run.sh`), trên mười ba bộ cố ý có lỗ hổng, mỗi bộ có đáp án từ chính dự án đó:
 
 | | larpcop | Semgrep OSS (`p/default`) | gitleaks |
 |---|---|---|---|
@@ -249,15 +249,16 @@ llm:
 | DVPWA (Python): dòng tìm thấy | **4/4** | 2/4 | – |
 | DVWS-Node (REST, GraphQL, SOAP): dòng tìm thấy | **13/15** | 7/15 | – |
 | GoVWA (Go): dòng tìm thấy | 4/4 | 4/4 | – |
-| OWASP Benchmark Java (2.740 ca, điểm TPR − FPR): thời gian / điểm | **11,1 s / +46,2%** | 45,8 s / +34,9% | – |
+| OWASP Benchmark Java (2.740 ca, điểm TPR − FPR): thời gian / điểm | **11,1 s / +46,8%** | 45,8 s / +34,9% | – |
 | NIST Juliet C# (1.443 ca web, điểm TPR − FPR): thời gian / điểm | **5,0 s / +86,5%** | 16,1 s / +0,8% | – |
 | RailsGoat (Ruby): dòng tìm thấy | **13/14** | 9/14 | – |
 | java-sec-code (Java/Spring, 76 endpoint, điểm TPR − FPR) | **+50,6%** | +20,8% | – |
+| VulnerableApp (Java/Spring, 97 handler, điểm TPR − FPR) | **+46,4%** | +16,5% | – |
 | DVWA (PHP, điểm TPR − FPR) | **+60,0%** | +3,3% | – |
 | vulnerable-node `sast/seeds` (chấm bằng script của dự án) | **11/12**, 1 báo nhầm (0 nếu bỏ rule chung chung) | 10/12, 1 báo nhầm (8/12 nếu bỏ rule chung chung) | – |
 | Secrets | trùng khớp hoàn toàn với gitleaks | – | 69 + 3 |
 
-Mỗi bộ từng là bộ kiểm chứng ở lần chạy đầu, rồi được dùng để thêm rule: NodeGoat lần đầu 8/14, DVNA 5/14 (Semgrep 7/14), vulnerable-node 10/12 với 1 báo nhầm, DVPWA 1/4 (Semgrep 2/4), DVWS-Node 10/15 (Semgrep 7/15), GoVWA 0/4 (Semgrep 4/4), OWASP Benchmark Java +37,5% (Semgrep +34,9%), DVWA +40,0% (Semgrep +3,3%), Juliet C# +43,9% (Semgrep +0,8%), RailsGoat 10/14 (Semgrep 9/14), java-sec-code +6,6% (Semgrep +20,8%). Thứ tự đó và từng dòng bị bỏ sót nằm trong [bench/README.md](bench/README.md).
+Mỗi bộ từng là bộ kiểm chứng ở lần chạy đầu, rồi được dùng để thêm rule: NodeGoat lần đầu 8/14, DVNA 5/14 (Semgrep 7/14), vulnerable-node 10/12 với 1 báo nhầm, DVPWA 1/4 (Semgrep 2/4), DVWS-Node 10/15 (Semgrep 7/15), GoVWA 0/4 (Semgrep 4/4), OWASP Benchmark Java +37,5% (Semgrep +34,9%), DVWA +40,0% (Semgrep +3,3%), Juliet C# +43,9% (Semgrep +0,8%), RailsGoat 10/14 (Semgrep 9/14), java-sec-code +6,6% (Semgrep +20,8%), VulnerableApp +7,2% (Semgrep +16,5%). Thứ tự đó và từng dòng bị bỏ sót nằm trong [bench/README.md](bench/README.md).
 
 ## Lệnh
 
@@ -495,7 +496,7 @@ Ngoài ra đã chạy agent thật trong repo demo:
 ## Giới hạn
 
 - **Lỗi logic và phân quyền** (IDOR, thiếu kiểm quyền admin, trả thừa dữ liệu) không có dạng cú pháp chung: trên ba bộ benchmark, đây là phần không công cụ SAST nào bắt được. Rule `llm` (`larpcop review`) nhắm vào loại này nhưng chỉ cho warning, vì model không tất định; `larpcop learn` chuyển dần các nhận xét lặp lại thành rule tất định.
-- **Taint là xấp xỉ**: field của chính object (`this.x`, `self.x`, `$this->x`, field Java/C# viết không có `this.`) được theo giữa các method của một class, field của object khác (kể cả field static của class khác) thì không; gọi qua lớp cơ sở ảo (`Base b = new Impl(); b.Run(x)`) và dữ liệu qua serialize không được theo; Java/C# coi các file cùng thư mục có tên class được nhắc tới là cùng package; import chỉ được theo 2 tầng (collection thì có: `push`, `set`, `append`, `Object.assign`…); giá trị trả về từ hàm không có summary (thư viện) được coi là bẩn nếu đối số bẩn; riêng `map`/`flatMap`/`collect` với callback là một biểu thức (`xs.map(x => esc(x))`, `xs.map { |x| h(x) }`) và list comprehension của Python (`[esc(x) for x in xs]`) mang đúng giá trị callback trả về, callback nhiều câu lệnh thì vẫn theo receiver. `guards` chỉ đọc điều kiện của `if` (không đọc toán tử ba ngôi hay `while`), và một hàm kiểm tự viết chỉ được tính khi được khai trong `guards`/`rejects` (`startsWith` với chuỗi cố định thì chỉ được tính khi chuỗi đó là phần đầu an toàn theo `safe_prefix`: `startsWith("/")` có, `startsWith("http")` không). Language server cần dự án đã cài đủ dependency mới trả lời đúng kiểu.
+- **Taint là xấp xỉ**: field của chính object (`this.x`, `self.x`, `$this->x`, field Java/C# viết không có `this.`) được theo giữa các method của một class, field của object khác (kể cả field static của class khác) thì không; gọi qua lớp cơ sở ảo (`Base b = new Impl(); b.Run(x)`) và dữ liệu qua serialize không được theo; Java/C# coi các file cùng thư mục có tên class được nhắc tới là cùng package; import chỉ được theo 2 tầng (collection thì có: `push`, `set`, `append`, `Object.assign`…); giá trị trả về từ hàm không có summary (thư viện) được coi là bẩn nếu đối số bẩn; riêng `map`/`flatMap`/`collect` với callback là một biểu thức (`xs.map(x => esc(x))`, `xs.map { |x| h(x) }`) và list comprehension của Python (`[esc(x) for x in xs]`) mang đúng giá trị callback trả về, callback nhiều câu lệnh thì vẫn theo receiver. `guards` chỉ đọc điều kiện của `if` (không đọc toán tử ba ngôi hay `while`); một hàm kiểm tự viết được tính khi nó trả `null`/`false` trừ lúc tham số đã qua một guard đã biết, còn phép kiểm truyền vào dưới dạng lambda hay method reference (`readFile(() -> ALLOWED.contains(f), f)`, `WHITELISTED_URLS::contains`) thì không được hiểu (`startsWith` với chuỗi cố định thì chỉ được tính khi chuỗi đó là phần đầu an toàn theo `safe_prefix`: `startsWith("/")` có, `startsWith("http")` không). Database không phải nguồn, nên stored XSS qua DB không được thấy. Escape HTML được coi là đủ ở mọi ngữ cảnh, kể cả attribute không có dấu nháy (`<img src=%s>`) hay trong JavaScript. Language server cần dự án đã cài đủ dependency mới trả lời đúng kiểu.
 - **Package uy tín bị chiếm quyền**: tuổi tối thiểu 14 ngày chặn được bản độc bị phát hiện trong 14 ngày (phần lớn: OSV ghi nhận mã độc với độ trễ trung vị khoảng 20 giờ). Bản độc tồn tại lâu hơn mà chưa ai báo thì không công cụ dựa trên advisory nào biết.
 - **Cursor và Gemini chưa chạy agent thật.** Cursor cần đăng nhập `cursor-agent login` (qua trình duyệt); Gemini CLI chưa được cài hay đăng nhập trên máy dev. Adapter được test bằng đúng schema payload ở trên.
 - **File agent ghi bằng shell**: `cat > f <<EOF`, `tee`, `echo … > f`, `cp`/`mv`/`install` và `sed -i` chỉ gồm lệnh thay thế (`s/…/…/`, chạy thử trên bản sao) được kiểm nội dung *trước khi* lệnh chạy. Script tự viết, Makefile hay `sed` có lệnh khác thì không thấy trước được; hook kiểm các file mà lệnh đã đổi ngay sau khi lệnh chạy, rồi lại ở lượt kết thúc, pre-commit và CI.

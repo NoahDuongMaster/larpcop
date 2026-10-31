@@ -8,6 +8,8 @@ valid:
 - "@RestController\npublic class X {\n  @GetMapping(\"/n\")\n  public int n(@RequestParam String q) {\n    return q.length();\n  }\n}\n"
 - "@RestController\npublic class X {\n  @GetMapping(\"/s\")\n  public String s(@RequestParam String q) {\n    return encode(q);\n  }\n  private static String encode(String s) {\n    s = StringUtils.replace(s,\
   \ \"&\", \"&amp;\");\n    s = StringUtils.replace(s, \"<\", \"&lt;\");\n    return s;\n  }\n}\n"
+- "@RestController\npublic class C {\n  @GetMapping(\"/c\")\n  public String c(@RequestParam String mode) {\n    if (DEFAULT_MODE.equals(mode)) {\n      return \"<p>\" + mode + \"</p>\";\n    }\n    return\
+  \ \"\";\n  }\n}\n"
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String q = request.getParameter(\"q\");\n    response.getWriter().println(\"\
   <p>No results for \" + q + \"</p>\");\n  }\n}\n"
@@ -15,3 +17,9 @@ invalid:
   <b>%s</b>\", request.getHeader(\"Referer\"));\n  }\n}\n"
 - "@RestController\npublic class X {\n  @GetMapping(\"/r\")\n  public String r(@RequestParam String q) {\n    return \"<p>\" + q + \"</p>\";\n  }\n}\n"
 - "@Controller\npublic class X {\n  @RequestMapping(\"/c\")\n  @ResponseBody\n  public String c(@CookieValue(\"xss\") String xss) {\n    return xss;\n  }\n}\n"
+- "@VulnerableAppRestController\npublic class X {\n  @VulnerableAppRequestMapping(value = \"LEVEL_1\")\n  public ResponseEntity<String> r(@RequestParam String q) {\n    return new ResponseEntity<String>(String.format(\"\
+  <div>%s</div>\", q), HttpStatus.OK);\n  }\n}\n"
+- "@RestController\npublic class C {\n  @GetMapping(\"/c\")\n  public String c(HttpServletRequest req) {\n    String nick = null;\n    for (Cookie cookie : req.getCookies()) {\n      if (NICK.equals(cookie.getName()))\
+  \ {\n        nick = cookie.getValue();\n      }\n    }\n    return \"Cookie nick: \" + nick;\n  }\n}\n"
+- "@RestController\npublic class C {\n  @GetMapping(\"/c\")\n  public String c(HttpServletRequest req) {\n    String nick = null;\n    for (Cookie cookie : req.getCookies()) {\n      if (cookie.getName().equalsIgnoreCase(NICK))\
+  \ {\n        nick = cookie.getValue();\n      }\n    }\n    return \"Cookie nick: \" + nick;\n  }\n}\n"

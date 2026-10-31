@@ -37,7 +37,8 @@ def handlers(path):
             if seen and depth <= 0:
                 end = k + 1
                 break
-        out.append((at, end, METHOD.match(lines[j]).group(1), secure))
+        method = METHOD.match(lines[j])
+        out.append((at, end, method.group(1) if method else "", secure))
         i = j + 1
     return out
 

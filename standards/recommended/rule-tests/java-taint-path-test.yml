@@ -2,8 +2,12 @@ id: java-taint-path
 valid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String name = request.getParameter(\"f\");\n    File f\
   \ = new File(\"/srv/files\", FilenameUtils.getName(name));\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    InputStream in = getClass().getResourceAsStream(\"/static/logo.png\"\
+  );\n  }\n}\n"
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String name = request.getParameter(\"f\");\n    FileInputStream\
   \ in = new FileInputStream(new File(\"/srv/files/\" + name));\n  }\n}\n"
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    javax.servlet.http.Cookie[] cookies = request.getCookies();\n\
   \    for (javax.servlet.http.Cookie c : cookies) {\n      Files.readAllBytes(Paths.get(\"/srv\", c.getValue()));\n    }\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    InputStream in = getClass().getResourceAsStream(\"/static/\"\
+  \ + request.getParameter(\"f\"));\n  }\n}\n"

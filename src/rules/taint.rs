@@ -210,6 +210,7 @@ mod guards;
 mod handlers;
 mod imports;
 mod iteration;
+mod membership;
 mod names;
 mod prefix;
 mod prepare;

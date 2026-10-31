@@ -5,3 +5,5 @@ valid:
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String user = request.getParameter(\"u\");\n    String\
   \ filter = \"(&(objectclass=person)(uid=\" + user + \"))\";\n    ctx.search(\"ou=people\", filter, controls);\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String u = request.getParameter(\"u\");\n    try (LDAPConnection\
+  \ connection = pool.getConnection()) {\n      connection.search(\"dc=x\", SearchScope.SUB, \"(uid=\" + u + \")\");\n    }\n  }\n}\n"

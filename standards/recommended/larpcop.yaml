@@ -353,9 +353,9 @@ taint:
     sink_arg: SQL
     sink_types: {"S": "(Statement|Connection|Session|JdbcTemplate|JdbcOperations|NamedParameterJdbcTemplate|SQLiteDatabase|QueryRunner)(<.*>)?$", "EM": "(EntityManager|Session|StatelessSession)$"}
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForSQL($C, $X)"]
-    guards: ["$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)"]
+    guards: ["$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)", "$C.equals($X)", "$C.equalsIgnoreCase($X)", "Objects.equals($A, $B)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
-    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
+    handler_decorators: "^\\w*(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-shell
     languages: [Java]
@@ -365,21 +365,21 @@ taint:
     sinks: ["$RT.exec($CMD, $$$R)", "new ProcessBuilder($$$CMD)", "$PB.command($$$CMD)"]
     sink_types: {"RT": "^(java\\.lang\\.)?Runtime$", "PB": "^(java\\.lang\\.)?ProcessBuilder$"}
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForOS($C, $X)"]
-    guards: ["$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)"]
+    guards: ["$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)", "$C.equals($X)", "$C.equalsIgnoreCase($X)", "Objects.equals($A, $B)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
-    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
+    handler_decorators: "^\\w*(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-path
     languages: [Java]
     message: "Request data used as a file path (path traversal)."
     note: "Keep only the file name (Paths.get(name).getFileName()), resolve it under a base directory and check normalize().startsWith(base)."
     sources: ["request.getParameter($K)", "request.getParameterValues($K)", "request.getParameterMap()", "request.getParameterNames()", "request.getHeader($K)", "request.getHeaders($K)", "request.getHeaderNames()", "request.getCookies()", "request.getQueryString()", "request.getInputStream()", "request.getReader()", "request.getPathInfo()", "request.getRequestURI()", "request.getRequestURL()", "request.getPart($K)", "request.getParts()", "req.getParameter($K)", "req.getParameterValues($K)", "req.getParameterMap()", "req.getParameterNames()", "req.getHeader($K)", "req.getHeaders($K)", "req.getHeaderNames()", "req.getCookies()", "req.getQueryString()", "req.getInputStream()", "req.getReader()", "req.getPathInfo()", "req.getRequestURI()", "req.getRequestURL()", "req.getPart($K)", "req.getParts()", "httpRequest.getParameter($K)", "httpRequest.getParameterValues($K)", "httpRequest.getParameterMap()", "httpRequest.getParameterNames()", "httpRequest.getHeader($K)", "httpRequest.getHeaders($K)", "httpRequest.getHeaderNames()", "httpRequest.getCookies()", "httpRequest.getQueryString()", "httpRequest.getInputStream()", "httpRequest.getReader()", "httpRequest.getPathInfo()", "httpRequest.getRequestURI()", "httpRequest.getRequestURL()", "httpRequest.getPart($K)", "httpRequest.getParts()", "servletRequest.getParameter($K)", "servletRequest.getParameterValues($K)", "servletRequest.getParameterMap()", "servletRequest.getParameterNames()", "servletRequest.getHeader($K)", "servletRequest.getHeaders($K)", "servletRequest.getHeaderNames()", "servletRequest.getCookies()", "servletRequest.getQueryString()", "servletRequest.getInputStream()", "servletRequest.getReader()", "servletRequest.getPathInfo()", "servletRequest.getRequestURI()", "servletRequest.getRequestURL()", "servletRequest.getPart($K)", "servletRequest.getParts()", "httpServletRequest.getParameter($K)", "httpServletRequest.getParameterValues($K)", "httpServletRequest.getParameterMap()", "httpServletRequest.getParameterNames()", "httpServletRequest.getHeader($K)", "httpServletRequest.getHeaders($K)", "httpServletRequest.getHeaderNames()", "httpServletRequest.getCookies()", "httpServletRequest.getQueryString()", "httpServletRequest.getInputStream()", "httpServletRequest.getReader()", "httpServletRequest.getPathInfo()", "httpServletRequest.getRequestURI()", "httpServletRequest.getRequestURL()", "httpServletRequest.getPart($K)", "httpServletRequest.getParts()"]
-    sinks: ["new File($P)", "new File($D, $P)", "new FileInputStream($P)", "new FileOutputStream($P, $$$R)", "new FileReader($P, $$$R)", "new FileWriter($P, $$$R)", "new RandomAccessFile($P, $M)", "new java.io.File($P)", "new java.io.File($D, $P)", "new java.io.FileInputStream($P)", "new java.io.FileOutputStream($P, $$$R)", "Paths.get($P, $$$R)", "Path.of($P, $$$R)", "java.nio.file.Paths.get($P, $$$R)", "Files.$M($P, $$$R)"]
+    sinks: ["new File($P)", "new File($D, $P)", "new FileInputStream($P)", "new FileOutputStream($P, $$$R)", "new FileReader($P, $$$R)", "new FileWriter($P, $$$R)", "new RandomAccessFile($P, $M)", "new java.io.File($P)", "new java.io.File($D, $P)", "new java.io.FileInputStream($P)", "new java.io.FileOutputStream($P, $$$R)", "Paths.get($P, $$$R)", "Path.of($P, $$$R)", "java.nio.file.Paths.get($P, $$$R)", "Files.$M($P, $$$R)", "$C.getResourceAsStream($P)", "$C.getResource($P)", "ClassLoader.getSystemResourceAsStream($P)", "ClassLoader.getSystemResource($P)"]
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "FilenameUtils.getName($X)", "$P.getFileName()"]
-    guards: ["$P.startsWith($B)", "$L.contains($X)", "$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)"]
+    guards: ["$P.startsWith($B)", "$L.contains($X)", "$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)", "$C.equals($X)", "$C.equalsIgnoreCase($X)", "Objects.equals($A, $B)"]
     rejects: ["$P.contains(\"$S\")", "$P.contains('$S')"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
-    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
+    handler_decorators: "^\\w*(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-xss
     languages: [Java]
@@ -389,10 +389,12 @@ taint:
     sinks: ["$RESP.getWriter().print($$$A)", "$RESP.getWriter().println($$$A)", "$RESP.getWriter().write($$$A)", "$RESP.getWriter().printf($$$A)", "$RESP.getWriter().format($$$A)", "$RESP.getWriter().append($$$A)", "$RESP.getOutputStream().print($$$A)", "$RESP.getOutputStream().println($$$A)", "out.print($$$A)", "out.println($$$A)", "out.write($$$A)", "out.printf($$$A)", "out.format($$$A)", "writer.print($$$A)", "writer.println($$$A)", "writer.write($$$A)", "pw.print($$$A)", "pw.println($$$A)", "pw.write($$$A)"]
     sink_types: {"RESP": "(HttpServletResponse|ServletResponse|HttpServletResponseWrapper)$"}
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForHTML($X)", "ESAPI.encoder().encodeForHTMLAttribute($X)", "ESAPI.encoder().encodeForJavaScript($X)", "Encode.forHtml($X)", "Encode.forHtmlContent($X)", "Encode.forHtmlAttribute($X)", "Encode.forJavaScript($X)", "StringEscapeUtils.escapeHtml4($X)", "StringEscapeUtils.escapeHtml($X)", "HtmlUtils.htmlEscape($X)", "org.springframework.web.util.HtmlUtils.htmlEscape($X)", "Jsoup.clean($X, $$$R)", "StringUtils.replace($X, \"<\", \"&lt;\")", "$X.replace(\"<\", \"&lt;\")", "$X.replaceAll(\"<\", \"&lt;\")"]
+    sanitizer_names: '^(htmlEscape\w*|escapeHtml\w*|encodeForHTML\w*|forHtml\w*|escapeXml\w*)$'
+    guards: ["$C.equals($X)", "$C.equalsIgnoreCase($X)", "Objects.equals($A, $B)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
-    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
+    handler_decorators: "^\\w*(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     response_returns:
-      headers: ['@(Get|Post|Put|Delete|Patch|Request)Mapping\b', '@(ResponseBody|RestController)\b']
+      headers: ['@\w*(Get|Post|Put|Delete|Patch|Request)Mapping\b', '@\w*(ResponseBody|RestController)\b']
       not: 'produces\s*=\s*[^)]*(json|JSON|xml|XML|TEXT_PLAIN|text/plain)'
       types: '^(String|ResponseEntity<String>)$'
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
@@ -401,13 +403,13 @@ taint:
     message: "Request data reaches an LDAP search filter (LDAP injection)."
     note: "Escape the value with LdapEncoder.filterEncode / ESAPI encodeForLDAP, or use a filter builder (LdapQueryBuilder)."
     sources: ["request.getParameter($K)", "request.getParameterValues($K)", "request.getParameterMap()", "request.getParameterNames()", "request.getHeader($K)", "request.getHeaders($K)", "request.getHeaderNames()", "request.getCookies()", "request.getQueryString()", "request.getInputStream()", "request.getReader()", "request.getPathInfo()", "request.getRequestURI()", "request.getRequestURL()", "request.getPart($K)", "request.getParts()", "req.getParameter($K)", "req.getParameterValues($K)", "req.getParameterMap()", "req.getParameterNames()", "req.getHeader($K)", "req.getHeaders($K)", "req.getHeaderNames()", "req.getCookies()", "req.getQueryString()", "req.getInputStream()", "req.getReader()", "req.getPathInfo()", "req.getRequestURI()", "req.getRequestURL()", "req.getPart($K)", "req.getParts()", "httpRequest.getParameter($K)", "httpRequest.getParameterValues($K)", "httpRequest.getParameterMap()", "httpRequest.getParameterNames()", "httpRequest.getHeader($K)", "httpRequest.getHeaders($K)", "httpRequest.getHeaderNames()", "httpRequest.getCookies()", "httpRequest.getQueryString()", "httpRequest.getInputStream()", "httpRequest.getReader()", "httpRequest.getPathInfo()", "httpRequest.getRequestURI()", "httpRequest.getRequestURL()", "httpRequest.getPart($K)", "httpRequest.getParts()", "servletRequest.getParameter($K)", "servletRequest.getParameterValues($K)", "servletRequest.getParameterMap()", "servletRequest.getParameterNames()", "servletRequest.getHeader($K)", "servletRequest.getHeaders($K)", "servletRequest.getHeaderNames()", "servletRequest.getCookies()", "servletRequest.getQueryString()", "servletRequest.getInputStream()", "servletRequest.getReader()", "servletRequest.getPathInfo()", "servletRequest.getRequestURI()", "servletRequest.getRequestURL()", "servletRequest.getPart($K)", "servletRequest.getParts()", "httpServletRequest.getParameter($K)", "httpServletRequest.getParameterValues($K)", "httpServletRequest.getParameterMap()", "httpServletRequest.getParameterNames()", "httpServletRequest.getHeader($K)", "httpServletRequest.getHeaders($K)", "httpServletRequest.getHeaderNames()", "httpServletRequest.getCookies()", "httpServletRequest.getQueryString()", "httpServletRequest.getInputStream()", "httpServletRequest.getReader()", "httpServletRequest.getPathInfo()", "httpServletRequest.getRequestURI()", "httpServletRequest.getRequestURL()", "httpServletRequest.getPart($K)", "httpServletRequest.getParts()"]
-    sinks: ["$CTX.search($BASE, $FILTER, $$$R)"]
+    sinks: ["$CTX.search($BASE, $FILTER, $$$R)", "$UB.search($BASE, $SCOPE, $FILTER, $$$R)", "Filter.create($FILTER)", "new SearchRequest($BASE, $SCOPE, $FILTER, $$$R)"]
     sink_arg: FILTER
-    sink_types: {"CTX": "(DirContext|LdapContext|LdapTemplate|LdapOperations|DirContextOperations)$"}
-    sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForLDAP($X)", "LdapEncoder.filterEncode($X)"]
-    guards: ["$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)"]
+    sink_types: {"CTX": "(DirContext|LdapContext|LdapTemplate|LdapOperations|DirContextOperations)$", "UB": "(LDAPConnection|LDAPInterface|LDAPConnectionPool|LDAPConnectionInterface)$"}
+    sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForLDAP($X)", "LdapEncoder.filterEncode($X)", "Filter.encodeValue($X)", "LdapEncoder.nameEncode($X)", "Rdn.escapeValue($X)", "ESAPI.encoder().encodeForDN($X)"]
+    guards: ["$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)", "$C.equals($X)", "$C.equalsIgnoreCase($X)", "Objects.equals($A, $B)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
-    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
+    handler_decorators: "^\\w*(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-xpath
     languages: [Java]
@@ -418,23 +420,23 @@ taint:
     sink_arg: E
     sink_types: {"XP": "^(javax\\.xml\\.xpath\\.)?(XPath|XPathExpression)$|^(org\\.dom4j\\.)?(Node|Document|Element|Branch)$"}
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForXPath($X)"]
-    guards: ["$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)"]
+    guards: ["$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)", "$C.equals($X)", "$C.equalsIgnoreCase($X)", "Objects.equals($A, $B)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
-    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
+    handler_decorators: "^\\w*(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-redirect
     languages: [Java]
     message: "Request data used as a redirect target (open redirect)."
     note: "Redirect to paths of this site only (a leading / not followed by / or \\), or map a key to a fixed URL."
     sources: ["request.getParameter($K)", "request.getParameterValues($K)", "request.getParameterMap()", "request.getParameterNames()", "request.getHeader($K)", "request.getHeaders($K)", "request.getHeaderNames()", "request.getCookies()", "request.getQueryString()", "request.getInputStream()", "request.getReader()", "request.getPathInfo()", "request.getRequestURI()", "request.getRequestURL()", "request.getPart($K)", "request.getParts()", "req.getParameter($K)", "req.getParameterValues($K)", "req.getParameterMap()", "req.getParameterNames()", "req.getHeader($K)", "req.getHeaders($K)", "req.getHeaderNames()", "req.getCookies()", "req.getQueryString()", "req.getInputStream()", "req.getReader()", "req.getPathInfo()", "req.getRequestURI()", "req.getRequestURL()", "req.getPart($K)", "req.getParts()", "httpRequest.getParameter($K)", "httpRequest.getParameterValues($K)", "httpRequest.getParameterMap()", "httpRequest.getParameterNames()", "httpRequest.getHeader($K)", "httpRequest.getHeaders($K)", "httpRequest.getHeaderNames()", "httpRequest.getCookies()", "httpRequest.getQueryString()", "httpRequest.getInputStream()", "httpRequest.getReader()", "httpRequest.getPathInfo()", "httpRequest.getRequestURI()", "httpRequest.getRequestURL()", "httpRequest.getPart($K)", "httpRequest.getParts()", "servletRequest.getParameter($K)", "servletRequest.getParameterValues($K)", "servletRequest.getParameterMap()", "servletRequest.getParameterNames()", "servletRequest.getHeader($K)", "servletRequest.getHeaders($K)", "servletRequest.getHeaderNames()", "servletRequest.getCookies()", "servletRequest.getQueryString()", "servletRequest.getInputStream()", "servletRequest.getReader()", "servletRequest.getPathInfo()", "servletRequest.getRequestURI()", "servletRequest.getRequestURL()", "servletRequest.getPart($K)", "servletRequest.getParts()", "httpServletRequest.getParameter($K)", "httpServletRequest.getParameterValues($K)", "httpServletRequest.getParameterMap()", "httpServletRequest.getParameterNames()", "httpServletRequest.getHeader($K)", "httpServletRequest.getHeaders($K)", "httpServletRequest.getHeaderNames()", "httpServletRequest.getCookies()", "httpServletRequest.getQueryString()", "httpServletRequest.getInputStream()", "httpServletRequest.getReader()", "httpServletRequest.getPathInfo()", "httpServletRequest.getRequestURI()", "httpServletRequest.getRequestURL()", "httpServletRequest.getPart($K)", "httpServletRequest.getParts()"]
-    sinks: ["$RESP.sendRedirect($U)", "new RedirectView($U, $$$R)", "new ModelAndView(\"redirect:\" + $U)", "return \"redirect:\" + $U;", "new ModelAndView(\"redirect:\" + $U, $$$R)", "$R.setHeader(\"Location\", $U)", "$R.addHeader(\"Location\", $U)", "$R.setHeader(\"location\", $U)"]
+    sinks: ["$RESP.sendRedirect($U)", "new RedirectView($U, $$$R)", "new ModelAndView(\"redirect:\" + $U)", "return \"redirect:\" + $U;", "new ModelAndView(\"redirect:\" + $U, $$$R)", "$R.setHeader(\"Location\", $U)", "$R.addHeader(\"Location\", $U)", "$R.setHeader(\"location\", $U)", "$H.setLocation($U)", "$H.add(HttpHeaders.LOCATION, $U)", "$H.set(HttpHeaders.LOCATION, $U)", "$H.add(\"Location\", $U)", "$H.set(\"Location\", $U)", "$B.location($U)", "$B.header(\"Location\", $U)", "$B.header(HttpHeaders.LOCATION, $U)", "new ResponseEntity<>($U, HttpStatus.FOUND)", "new ResponseEntity<$T>($U, HttpStatus.FOUND)", "new ResponseEntity<>($BODY, $U, HttpStatus.FOUND)", "new ResponseEntity<$T>($BODY, $U, HttpStatus.FOUND)", "new ResponseEntity<>($U, HttpStatus.MOVED_PERMANENTLY)", "new ResponseEntity<$T>($U, HttpStatus.MOVED_PERMANENTLY)", "new ResponseEntity<>($BODY, $U, HttpStatus.MOVED_PERMANENTLY)", "new ResponseEntity<$T>($BODY, $U, HttpStatus.MOVED_PERMANENTLY)", "new ResponseEntity<>($U, HttpStatus.SEE_OTHER)", "new ResponseEntity<$T>($U, HttpStatus.SEE_OTHER)", "new ResponseEntity<>($BODY, $U, HttpStatus.SEE_OTHER)", "new ResponseEntity<$T>($BODY, $U, HttpStatus.SEE_OTHER)", "new ResponseEntity<>($U, HttpStatus.TEMPORARY_REDIRECT)", "new ResponseEntity<$T>($U, HttpStatus.TEMPORARY_REDIRECT)", "new ResponseEntity<>($BODY, $U, HttpStatus.TEMPORARY_REDIRECT)", "new ResponseEntity<$T>($BODY, $U, HttpStatus.TEMPORARY_REDIRECT)", "new ResponseEntity<>($U, HttpStatus.PERMANENT_REDIRECT)", "new ResponseEntity<$T>($U, HttpStatus.PERMANENT_REDIRECT)", "new ResponseEntity<>($BODY, $U, HttpStatus.PERMANENT_REDIRECT)", "new ResponseEntity<$T>($BODY, $U, HttpStatus.PERMANENT_REDIRECT)"]
     sink_arg: U
-    sink_types: {"RESP": "(HttpServletResponse|ServletResponse|HttpServletResponseWrapper)$", "R": "(HttpServletResponse|ServletResponse|HttpServletResponseWrapper|HttpHeaders|ServerHttpResponse)$"}
+    sink_types: {"RESP": "(HttpServletResponse|ServletResponse|HttpServletResponseWrapper)$", "R": "(HttpServletResponse|ServletResponse|HttpServletResponseWrapper|HttpHeaders|ServerHttpResponse)$", "H": "(HttpHeaders|MultiValueMap<.*>|HttpServletResponse)$", "B": "(Builder|BodyBuilder|HeadersBuilder<.*>)$"}
     safe_prefix: '^/[^/\\]'
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)"]
-    guards: ["$U.startsWith($P)"]
+    guards: ["$U.startsWith($P)", "$C.equals($X)", "$C.equalsIgnoreCase($X)", "Objects.equals($A, $B)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
-    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
+    handler_decorators: "^\\w*(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-trust-boundary
     languages: [Java]
@@ -444,8 +446,9 @@ taint:
     sinks: ["$R.getSession().setAttribute($K, $V)", "$R.getSession().putValue($K, $V)", "session.setAttribute($K, $V)", "session.putValue($K, $V)", "httpSession.setAttribute($K, $V)"]
     sink_types: {"R": "(HttpServletRequest|ServletRequest|HttpServletRequestWrapper)$"}
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)"]
+    guards: ["$C.equals($X)", "$C.equalsIgnoreCase($X)", "Objects.equals($A, $B)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
-    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
+    handler_decorators: "^\\w*(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: php-taint-sql
     languages: [Php]
@@ -800,9 +803,9 @@ taint:
     sink_arg: U
     sink_types: {"B": "(Builder|Spec|WebClient|RestClient)(<.*>)?$", "U": "^(java\\.net\\.)?(URL|URI|URLConnection|HttpURLConnection|HttpsURLConnection)$|^(java\\.lang\\.)?(String|CharSequence|Object)$"}
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForSQL($C, $X)"]
-    guards: ["$L.contains($H)"]
+    guards: ["$L.contains($H)", "$C.equals($X)", "$C.equalsIgnoreCase($X)", "Objects.equals($A, $B)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
-    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
+    handler_decorators: "^\\w*(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-code
     languages: [Java]
@@ -813,9 +816,9 @@ taint:
     sink_arg: X
     sink_types: {"QL": "^(com\\.ql\\.util\\.express\\.)?ExpressRunner$", "JX": "^(org\\.apache\\.commons\\.jexl\\d\\.)?Jexl(Engine|Builder)$", "E": "(ScriptEngine|Invocable|Compilable|GroovyShell|Interpreter)$", "P": "(ExpressionParser|SpelExpressionParser|TemplateAwareExpressionParser)$", "L": "ClassLoader$", "C": "^Class(<.*>)?$"}
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForSQL($C, $X)"]
-    guards: ["$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)"]
+    guards: ["$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)", "$C.equals($X)", "$C.equalsIgnoreCase($X)", "Objects.equals($A, $B)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
-    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
+    handler_decorators: "^\\w*(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-deserialization
     languages: [Java]
@@ -826,8 +829,9 @@ taint:
     sink_arg: X
     sink_types: {"K": "^Kryo$", "H": "(ObjectInputStream|Hessian2?Input|HessianInput|Hessian2StreamingInput)$"}
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForSQL($C, $X)"]
+    guards: ["$C.equals($X)", "$C.equalsIgnoreCase($X)", "Objects.equals($A, $B)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
-    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
+    handler_decorators: "^\\w*(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: php-taint-ldap
     languages: [Php]
@@ -859,7 +863,7 @@ taint:
     sink_arg: X
     sink_types: {"VE": "^(org\\.apache\\.velocity\\.app\\.)?VelocityEngine$", "TE": "TemplateEngine$", "PE": "^PebbleEngine$", "JJ": "^Jinjava$"}
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForSQL($C, $X)"]
-    guards: ["$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)"]
+    guards: ["$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)", "$C.equals($X)", "$C.equalsIgnoreCase($X)", "Objects.equals($A, $B)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
-    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
+    handler_decorators: "^\\w*(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]

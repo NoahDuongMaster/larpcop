@@ -34,7 +34,9 @@ const FILLS: [&str; 22] = [
 /// The variable a call stores its arguments in: the receiver of a filling
 /// method, or the first argument of `Object.assign`.
 pub(super) fn filled<D: Doc>(call: &Node<D>) -> Option<String> {
-    let name = callee(call)?;
+    let Some(name) = callee(call) else {
+        return chained(call);
+    };
     if name == "Object.assign" {
         let target = args(call).into_iter().next()?;
         return (target.kind() == "identifier").then(|| target.text().to_string());
@@ -47,4 +49,27 @@ pub(super) fn filled<D: Doc>(call: &Node<D>) -> Option<String> {
             .chars()
             .all(|c| c.is_alphanumeric() || c == '_' || c == '$'))
     .then(|| root.to_string())
+}
+
+/// `headers.get("Location").add(x)`: the variable at the root of the
+/// receiver chain holds what the call stores.
+fn chained<D: Doc>(call: &Node<D>) -> Option<String> {
+    let member = call.field("function");
+    let member = member.as_ref().unwrap_or(call);
+    let method = member.field("name").or_else(|| member.field("property"))?;
+    if !FILLS.contains(&method.text().to_lowercase().as_str()) {
+        return None;
+    }
+    let mut object = member.field("object")?;
+    loop {
+        let inner = object
+            .field("function")
+            .and_then(|f| f.field("object"))
+            .or_else(|| object.field("object"));
+        match inner {
+            Some(i) => object = i,
+            None => break,
+        }
+    }
+    (object.kind() == "identifier").then(|| object.text().to_string())
 }

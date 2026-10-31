@@ -156,6 +156,28 @@ dependencies:
 - `zod@3.23.8`: 1 advisory High (GHSA-mrhx-c7xc-m3w5).
 - Hook chặn `npm i local-commander-agent`, `npm i lodash@4.17.15` và `npm i zod@3.23.8`; cho qua `npm i lodash` (không pin, npm cài bản mới nhất).
 
+## AI review và học rule (thay CodeRabbit/Bugbot, Packmind)
+
+Model là CLI mà team đang dùng (`claude -p`, `codex exec -`, `gemini`, `ollama run …`). agentkit gửi prompt qua stdin và đọc stdout, nên không giữ API key và không phụ thuộc SDK của hãng nào. Không khai `llm.command` thì tự dùng `claude -p`, nếu không có thì `codex exec -`. Có thể đổi bằng biến `AGENTKIT_LLM`.
+
+```yaml
+llm:
+  command: claude -p --model sonnet     # chuỗi: chạy qua sh; mảng: chạy thẳng
+  rules:
+    - id: thin-controllers
+      files: ["src/controllers/**"]
+      prompt: Controllers only parse the request, call one service function and map the result. They never touch the database directly.
+```
+
+**`agentkit review [--staged | --changed | --since REF]`** chấm các rule `llm`, mỗi file một lần gọi (chạy song song 4 file), chỉ gửi những file mà rule áp dụng. Trên một diff, các dòng đã đổi được đánh dấu và chỉ những dòng đó được báo. Kết quả **luôn là warning**: model không tất định, còn cổng chặn thì phải tất định. Câu trả lời được cache theo nội dung prompt, nên chạy lại trên code không đổi sẽ ra cùng kết quả và không tốn tiền (`--no-cache` để hỏi lại). Có đủ các format như `check` (`--format markdown` cho comment PR, `sarif`…).
+
+**`agentkit learn "<chuẩn viết bằng lời>"`** hoặc **`agentkit learn --reviews 50`** (lấy từ review comment của các PR gần đây, qua `gh`) biến chuẩn thành rule ast-grep tất định. Model chỉ đề xuất; một rule được giữ lại khi parse được và pass các ví dụ valid/invalid do chính model viết. Rule fail được gửi lại cho model kèm lỗi chính xác (mặc định 3 vòng). Rule đạt được ghi vào `.agentkit/rules/` cùng fixture trong `.agentkit/rule-tests/`, kèm số chỗ trong repo đang vi phạm để quyết định sửa hay baseline. Đây là cách chuyển dần các rule "mềm" của AI review thành rule cứng.
+
+Đã chạy thật với `claude -p --model sonnet` trên một repo Express demo:
+
+- `review --changed`: một hàm controller mới gọi `db.user.findUnique` bị báo đúng dòng 9, kèm gợi ý chuyển sang service (8,6 giây).
+- `learn "Never import moment; use date-fns. No default exports, only named exports. Never await inside a loop; collect the promises and use Promise.all."` cho ra 3 rule đều pass ngay vòng đầu (22 giây). Có 7–8 ví dụ mỗi rule, gồm cả trường hợp gần giống mà phải hợp lệ: `await` trong arrow function nằm trong vòng lặp thì không bị tính. Gắn 3 rule vào repo thì `agentkit check` bắt đúng 3 chỗ vi phạm có sẵn.
+
 ## Lệnh
 
 ```sh
@@ -164,6 +186,8 @@ agentkit fix [paths…] [--changed | --since REF] [--dry-run]   # áp `fix:` c�
 agentkit baseline [--prune]    # ghi nhận vi phạm cũ; --prune chỉ xoá entry đã sửa
 agentkit test [STANDARDS_DIR] [--require-all]  # chạy fixture trong rule-tests/ (valid, invalid, fixed)
 agentkit metrics [paths…] [--top N] [--json]    # độ phức tạp, kích thước hàm
+agentkit review [--changed | --since REF]       # rule `llm`, chấm bằng model (warning)
+agentkit learn "<chuẩn>" | --reviews N          # sinh rule ast-grep + test từ lời / review comment
 agentkit lsp | agentkit mcp    # language server / MCP server (stdio)
 agentkit org status|setup …    # trạng thái và triển khai trên GitHub
 agentkit rules                 # rule hiệu lực, nguồn, rule nào bị lock
@@ -346,9 +370,10 @@ Binary nặng 47 MB trên đĩa, nhưng chỉ khoảng **4 MB khi tải về** (
 
 ## Đã kiểm chứng
 
-`cargo test` có 75 test:
+`cargo test` có 79 test:
 
 - Unit: guard, tìm shell, path trong patch Codex; đọc lockfile thật của npm 11, pnpm 11, uv 0.11, cargo 1.98 (kèm yarn v1/Berry, Poetry, go.mod, và các entry registry riêng/git/workspace phải bị bỏ qua); manifest; nhận diện lệnh cài; thiết lập gate của 4 package manager.
+- AI (model giả bằng shell script): review chỉ báo dòng đã đổi, bỏ rule lạ, cache câu trả lời; learn gửi lại rule fail kèm lỗi, chỉ giữ rule pass test, rule ghi ra chạy được như rule thường.
 - Bảo mật: taint qua biến/destructuring/sanitizer/gán lại (TS, Python), secrets bị che khi in ra, OSV giả: mã độc luôn chặn, lỗ hổng chỉ chặn bản mới, theo ngưỡng, hook chặn lệnh cài.
 - Integration: check, locked, git extends theo tag, staged, `--changed`/`--since`, linter delegation, format github, chống né rule, hook của 4 agent, sync idempotent, phát hiện drift, CRLF, pre-commit thật; dependency: tuổi phiên bản (qua cache và qua một server deps.dev giả), merge-base của PR, ngoại lệ bản vá bảo mật, gate package manager, duyệt dependency mới (cả monorepo), hook chặn lệnh cài, lock chỉ được siết thêm.
 

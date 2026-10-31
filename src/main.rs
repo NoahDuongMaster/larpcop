@@ -1,3 +1,4 @@
+mod ai;
 mod baseline;
 mod cli;
 mod commands;

@@ -86,6 +86,28 @@ pub fn run(cli: Cli) -> Result<u8> {
             }
             Ok(0)
         }
+        Cmd::Review {
+            scope,
+            format,
+            no_cache,
+        } => {
+            let ctx = ctx()?;
+            let (cfg, _) = ctx.load()?;
+            let (files, violations) = crate::ai::review::review(&cfg, &scope.scope(), !no_cache)?;
+            let outcome = crate::context::Outcome {
+                files,
+                violations,
+                ..Default::default()
+            };
+            print!("{}", report::render(&outcome, format));
+            Ok(0)
+        }
+        Cmd::Learn {
+            instruction,
+            reviews,
+            out,
+            attempts,
+        } => crate::ai::learn::run(&ctx()?, instruction, reviews, out, attempts),
         Cmd::Rules => rules(&ctx()?),
         Cmd::Sync {
             check,

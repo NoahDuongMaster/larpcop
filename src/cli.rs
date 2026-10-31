@@ -130,6 +130,33 @@ pub enum Cmd {
         #[arg(long)]
         json: bool,
     },
+    /// Judge the `llm` rules with a model. Findings are warnings only; on a diff,
+    /// only changed lines are reported. Answers are cached per file content.
+    Review {
+        #[command(flatten)]
+        scope: ScopeArgs,
+        #[arg(long, value_enum, default_value_t = Format::Text)]
+        format: Format,
+        /// Ask the model again instead of reusing cached answers.
+        #[arg(long)]
+        no_cache: bool,
+    },
+    /// Turn a standard written in words, or recurring review comments, into
+    /// ast-grep rules with tests. Only rules that pass their tests are written.
+    Learn {
+        /// The standard, e.g. "never import from lodash; use native methods".
+        #[arg(required_unless_present = "reviews")]
+        instruction: Option<String>,
+        /// Learn from the N latest pull request review comments (GitHub, via `gh`).
+        #[arg(long, value_name = "N")]
+        reviews: Option<usize>,
+        /// Where to write rules/ and rule-tests/ (default: the repo's first rule dir's parent, or `.agentkit`).
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Rounds of feedback on rules that fail their tests.
+        #[arg(long, default_value_t = 3)]
+        attempts: usize,
+    },
     /// List the effective rules and where they come from.
     Rules,
     /// Generate AGENTS.md, CLAUDE.md and agent hook settings from the rules.

@@ -37,6 +37,38 @@ pub struct RawConfig {
     /// Intraprocedural taint rules: sources must not reach sinks unsanitized.
     #[serde(default)]
     pub taint: Vec<TaintConfig>,
+    /// Rules in plain language, judged by a model (`agentkit review`).
+    pub llm: Option<LlmConfig>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LlmConfig {
+    /// CLI that reads a prompt on stdin and answers on stdout
+    /// (default: `claude -p`, else `codex exec -`).
+    pub command: Option<LlmCommand>,
+    #[serde(default)]
+    pub rules: Vec<LlmRule>,
+}
+
+/// `[claude, -p]` runs the program directly; `"claude -p | tail -1"` runs
+/// through a POSIX shell (Git's `sh` on Windows), like linter `run:` commands.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum LlmCommand {
+    Argv(Vec<String>),
+    Shell(String),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LlmRule {
+    pub id: String,
+    /// What to look for, as you would tell a reviewer.
+    pub prompt: String,
+    /// Globs of files the rule applies to (default: every file).
+    #[serde(default)]
+    pub files: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

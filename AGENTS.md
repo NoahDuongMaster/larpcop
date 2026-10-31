@@ -24,6 +24,7 @@ Workflow:
 |---|---|---|---|
 | `dependency-approval` | error | manifests | Adding a direct dependency needs a human's approval. Do not add or install a package the repo does not already use or list in `dependencies.approved`: solve the task without it, or ask the user. |
 | `dependency-release-age` | error | lockfiles | Every dependency version, direct or transitive, must have been published at least 14 days ago. Keep the package manager's own minimum-release-age setting on; never override it. |
+| `dependency-vulnerability` | error | lockfiles, installs | No known-malicious package, and no new dependency version with a known High or worse vulnerability (OSV.dev). Pick a fixed version or another package; never install one an advisory names as malicious. |
 | `go-no-panic` | error | Go | `panic` in application code crashes the whole process. Return an `error` and let the caller decide; wrap it with `fmt.Errorf("...: %w", err)`. |
 | `max-lines` | error | source files | Files must not exceed 300 lines. Split the file along responsibility boundaries into smaller modules. Do not compress code, join lines or delete comments just to get under the limit. |
 | `no-console` | error | TypeScript | `console` is not allowed in committed code. Use the project logger (`import { logger } from '@/lib/logger'`). Reaching `console` indirectly (globalThis, window, aliases, computed keys) is the same violation. |
@@ -31,6 +32,7 @@ Workflow:
 | `no-hardcoded-secret` | error | TypeScript | Hard-coded credential. Read secrets from the environment or the secret manager; rotate the leaked key. |
 | `py-no-bare-except` | error | Python | Bare `except:` swallows every error, including KeyboardInterrupt. Catch the specific exceptions you expect, e.g. `except (ValueError, KeyError) as exc:`. |
 | `py-no-print` | warning | Python | Use `logging` instead of `print()`. |
+| `secrets` | error | all files | No credentials, tokens or private keys in the repository. Remove it from the code and load it from the environment or a secret manager. Treat it as leaked: revoke and rotate it at the provider, because git history keeps it. |
 
 Standards applied (in order): examples/standards → .agentkit.yaml
 <!-- agentkit:end -->

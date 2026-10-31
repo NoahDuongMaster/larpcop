@@ -5,8 +5,8 @@ mod model;
 
 pub use fetch::cache_root;
 pub use model::{
-    DependenciesConfig, ExtendSpec, LinterConfig, MaxLinesConfig, MetricsConfig, RawConfig,
-    SecretsConfig, TaintConfig,
+    DependenciesConfig, ExtendSpec, LinterConfig, LlmCommand, LlmConfig, LlmRule, MaxLinesConfig,
+    MetricsConfig, RawConfig, SecretsConfig, TaintConfig,
 };
 
 use anyhow::{Context, Result, bail};
@@ -35,6 +35,7 @@ pub struct Config {
     pub metrics: Option<MetricsConfig>,
     pub secrets: Option<SecretsConfig>,
     pub taint: Vec<TaintConfig>,
+    pub llm: LlmConfig,
     /// Layers in application order, for traceability.
     pub sources: Vec<String>,
 }
@@ -196,6 +197,16 @@ impl Config {
             }
             self.taint.retain(|t| t.id != rule.id);
             self.taint.push(rule);
+        }
+        if let Some(llm) = raw.llm {
+            self.llm.command = llm.command.or(self.llm.command.take());
+            for rule in llm.rules {
+                if self.llm.rules.iter().any(|r| r.id == rule.id) {
+                    self.ensure_unlocked(&rule.id, source, "override")?;
+                }
+                self.llm.rules.retain(|r| r.id != rule.id);
+                self.llm.rules.push(rule);
+            }
         }
         // Exclusions only accumulate; a locked `secrets` rule takes none.
         if let Some(s) = raw.secrets {

@@ -9,6 +9,13 @@ pub mod secrets;
 mod taint;
 pub mod testing;
 
+/// ast-grep rules defined in `dirs` (for `agentkit learn`).
+pub fn ast_rules(
+    dirs: &[std::path::PathBuf],
+) -> Result<Vec<ast_grep_config::RuleConfig<ast_grep_language::SupportLang>>> {
+    ast::load_all(dirs)
+}
+
 pub use max_lines::ID as MAX_LINES_ID;
 pub use metrics::{COMPLEXITY_ID, LENGTH_ID};
 

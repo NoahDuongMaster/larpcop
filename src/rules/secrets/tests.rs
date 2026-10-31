@@ -41,3 +41,15 @@ fn entropy_matches_gitleaks() {
     // Non-ASCII: character counts over the byte length, like gitleaks.
     assert!(entropy("パスワード") < entropy("abcde"));
 }
+
+#[test]
+fn patterns_keep_re2_ascii_classes() {
+    // RE2 (gitleaks): é is not a word character, so `\b` holds around foo.
+    let re = compile(r"\bfoo\b").expect("compiles");
+    assert!(re.is_match("éfooé"));
+    let word = compile(r"^[\w.-]+$").expect("compiles");
+    assert!(word.is_match("a_1.b-c") && !word.is_match("é"));
+    assert!(compile(r"^\d\s\w$").expect("compiles").is_match("1 a"));
+    // Escaped backslash and brackets survive.
+    assert!(compile(r"^\\b[\]]$").expect("compiles").is_match("\\b]"));
+}

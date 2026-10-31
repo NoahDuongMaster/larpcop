@@ -1,0 +1,7 @@
+id: java-taint-xpath
+valid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String id = request.getParameter(\"id\");\n    xp.evaluate(\"\
+  /users/user[@id=$id]\", doc);\n  }\n}\n"
+invalid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String id = request.getParameter(\"id\");\n    xp.evaluate(\"\
+  /users/user[@id='\" + id + \"']\", doc);\n  }\n}\n"

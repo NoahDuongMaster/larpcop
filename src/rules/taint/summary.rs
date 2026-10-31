@@ -28,8 +28,25 @@ const ROUNDS: usize = 3;
 
 /// Callee of a call, whitespace removed: `f`, `mod.f`, `a.b.f`.
 pub fn callee<D: Doc>(call: &Node<D>) -> Option<String> {
-    let f = call.field("function")?;
-    let text: String = f.text().split_whitespace().collect();
+    let squeeze = |n: Node<D>| -> String { n.text().split_whitespace().collect() };
+    let text = match call.field("function") {
+        Some(f) => squeeze(f),
+        // Java `obj.name(…)` / `new Type(…)`, PHP `$obj->name(…)`, Ruby `obj.name …`
+        None => {
+            let name = call
+                .field("name")
+                .or_else(|| call.field("method"))
+                .or_else(|| call.field("type"))?;
+            let object = call
+                .field("object")
+                .or_else(|| call.field("receiver"))
+                .or_else(|| call.field("scope"));
+            match object {
+                Some(o) => format!("{}.{}", squeeze(o), squeeze(name)),
+                None => squeeze(name),
+            }
+        }
+    };
     let plain = text
         .chars()
         .all(|c| c.is_alphanumeric() || c == '_' || c == '.' || c == '$');

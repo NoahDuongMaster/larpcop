@@ -182,7 +182,7 @@ impl TaintRule {
     fn decorated_input(&self, content: &str) -> bool {
         self.param_decorators
             .iter()
-            .any(|d| content.contains(&format!("@{d}(")))
+            .any(|d| content.contains(&format!("@{d}")) || content.contains(&format!("[{d}")))
             || (self.handler_decorators.is_some() && content.contains('@'))
             || (self.resolver_args && (content.contains("args") || content.contains("info")))
     }

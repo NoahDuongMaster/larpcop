@@ -1,0 +1,7 @@
+id: java-no-insecure-random
+valid:
+- "class T {\n  void f(String name, int id) throws Exception {\n    SecureRandom r = new SecureRandom();\n  }\n}\n"
+invalid:
+- "class T {\n  void f(String name, int id) throws Exception {\n    int n = new Random().nextInt();\n  }\n}\n"
+- "class T {\n  void f(String name, int id) throws Exception {\n    double d = Math.random();\n  }\n}\n"
+- "class T {\n  void f(String name, int id) throws Exception {\n    java.util.Random r = new java.util.Random(42);\n  }\n}\n"

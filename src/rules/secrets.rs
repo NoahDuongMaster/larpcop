@@ -114,7 +114,16 @@ impl Secrets {
                 }
                 continue;
             };
-            for caps in regex.captures_iter(text) {
+            // The fast engine finds each match; groups are then read on that
+            // match alone: capturing over a whole 60 MB file ran the slow one.
+            for found in regex.find_iter(text) {
+                let mut end = (found.end() + 64).min(text.len());
+                while !text.is_char_boundary(end) {
+                    end += 1;
+                }
+                let Some(caps) = regex.captures_at(&text[..end], found.start()) else {
+                    continue;
+                };
                 let whole = caps.get(0).expect("group 0");
                 let secret = match rule.secret_group {
                     0 => (1..caps.len()).find_map(|i| caps.get(i)).unwrap_or(whole),

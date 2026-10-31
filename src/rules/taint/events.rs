@@ -4,7 +4,7 @@
 //! rule; a rule adds its guards and sinks, once per scope however many
 //! parameters, summary rounds or callers ask about it.
 
-use super::flow::{ASSIGNMENTS, CALLS, enclosing};
+use super::flow::{ASSIGNMENTS, CALLS, LOOPS, enclosing};
 use super::guards::Guard;
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
@@ -17,7 +17,9 @@ use std::rc::Rc;
 pub(super) type Hit<'a, D> = (usize, Node<'a, D>, Vec<(usize, Node<'a, D>)>);
 
 pub(super) enum Event<'a, D: Doc> {
-    Assign(Node<'a, D>, Node<'a, D>),
+    /// Target, value, and whether it runs only on some paths (in a branch,
+    /// loop or `try`): such an assignment can taint a name, never clean it.
+    Assign(Node<'a, D>, Node<'a, D>, bool),
     Sink(Node<'a, D>, Vec<(usize, Node<'a, D>)>),
     Call(Node<'a, D>),
     Return(Node<'a, D>),
@@ -37,7 +39,7 @@ type Key = (usize, usize);
 /// What a scope holds whatever the rule, in walk order: `If` stands where the
 /// guard events of an `if` go once a rule's guards are known.
 pub(super) enum Shape<'a, D: Doc> {
-    Assign(Node<'a, D>, Node<'a, D>),
+    Assign(Node<'a, D>, Node<'a, D>, bool),
     Call(Node<'a, D>),
     Return(Node<'a, D>),
     Nested(Node<'a, D>),
@@ -104,7 +106,7 @@ impl<'a, D: Doc> Hits<'a, D> {
         let mut events: Vec<(usize, Event<D>)> = Vec::new();
         for (at, shape) in self.skeleton(scope).iter() {
             let event = match shape {
-                Shape::Assign(l, r) => Event::Assign(l.clone(), r.clone()),
+                Shape::Assign(l, r, c) => Event::Assign(l.clone(), r.clone(), *c),
                 Shape::Call(n) => Event::Call(n.clone()),
                 Shape::Return(n) => Event::Return(n.clone()),
                 Shape::Nested(n) => Event::Nested(n.clone()),
@@ -133,7 +135,7 @@ impl<'a, D: Doc> Hits<'a, D> {
 
 fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
     let mut out: Skeleton<D> = Vec::new();
-    walk(scope, &mut |n| {
+    walk(scope, false, &mut |n, conditional| {
         if is_function(n) {
             out.push((n.range().start, Shape::Nested(n.clone())));
             return;
@@ -145,7 +147,12 @@ fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
         if let Some((_, l, r)) = ASSIGNMENTS.iter().find(|(k, ..)| kind == *k)
             && let (Some(left), Some(right)) = (n.field(l), n.field(r))
         {
-            out.push((n.range().end, Shape::Assign(left, right)));
+            let at = if LOOPS.contains(&kind.as_ref()) {
+                right.range().end
+            } else {
+                n.range().end
+            };
+            out.push((at, Shape::Assign(left, right, conditional)));
         } else if CALLS.contains(&kind.as_ref()) {
             out.push((n.range().start, Shape::Call(n.clone())));
         } else if matches!(kind.as_ref(), "return_statement" | "return_expression") {
@@ -162,12 +169,48 @@ fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
     out
 }
 
-/// Nodes of a scope in order; nested functions are visited, not descended into.
-fn walk<'a, D: Doc>(scope: &Node<'a, D>, f: &mut impl FnMut(&Node<'a, D>)) {
+/// Constructs whose insides run on some paths only.
+const CONDITIONAL: [&str; 26] = [
+    "if_statement",
+    "if_expression",
+    "else_clause",
+    "elif_clause",
+    "switch_statement",
+    "switch_expression",
+    "expression_switch_statement",
+    "type_switch_statement",
+    "select_statement",
+    "match_expression",
+    "conditional_expression",
+    "ternary_expression",
+    "while_statement",
+    "while_expression",
+    "do_statement",
+    "for_statement",
+    "enhanced_for_statement",
+    "for_in_statement",
+    "for_expression",
+    "loop_expression",
+    "try_statement",
+    "catch_clause",
+    "except_clause",
+    "case",
+    "when",
+    "rescue",
+];
+
+/// Nodes of a scope in order, each with whether it is inside a conditional
+/// construct; nested functions are visited, not descended into.
+fn walk<'a, D: Doc>(
+    scope: &Node<'a, D>,
+    conditional: bool,
+    f: &mut impl FnMut(&Node<'a, D>, bool),
+) {
     for c in scope.children() {
-        f(&c);
+        f(&c, conditional);
         if !is_function(&c) {
-            walk(&c, f);
+            let inside = conditional || CONDITIONAL.contains(&c.kind().as_ref());
+            walk(&c, inside, f);
         }
     }
 }

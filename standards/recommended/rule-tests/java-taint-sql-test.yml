@@ -1,0 +1,14 @@
+id: java-taint-sql
+valid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String id = request.getParameter(\"id\");\n    PreparedStatement\
+  \ ps = conn.prepareStatement(\"SELECT * FROM users WHERE id = ?\");\n    ps.setString(1, id);\n    ps.executeQuery();\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    int id = Integer.parseInt(request.getParameter(\"id\"));\n\
+  \    stmt.executeQuery(\"SELECT * FROM users WHERE id = \" + id);\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    MessageDigest md = MessageDigest.getInstance(\"SHA-256\"\
+  );\n    md.update(request.getParameter(\"p\").getBytes());\n  }\n}\n"
+invalid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String name = request.getParameter(\"name\");\n    String\
+  \ sql = \"SELECT * FROM users WHERE name = '\" + name + \"'\";\n    statement.executeQuery(sql);\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String id = request.getHeader(\"X-Id\");\n    jdbcTemplate.queryForList(\"\
+  SELECT * FROM t WHERE id = \" + id);\n  }\n}\n"
+- "@RestController\nclass C {\n  @GetMapping(\"/u\")\n  List<User> find(@RequestParam String name) {\n    return em.createQuery(\"from User where name = '\" + name + \"'\").getResultList();\n  }\n}\n"

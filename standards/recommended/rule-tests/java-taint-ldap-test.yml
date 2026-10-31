@@ -1,0 +1,7 @@
+id: java-taint-ldap
+valid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String user = request.getParameter(\"u\");\n    ctx.search(\"\
+  ou=people\", \"(uid=\" + LdapEncoder.filterEncode(user) + \")\", controls);\n  }\n}\n"
+invalid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String user = request.getParameter(\"u\");\n    String\
+  \ filter = \"(&(objectclass=person)(uid=\" + user + \"))\";\n    ctx.search(\"ou=people\", filter, controls);\n  }\n}\n"

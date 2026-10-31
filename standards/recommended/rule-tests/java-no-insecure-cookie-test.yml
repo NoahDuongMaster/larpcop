@@ -1,0 +1,6 @@
+id: java-no-insecure-cookie
+valid:
+- "class T {\n  void f(String name, int id) throws Exception {\n    cookie.setSecure(true); cookie.setHttpOnly(true);\n  }\n}\n"
+invalid:
+- "class T {\n  void f(String name, int id) throws Exception {\n    cookie.setSecure(false);\n  }\n}\n"
+- "class T {\n  void f(String name, int id) throws Exception {\n    c.setHttpOnly( false );\n  }\n}\n"

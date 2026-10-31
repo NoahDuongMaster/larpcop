@@ -1,0 +1,7 @@
+id: java-taint-trust-boundary
+valid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    request.getSession().setAttribute(\"lang\", \"en\");\n\
+  \  }\n}\n"
+invalid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String role = request.getParameter(\"role\");\n    request.getSession().setAttribute(\"\
+  role\", role);\n  }\n}\n"

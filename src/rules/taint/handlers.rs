@@ -61,11 +61,11 @@ pub(super) fn params<D: Doc>(
     for p in list.children().filter(|c| c.is_named()) {
         let Some(name) = name_of(&p) else { continue };
         let decorated = !param_decorators.is_empty()
-            && p.children().filter(|c| c.kind() == "decorator").any(|d| {
-                let text = d.text();
+            && annotations(&p).iter().any(|text| {
                 let called = text
                     .trim_start_matches('@')
-                    .split('(')
+                    .trim_start_matches('[')
+                    .split(['(', ']'])
                     .next()
                     .unwrap_or("")
                     .trim()
@@ -131,8 +131,28 @@ fn decorators_of<D: Doc>(function: &Node<D>) -> Vec<String> {
         .collect()
 }
 
+/// Decorators of a parameter: TS `@Body()`, Java `@RequestParam("q")` (in
+/// `modifiers`), C# `[FromQuery]` (an `attribute_list`).
+fn annotations<D: Doc>(p: &Node<D>) -> Vec<String> {
+    let mut out = Vec::new();
+    for c in p.children() {
+        match c.kind().as_ref() {
+            "decorator" | "attribute_list" => out.push(c.text().to_string()),
+            "modifiers" => out.extend(
+                c.children()
+                    .filter(|a| matches!(a.kind().as_ref(), "annotation" | "marker_annotation"))
+                    .map(|a| a.text().to_string()),
+            ),
+            _ => {}
+        }
+    }
+    out
+}
+
 fn name_of<D: Doc>(p: &Node<D>) -> Option<String> {
     let n = match p.kind().as_ref() {
+        // Java, C#
+        "formal_parameter" | "parameter" => p.field("name")?,
         "identifier" => p.clone(),
         "typed_parameter" => p.children().find(|c| c.kind() == "identifier")?,
         "default_parameter" | "typed_default_parameter" => p.field("name")?,

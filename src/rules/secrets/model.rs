@@ -63,7 +63,70 @@ pub(super) struct Rule {
 }
 
 pub(super) fn compile(pattern: &str) -> Option<Regex> {
-    RegexBuilder::new(pattern).size_limit(64 << 20).build().ok()
+    RegexBuilder::new(&ascii_boundaries(pattern))
+        .size_limit(64 << 20)
+        .build()
+        .ok()
+}
+
+/// gitleaks patterns are RE2, where `\b`, `\w`, `\d` and `\s` are ASCII. In
+/// Rust they are Unicode, which keeps the fast DFA off non-ASCII text and
+/// blows up its states, leaving a 60 MB file to the slow engine. The ASCII
+/// forms are both what gitleaks means and fast.
+fn ascii_boundaries(pattern: &str) -> String {
+    let mut out = String::with_capacity(pattern.len() + 32);
+    let mut chars = pattern.chars().peekable();
+    let mut in_class = false;
+    while let Some(c) = chars.next() {
+        match c {
+            '[' if !in_class => {
+                in_class = true;
+                out.push(c);
+                // `[]` or `[^]` at the start is a literal bracket.
+                if chars.peek() == Some(&'^') {
+                    out.push(chars.next().unwrap_or('^'));
+                }
+                if chars.peek() == Some(&']') {
+                    out.push(chars.next().unwrap_or(']'));
+                }
+            }
+            ']' if in_class => {
+                in_class = false;
+                out.push(c);
+            }
+            '\\' => {
+                let Some(e) = chars.next() else {
+                    out.push(c);
+                    break;
+                };
+                let ascii = match e {
+                    'w' => Some("0-9A-Za-z_"),
+                    'd' => Some("0-9"),
+                    's' => Some("\\t\\n\\x0B\\f\\r "),
+                    _ => None,
+                };
+                match (ascii, in_class, e) {
+                    (Some(set), true, _) => out.push_str(set),
+                    (Some(set), false, _) => {
+                        out.push('[');
+                        out.push_str(set);
+                        out.push(']');
+                    }
+                    (None, false, 'b' | 'B') => {
+                        out.push_str("(?-u:\\");
+                        out.push(e);
+                        out.push(')');
+                    }
+                    _ => {
+                        out.push('\\');
+                        out.push(e);
+                    }
+                }
+            }
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 pub(super) fn allow(raw: RawAllow) -> Allow {

@@ -33,7 +33,9 @@ Một bộ chỉ đo được độ tổng quát khi rule chưa được viết 
 
 7. **GoVWA** là bộ Go đầu tiên, đo 5 rule taint Go vừa viết (SQL, shell, path, SSRF, redirect) cùng `go-no-sql-sprintf`. Lần đầu: larpcop **0/4**, Semgrep **4/4**. Lần chạy lộ ra bốn điểm yếu chung của phần Go: không có rule XSS nào (`template.HTML(x)`), `go-no-sql-sprintf` chỉ bắt `fmt.Sprintf` nằm ngay trong `db.Query(...)` chứ không bắt khi câu SQL được dựng trước ở một biến, method Go (`func (p *Profile) Load()`) không có summary theo kiểu receiver nên taint không qua được `p.Load(uid)` ở file khác cùng package, và pattern nguồn `$C.Query(k)` của gin trùng với sink `db.Query(sql)`. Cả bốn đã được sửa (`go-taint-xss`, `go-no-unsafe-template-type`, SQL dựng ở bất kỳ đâu, method theo receiver, sink nằm trong nguồn thì không tính). Chạy thử trên `pocketbase/pocketbase` (Go thật, không phải bộ có đáp án) lộ thêm báo nhầm: `stmt.Exec(args)` của prepared statement, `resp.Body` của response bị coi là nguồn; đã sửa.
 
-Kết quả dưới đây là sau bước 7: chỉ có ý nghĩa *không thụt lùi* trên cả bảy bộ. Rule mới cần một bộ chưa ai nhìn.
+8. **OWASP Benchmark (Java)** đo 8 rule taint Java và 5 rule cú pháp Java vừa viết, chấm như scorecard của chính dự án (mỗi hạng mục: tỉ lệ bắt đúng − tỉ lệ báo nhầm, rồi lấy trung bình). Lần đầu: larpcop **+37,5%**, Semgrep `p/default` +34,9%, `p/java` +17,7%. Lần chạy lộ ra một điểm yếu chung của taint: phép gán sạch nằm trong nhánh `if` (`if (param == null) param = "";`) xoá taint như thể nó luôn chạy. Giờ phép gán chỉ chạy trên một số đường (trong `if`, vòng lặp, `try`, `switch`) có thể làm bẩn nhưng không làm sạch một biến: **+44,0%**. Báo nhầm còn lại phần lớn là các ca cố ý của Benchmark mà taint không có hằng số và chỉ số collection không phân biệt được (`(7*18)+num > 200 ? "safe" : param`, `list.remove(0); list.get(1)`), và rule quy ước `java-no-sql-concat` báo mọi câu SQL ghép chuỗi, kể cả khi giá trị ghép vào là an toàn.
+
+Kết quả dưới đây là sau bước 8: chỉ có ý nghĩa *không thụt lùi* trên cả tám bộ. Rule mới cần một bộ chưa ai nhìn.
 
 ## Kết quả (01/11/2026)
 
@@ -51,6 +53,8 @@ Kết quả dưới đây là sau bước 7: chỉ có ý nghĩa *không thụt 
 | DVWS-Node: dòng tìm thấy (/15) | **13** (cả 13 khi bỏ `validate-request-input`) | 7 | – |
 | GoVWA: thời gian | 1,57 s | – | – |
 | GoVWA: dòng tìm thấy (/4) | **4** (lần đầu 0) | 4 | – |
+| OWASP Benchmark Java: thời gian | **7,11 s** | 48,6 s (`p/default`), 54,9 s (`p/java`) | 49,8 s |
+| OWASP Benchmark Java: điểm trung bình (TPR − FPR) | **+44,0%** (lần đầu +37,5%) | +34,9% (`p/default`), +17,7% (`p/java`) | – |
 | vulnerable-node seeds (/12 file, báo nhầm trên 2 file sạch) | **11**, 1 báo nhầm (11 và 0 báo nhầm nếu bỏ rule chung chung) | 10, 1 báo nhầm (8 và 1 báo nhầm nếu bỏ rule chung chung) | – |
 | Secrets (so với gitleaks) | 69/69 và 3/3 trùng khớp | – | 69 và 3 |
 

@@ -1,0 +1,7 @@
+id: java-no-weak-cipher
+valid:
+- "class T {\n  void f(String name, int id) throws Exception {\n    Cipher.getInstance(\"AES/GCM/NoPadding\");\n  }\n}\n"
+invalid:
+- "class T {\n  void f(String name, int id) throws Exception {\n    Cipher.getInstance(\"DES/CBC/PKCS5Padding\");\n  }\n}\n"
+- "class T {\n  void f(String name, int id) throws Exception {\n    Cipher c = Cipher.getInstance(\"AES\");\n  }\n}\n"
+- "class T {\n  void f(String name, int id) throws Exception {\n    javax.crypto.Cipher.getInstance(\"AES/ECB/PKCS5Padding\");\n  }\n}\n"

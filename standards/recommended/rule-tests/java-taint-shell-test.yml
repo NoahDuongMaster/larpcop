@@ -1,0 +1,9 @@
+id: java-taint-shell
+valid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String host = request.getParameter(\"host\");\n    new\
+  \ ProcessBuilder(\"ping\", \"-c\", \"1\", \"localhost\").start();\n  }\n}\n"
+invalid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String host = request.getParameter(\"host\");\n    Runtime.getRuntime().exec(\"\
+  ping -c 1 \" + host);\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String[] args = {\"sh\", \"-c\", request.getParameter(\"\
+  cmd\")};\n    new ProcessBuilder(args).start();\n  }\n}\n"

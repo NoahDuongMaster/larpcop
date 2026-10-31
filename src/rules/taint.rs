@@ -263,6 +263,7 @@ fn pattern(p: &str, lang: SupportLang) -> Result<Pattern> {
     Ok(Pattern::try_new(p, lang)?)
 }
 
+mod containers;
 mod destructure;
 mod events;
 mod flow;

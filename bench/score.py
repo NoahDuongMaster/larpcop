@@ -39,6 +39,9 @@ SECURITY = {
     "no-env-file-secrets",
     "go-no-unsafe-template-type", "go-taint-sql", "go-taint-shell", "go-taint-path", "go-taint-ssrf",
     "go-taint-redirect", "go-taint-xss",
+    "java-taint-sql", "java-taint-shell", "java-taint-path", "java-taint-xss", "java-taint-ldap", "java-taint-xpath",
+    "java-taint-redirect", "java-taint-trust-boundary", "java-no-sql-concat", "java-no-weak-hash",
+    "java-no-weak-cipher", "java-no-insecure-random", "java-no-insecure-cookie",
 }
 
 

@@ -1,0 +1,7 @@
+id: java-no-sql-concat
+valid:
+- "class T {\n  void f(String name, int id) throws Exception {\n    stmt.executeQuery(\"SELECT * FROM users WHERE \" + \"active = 1\");\n  }\n}\n"
+- "class T {\n  void f(String name, int id) throws Exception {\n    log.info(\"selected \" + n + \" rows from cache\");\n  }\n}\n"
+invalid:
+- "class T {\n  void f(String name, int id) throws Exception {\n    String sql = \"SELECT * FROM users WHERE name = '\" + name + \"'\";\n  }\n}\n"
+- "class T {\n  void f(String name, int id) throws Exception {\n    st.execute(\"DELETE FROM t WHERE id = \" + id);\n  }\n}\n"

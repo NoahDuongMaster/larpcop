@@ -26,9 +26,11 @@ clone dvna https://github.com/appsecco/dvna.git 9ba473a
 clone dvpwa https://github.com/anxolerd/dvpwa.git a1d8f89
 clone dvws-node https://github.com/snoopysecurity/dvws-node.git e83689c
 clone govwa https://github.com/0c34/govwa.git 4058f79
+clone BenchmarkJava https://github.com/OWASP-Benchmark/BenchmarkJava.git f40c618
 clone vulnerable-node https://github.com/cr0hn/vulnerable-node.git d68f2a3
 # Semgrep's registry pack, fetched once so timings exclude the download.
 [ -f "$WORK/p-default.yml" ] || curl -sfL https://semgrep.dev/c/p/default -o "$WORK/p-default.yml"
+[ -f "$WORK/p-java.yml" ] || curl -sfL https://semgrep.dev/c/p/java -o "$WORK/p-java.yml"
 
 # Median wall time of RUNS runs of "$@", in seconds.
 time_it() {
@@ -67,6 +69,19 @@ python3 "$HERE/score.py" "$WORK/dvws-node" "$OUT/dvws-node-larpcop.json" "$OUT/d
 python3 "$HERE/score.py" "$WORK/govwa" "$OUT/govwa-larpcop.json" "$OUT/govwa-semgrep.json" \
   "$OUT/govwa-gitleaks.json" --truth "$HERE/govwa-truth.json" > "$OUT/govwa.md"
 
+# OWASP Benchmark (Java): 2,740 test cases, scored like the project's scorecard.
+cd "$WORK/BenchmarkJava"
+printf "extends: ['%s/standards/recommended']\ndisable: [dependency-vulnerability]\n" "$REPO" > .larpcop.yaml
+"$LARPCOP" check --format json > "$OUT/owasp-benchmark-larpcop.json" || true
+semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/owasp-benchmark-semgrep-default.json" --quiet . || true
+semgrep scan --config "$WORK/p-java.yml" --metrics off --json -o "$OUT/owasp-benchmark-semgrep-java.json" --quiet . || true
+{
+  echo "BenchmarkJava larpcop_seconds $(time_it "$LARPCOP" check --format json)"
+  echo "BenchmarkJava semgrep_default_seconds $(time_it semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o /dev/null --quiet .)"
+} >> "$OUT/timing.txt"
+python3 "$HERE/owasp_benchmark.py" "$WORK/BenchmarkJava" "$OUT/owasp-benchmark-larpcop.json" \
+  "$OUT/owasp-benchmark-semgrep-default.json" "$OUT/owasp-benchmark-semgrep-java.json" > "$OUT/owasp-benchmark.md"
+
 # vulnerable-node: only sast/seeds/, scored by the project's own sast/tests/score.js.
 cd "$WORK/vulnerable-node"
 printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
@@ -74,4 +89,4 @@ printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
 semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/seeds-semgrep.json" --quiet sast/seeds || true
 python3 "$HERE/seeds.py" "$WORK/vulnerable-node" "$OUT/seeds-larpcop.json" "$OUT/seeds-semgrep.json" > "$OUT/seeds.md"
 
-cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/dvpwa.md" "$OUT/dvws-node.md" "$OUT/govwa.md" "$OUT/seeds.md"
+cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/dvpwa.md" "$OUT/dvws-node.md" "$OUT/govwa.md" "$OUT/owasp-benchmark.md" "$OUT/seeds.md"

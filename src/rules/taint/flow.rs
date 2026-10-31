@@ -2,6 +2,7 @@
 //! taint or clean names in source order; sinks, calls and returns are judged
 //! with the state at that point.
 
+use super::containers::filled;
 use super::events::{Event, Hits};
 use super::summary::{Summaries, args, callee};
 use super::{VARIABLES, destructure};
@@ -11,7 +12,7 @@ use std::collections::HashSet;
 use std::ops::Range;
 
 /// Targets (left) and value (right) of the assignment kinds we follow.
-pub(super) const ASSIGNMENTS: [(&str, &str, &str); 9] = [
+pub(super) const ASSIGNMENTS: [(&str, &str, &str); 13] = [
     ("variable_declarator", "name", "value"),
     ("let_declaration", "pattern", "value"),
     ("var_spec", "name", "value"),
@@ -21,9 +22,33 @@ pub(super) const ASSIGNMENTS: [(&str, &str, &str); 9] = [
     ("augmented_assignment", "left", "right"),
     ("short_var_declaration", "left", "right"),
     ("assignment_statement", "left", "right"),
+    // Loops bind each element of the collection: `for (Cookie c : cookies)`,
+    // `for (const x of xs)`, `for x in xs:`, `for _, x := range xs`.
+    ("enhanced_for_statement", "name", "value"),
+    ("for_in_statement", "left", "right"),
+    ("for_statement", "left", "right"),
+    ("range_clause", "left", "right"),
 ];
 
-pub(super) const CALLS: [&str; 2] = ["call_expression", "call"];
+/// Loop kinds among `ASSIGNMENTS`: they bind before the body, not at the end.
+pub(super) const LOOPS: [&str; 4] = [
+    "enhanced_for_statement",
+    "for_in_statement",
+    "for_statement",
+    "range_clause",
+];
+
+/// Call kinds: JS/TS/Go/Rust, Python/Ruby, Java (`m()`, `new T()`), C#, PHP.
+pub(super) const CALLS: [&str; 8] = [
+    "call_expression",
+    "call",
+    "method_invocation",
+    "object_creation_expression",
+    "invocation_expression",
+    "function_call_expression",
+    "member_call_expression",
+    "scoped_call_expression",
+];
 
 pub(super) enum Reached<'a, D: Doc> {
     /// Tainted data at a sink argument.
@@ -176,15 +201,15 @@ impl Ctx {
                     cleaned.push(was);
                 }
                 Event::Restore => names.extend(cleaned.pop().unwrap_or_default()),
-                Event::Assign(left, right) if is_field(left) => {
+                Event::Assign(left, right, conditional) if is_field(left) => {
                     if self.tainted(right, &names) {
                         names.insert(left.text().to_string());
                         on(Seen::Reached(Reached::Field(left.clone())));
-                    } else {
+                    } else if !conditional {
                         names.remove(left.text().as_ref());
                     }
                 }
-                Event::Assign(left, right) => {
+                Event::Assign(left, right, conditional) => {
                     let tainted = self.tainted(right, &names);
                     for v in left
                         .dfs()
@@ -192,7 +217,7 @@ impl Ctx {
                     {
                         if tainted {
                             names.insert(v.text().to_string());
-                        } else if left.kind() == "identifier" {
+                        } else if left.kind() == "identifier" && !conditional {
                             names.remove(v.text().as_ref());
                         }
                     }
@@ -244,38 +269,4 @@ pub(super) fn enclosing<'a, D: Doc>(node: &Node<'a, D>, root: &Node<'a, D>) -> N
     node.ancestors()
         .find(|a| is_function(a))
         .unwrap_or_else(|| root.clone())
-}
-
-/// Methods that store their arguments in the object they are called on.
-const FILLS: [&str; 12] = [
-    "push",
-    "unshift",
-    "splice",
-    "set",
-    "add",
-    "append",
-    "appendleft",
-    "extend",
-    "insert",
-    "update",
-    "setdefault",
-    "concat",
-];
-
-/// The variable a call stores its arguments in: the receiver of a filling
-/// method, or the first argument of `Object.assign`.
-fn filled<D: Doc>(call: &Node<D>) -> Option<String> {
-    let name = callee(call)?;
-    if name == "Object.assign" {
-        let target = args(call).into_iter().next()?;
-        return (target.kind() == "identifier").then(|| target.text().to_string());
-    }
-    let (receiver, method) = name.rsplit_once('.')?;
-    let root = receiver.split(['.', '[']).next()?;
-    (FILLS.contains(&method)
-        && !root.is_empty()
-        && root
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '_' || c == '$'))
-    .then(|| root.to_string())
 }

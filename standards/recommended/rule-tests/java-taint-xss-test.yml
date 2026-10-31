@@ -1,0 +1,9 @@
+id: java-taint-xss
+valid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String q = request.getParameter(\"q\");\n    response.getWriter().println(\"\
+  <p>\" + Encode.forHtml(q) + \"</p>\");\n  }\n}\n"
+invalid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String q = request.getParameter(\"q\");\n    response.getWriter().println(\"\
+  <p>No results for \" + q + \"</p>\");\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    PrintWriter out = response.getWriter();\n    out.format(\"\
+  <b>%s</b>\", request.getHeader(\"Referer\"));\n  }\n}\n"

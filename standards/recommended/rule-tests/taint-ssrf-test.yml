@@ -1,0 +1,7 @@
+id: taint-ssrf
+valid:
+- app.post('/p', async (req, res) => res.send(await fetch('https://api.example.com/items/' + encodeURIComponent(req.body.id))));
+invalid:
+- app.post('/p', async (req, res) => { const r = await fetch(req.body.url); res.send(await r.text()); });
+- 'async function get(req) { return axios.get(req.query.target, { timeout: 1000 }); }'
+- app.get('/p', async (req, res) => res.send(await fetch('https://' + req.query.host + '/api')));

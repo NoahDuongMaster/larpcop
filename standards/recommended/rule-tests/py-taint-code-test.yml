@@ -1,0 +1,6 @@
+id: py-taint-code
+valid:
+- "def h():\n    data = json.loads(request.data)\n    return str(ast.literal_eval(request.form['n']))\n"
+invalid:
+- "def h():\n    return str(eval(request.args['expr']))\n"
+- "def h():\n    obj = pickle.loads(request.files['f'].read())\n"

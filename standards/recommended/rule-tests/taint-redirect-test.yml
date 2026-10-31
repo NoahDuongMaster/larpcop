@@ -1,0 +1,11 @@
+id: taint-redirect
+valid:
+- app.get('/r', (req, res) => res.redirect('/home'));
+- function r(req, res) { const next = req.query.next; if (!next.startsWith('/') || next.startsWith('//')) { return res.redirect('/'); } res.redirect(next); }
+- app.get('/p/:id', (req, res) => res.redirect('/products/' + req.params.id));
+- app.get('/p/:id', (req, res) => res.redirect(`/products/${req.params.id}`));
+invalid:
+- app.get('/r', (req, res) => res.redirect(req.query.url));
+- function r(req, res) { const next = req.query.next || '/'; res.redirect(302, next); }
+- app.get('/p', (req, res) => res.redirect('//' + req.query.host));
+- app.get('/p', (req, res) => res.redirect(`https://${req.query.host}/x`));

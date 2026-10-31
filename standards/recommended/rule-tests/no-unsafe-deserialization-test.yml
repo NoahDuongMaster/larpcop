@@ -1,0 +1,8 @@
+id: no-unsafe-deserialization
+valid:
+  - "const data = JSON.parse(body);"
+  - "const serialize = require('serialize-javascript');"
+invalid:
+  - "var serialize = require('node-serialize');"
+  - "import { unserialize } from 'node-serialize';"
+  - "const products = serialize.unserialize(req.files.products.data.toString('utf8'));"

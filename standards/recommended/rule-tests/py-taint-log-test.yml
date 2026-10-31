@@ -1,0 +1,5 @@
+id: py-taint-log
+valid:
+- "def h():\n    logger.info('login %r', repr(request.form['user']))\n"
+invalid:
+- "def h():\n    logging.info('login ' + request.form['user'])\n"

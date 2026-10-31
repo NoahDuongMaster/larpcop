@@ -1,0 +1,18 @@
+id: no-unescaped-template-output
+file: views/page.ejs
+valid:
+- '<%- include(''header'') %>
+
+  <p><%= user.name %></p>
+
+  '
+- '<p [innerHTML]="feedback.comment"></p>
+
+  '
+invalid:
+- '<p><%- user.bio %></p>
+
+  '
+- '<td>{{{ product.description }}}</td>
+
+  '

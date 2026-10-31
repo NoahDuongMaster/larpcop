@@ -1,0 +1,6 @@
+id: taint-code
+valid:
+- 'app.post(''/c'', (req, res) => res.json({ v: mathjs.evaluate(Number(req.body.x)) }));'
+invalid:
+- app.post('/c', (req, res) => res.send(String(eval(req.body.expr))));
+- 'function calc(req, res) { res.render(''calc'', { output: mathjs.eval(req.body.eqn) }); }'

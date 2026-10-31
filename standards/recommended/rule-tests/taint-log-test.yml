@@ -1,0 +1,6 @@
+id: taint-log
+valid:
+- app.post('/l', (req, res) => logger.info('login', JSON.stringify(req.body.user)));
+invalid:
+- app.post('/l', (req, res) => console.log('login ' + req.body.userName));
+- function h(req) { const { user } = req.query; log.warn(`bad user ${user}`); }

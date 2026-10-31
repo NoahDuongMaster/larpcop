@@ -1,0 +1,7 @@
+id: py-no-regex-redos
+valid:
+  - "re.compile(r'^[0-9]+$')"
+  - "re.match(r'(ab)+', s)"
+invalid:
+  - "re.compile(r'^(\\w+\\s?)*$')"
+  - "re.match('(a+)+b', s)"

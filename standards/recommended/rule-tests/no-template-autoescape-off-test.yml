@@ -1,0 +1,7 @@
+id: no-template-autoescape-off
+valid:
+  - "swig.setDefaults({ autoescape: true });"
+  - "nunjucks.configure('views', { autoescape: true });"
+invalid:
+  - "swig.setDefaults({ autoescape: false });"
+  - "nunjucks.configure('views', { 'autoescape': false, watch: true });"

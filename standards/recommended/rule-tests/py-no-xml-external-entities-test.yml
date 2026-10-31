@@ -1,0 +1,5 @@
+id: py-no-xml-external-entities
+valid:
+  - "parser = etree.XMLParser(resolve_entities=False)"
+invalid:
+  - "parser = etree.XMLParser(resolve_entities=True)"

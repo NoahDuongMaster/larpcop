@@ -1,0 +1,34 @@
+id: no-unsafe-recursive-merge
+valid:
+  - |
+    function deepMerge(target, source) {
+      for (const key of Object.keys(source)) {
+        if (key === "__proto__" || key === "constructor") continue;
+        if (typeof source[key] === "object") deepMerge(target[key], source[key]);
+        else target[key] = source[key];
+      }
+    }
+  - |
+    function copy(target, source) {
+      for (const key in source) target[key] = source[key];
+    }
+invalid:
+  - |
+    function deepMerge(target, source) {
+      for (const key of Object.keys(source)) {
+        if (typeof source[key] === "object" && source[key] !== null) {
+          if (!target[key]) target[key] = {};
+          deepMerge(target[key], source[key]);
+        } else {
+          target[key] = source[key];
+        }
+      }
+      return target;
+    }
+  - |
+    const merge = (a, b) => {
+      for (const k in b) {
+        a[k] = typeof b[k] === "object" ? merge(a[k] || {}, b[k]) : b[k];
+      }
+      return a;
+    };

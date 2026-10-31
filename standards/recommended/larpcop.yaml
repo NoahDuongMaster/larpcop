@@ -3,7 +3,7 @@
 # size/complexity limits. Extend it, then tighten or add your own:
 #
 #   extends:
-#     - https://github.com/NoahDuongMaster/larpcop.git#v0.2.1//standards/recommended
+#     - https://github.com/NoahDuongMaster/larpcop.git#v0.3.0//standards/recommended
 rule_dirs: [rules]
 max_lines:
   max: 500
@@ -21,6 +21,23 @@ dependencies:
   vulnerabilities: high
 # Request data must not reach SQL or a shell inside one function, even through
 # variables (the syntactic rules above catch it at the call site).
+text:
+  - id: no-unescaped-template-output
+    files: ["**/*.ejs", "**/*.hbs", "**/*.handlebars", "**/*.mustache", "**/*.njk", "**/*.jinja", "**/*.jinja2", "**/*.j2", "**/*.html", "**/*.htm", "**/*.blade.php", "**/*.erb", "**/*.twig", "**/*.liquid", "**/*.svelte", "**/*.vue", "**/*.cshtml"]
+    regex: '<%-[^%]*%>|<%==|\{\{\{|\{!!|\|\s*safe\b|\{%-?\s*autoescape\s+(false|off)|\{@html\s|\bv-html\s*=|\.html_safe\b|\braw\(|\|\s*raw\b|@Html\.Raw\('
+    not: '^<%-\s*include\b|^\{\{\{?\s*>'
+    message: Template output written without HTML escaping (XSS).
+    note: Use the escaping form (`<%= %>`, `{{ }}`, no `|safe`/`raw`/`v-html`); sanitize the few HTML fragments that must stay HTML with DOMPurify or sanitize-html.
+  - id: pug-no-unescaped-output
+    files: ["**/*.pug", "**/*.jade"]
+    regex: '(?m)^\s*[\w.#:-]*(\([^)]*\))?!=\s|!\{'
+    message: Template output written without HTML escaping (XSS).
+    note: Use `=` and `#{}` (escaped) instead of `!=` and `!{}`.
+  - id: no-inner-html-in-templates
+    files: ["**/*.ejs", "**/*.hbs", "**/*.handlebars", "**/*.mustache", "**/*.njk", "**/*.jinja", "**/*.jinja2", "**/*.j2", "**/*.html", "**/*.htm", "**/*.blade.php", "**/*.erb", "**/*.twig", "**/*.liquid", "**/*.svelte", "**/*.vue", "**/*.cshtml"]
+    regex: '\.(innerHTML|outerHTML)\s*=[^=]|\.insertAdjacentHTML\(|document\.write(ln)?\('
+    message: Script in a template writes HTML from a string (DOM XSS).
+    note: Set textContent, or build nodes with createElement; sanitize with DOMPurify when HTML is required.
 taint:
   - id: taint-sql
     languages: [TypeScript, Tsx, JavaScript]
@@ -46,7 +63,118 @@ taint:
     sources: ["req.query", "req.body", "req.params", "request.nextUrl.searchParams"]
     sinks: ["$RES.redirect($URL)", "$RES.redirect($CODE, $URL)", "redirect($URL)", "NextResponse.redirect($URL)"]
     sink_arg: URL
+    safe_prefix: '^/[^/\\]'
+    guards: ["$U.startsWith($P)", "$L.includes($U)", "$L.has($U)", "$R.test($U)", "isSafeRedirect($U)", "isRelativeUrl($U)"]
     param_types: { Request: req, NextRequest: request }
+  - id: taint-code
+    languages: [TypeScript, Tsx, JavaScript]
+    message: Request data evaluated as code (code injection).
+    note: Never evaluate input. Parse it (JSON.parse, a math parser's safe API) and validate it with a schema.
+    sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "await request.json()"]
+    sinks: ["eval($X)", "new Function($$$A)", "vm.runInNewContext($X, $$$R)", "vm.runInThisContext($X, $$$R)", "vm.runInContext($X, $$$R)", "$M.eval($X, $$$R)", "$M.evaluate($X, $$$R)"]
+    sink_arg: X
+    sanitizers: ["Number($X)", "parseInt($X, $$$R)", "parseFloat($X)"]
+    param_types: { Request: req }
+  - id: taint-xss
+    languages: [TypeScript, Tsx, JavaScript]
+    message: Request data written into an HTML response without escaping (reflected XSS).
+    note: Render through a template with autoescaping, or escape the value (escape-html, he.encode); send data as JSON with res.json.
+    sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "req.files", "request.nextUrl.searchParams", "await request.json()", "await request.formData()"]
+    sinks: ["$RES.send($A + $B)", "$RES.send(`$$$T`)", "$RES.write($A + $B)", "$RES.end($A + $B)", "$RES.type(\"html\").send($X)", "$RES.type('html').send($X)", "$RES.type(\"text/html\").send($X)", "$RES.type('text/html').send($X)", "$RES.contentType(\"html\").send($X)", "$RES.contentType('html').send($X)", "$RES.contentType(\"text/html\").send($X)", "$RES.contentType('text/html').send($X)", "$EL.innerHTML = $X", "$EL.outerHTML = $X", "document.write($X)"]
+    sanitizers: ["escapeHtml($X)", "escape($X)", "$E.escape($X)", "he.encode($X, $$$R)", "encodeURIComponent($X)", "DOMPurify.sanitize($X, $$$R)", "sanitizeHtml($X, $$$R)", "xss($X)", "Number($X)", "parseInt($X, $$$R)", "JSON.stringify($X)"]
+    param_types: { Request: req, NextRequest: request }
+  - id: taint-path
+    languages: [TypeScript, Tsx, JavaScript]
+    message: Request data used as a file path (path traversal).
+    note: Take path.basename() of the name, or resolve it and check it stays under the base directory (resolved.startsWith(base + path.sep)).
+    sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "req.files", "request.nextUrl.searchParams", "await request.json()", "await request.formData()"]
+    sinks: ["fs.$F($P, $$$R)", "fsp.$F($P, $$$R)", "$RES.sendFile($P, $$$R)", "$RES.download($P, $$$R)", "readFileSync($P, $$$R)", "readFile($P, $$$R)", "createReadStream($P, $$$R)", "createWriteStream($P, $$$R)", "writeFileSync($P, $$$R)", "writeFile($P, $$$R)", "unlink($P, $$$R)", "unlinkSync($P)"]
+    sink_arg: P
+    sanitizers: ["path.basename($X, $$$R)", "basename($X, $$$R)", "Number($X)", "parseInt($X, $$$R)", "sanitizeFilename($X)", "sanitize($X)"]
+    guards: ["$P.startsWith($B)", "$A.includes($B)", "$A.indexOf($B)", "$L.has($P)", "$R.test($P)", "isInside($$$A)", "isSubPath($$$A)"]
+    param_types: { Request: req, NextRequest: request }
+  - id: taint-ssrf
+    languages: [TypeScript, Tsx, JavaScript]
+    message: Request data decides which URL the server fetches (SSRF).
+    note: Fetch only fixed hosts; take an id from the request and look the URL up, or check new URL(x).host against an allowlist first.
+    sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "req.files", "request.nextUrl.searchParams", "await request.json()", "await request.formData()"]
+    sinks: ["fetch($U, $$$R)", "axios($U, $$$R)", "axios.$M($U, $$$R)", "got($U, $$$R)", "got.$M($U, $$$R)", "http.get($U, $$$R)", "https.get($U, $$$R)", "http.request($U, $$$R)", "https.request($U, $$$R)", "request($U, $$$R)", "request.$M($U, $$$R)", "needle.$M($U, $$$R)", "superagent.$M($U)", "ky($U, $$$R)", "ky.$M($U, $$$R)", "undici.request($U, $$$R)"]
+    sink_arg: U
+    safe_prefix: '^https?://[^/?#]+[/?#]'
+    sanitizers: ["encodeURIComponent($X)", "Number($X)", "parseInt($X, $$$R)"]
+    guards: ["$L.includes($H)", "$L.has($H)", "$U.startsWith($P)", "$R.test($U)", "isAllowedUrl($U)", "isAllowedHost($H)"]
+    param_types: { Request: req, NextRequest: request }
+  - id: taint-nosql
+    languages: [TypeScript, Tsx, JavaScript]
+    message: Request data used as a MongoDB filter (NoSQL operator injection with $ne, $gt, $where).
+    note: Cast each field to the type it must be (String(x), Number(x)) or validate the body with a schema, so an object with $-operators cannot reach the query.
+    sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "req.files", "request.nextUrl.searchParams", "await request.json()", "await request.formData()"]
+    sinks: ["$C.find($Q, $$$R)", "$C.findOne($Q, $$$R)", "$C.findOneAndUpdate($Q, $$$R)", "$C.findOneAndDelete($Q, $$$R)", "$C.updateOne($Q, $$$R)", "$C.updateMany($Q, $$$R)", "$C.deleteOne($Q, $$$R)", "$C.deleteMany($Q, $$$R)", "$C.countDocuments($Q, $$$R)", "$C.aggregate($Q, $$$R)"]
+    sink_arg: Q
+    # Sequelize filters sit under `where:` / `include:` and take no operators from JSON.
+    sanitizers: ["$M.$F({ $$$A, where: $W, $$$R })", "$M.$F({ $$$A, include: $I, $$$R })", "String($X)", "Number($X)", "parseInt($X, $$$R)", "sanitize($X)", "mongoSanitize($X)", "$S.parse($X)", "new ObjectId($X)", "$M.Types.ObjectId($X)", "escapeRegExp($X)"]
+    param_types: { Request: req, NextRequest: request }
+  - id: taint-regex
+    languages: [TypeScript, Tsx, JavaScript]
+    message: Request data compiled as a regular expression (ReDoS / regex injection).
+    note: Escape it first (escape-string-regexp, lodash.escapeRegExp) or match with includes/startsWith.
+    sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "req.files", "request.nextUrl.searchParams", "await request.json()", "await request.formData()"]
+    sinks: ["new RegExp($X, $$$R)", "RegExp($X, $$$R)"]
+    sink_arg: X
+    sanitizers: ["escapeRegExp($X)", "escapeStringRegexp($X)", "_.escapeRegExp($X)", "$S.replace($$$R)"]
+    param_types: { Request: req, NextRequest: request }
+  - id: py-taint-path
+    languages: [Python]
+    message: Request data used as a file path (path traversal).
+    note: Use werkzeug's secure_filename / os.path.basename, or resolve the path and check it is under the base directory (Path.is_relative_to).
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.files", "request.GET", "request.POST", "request.FILES", "request.query_params", "request.path_params", "request.headers", "request.cookies"]
+    sinks: ["open($P, $$$R)", "send_file($P, $$$R)", "send_from_directory($D, $P, $$$R)", "FileResponse($P, $$$R)", "os.remove($P)", "os.unlink($P)", "shutil.rmtree($P, $$$R)", "Path($P, $$$R)", "pathlib.Path($P)"]
+    sink_arg: P
+    sanitizers: ["secure_filename($X)", "os.path.basename($X)", "int($X)", "uuid.UUID($X)"]
+    guards: ["$P.is_relative_to($B)", "$P.startswith($B)", "$X in $L"]
+  - id: py-taint-ssrf
+    languages: [Python]
+    message: Request data decides which URL the server fetches (SSRF).
+    note: Fetch only fixed hosts; check urlparse(url).hostname against an allowlist first.
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.files", "request.GET", "request.POST", "request.FILES", "request.query_params", "request.path_params", "request.headers", "request.cookies"]
+    sinks: ["requests.$M($U, $$$R)", "httpx.$M($U, $$$R)", "urllib.request.urlopen($U, $$$R)", "urlopen($U, $$$R)", "aiohttp.ClientSession().$M($U, $$$R)", "$S.get($U, $$$R)", "$S.post($U, $$$R)"]
+    sink_arg: U
+    safe_prefix: '^https?://[^/?#]+[/?#]'
+    sanitizers: ["int($X)", "quote($X)", "urllib.parse.quote($X)"]
+    guards: ["$H in $L", "$U.startswith($P)"]
+  - id: py-taint-ssti
+    languages: [Python]
+    message: Request data used as a template (server-side template injection, runs code).
+    note: Keep templates in files; pass request data as variables to render_template.
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.files", "request.GET", "request.POST", "request.FILES", "request.query_params", "request.path_params", "request.headers", "request.cookies"]
+    sinks: ["render_template_string($T, $$$R)", "Template($T, $$$R)", "jinja2.Template($T)", "Environment($$$E).from_string($T)", "$ENV.from_string($T)", "Markup($T)"]
+    sink_arg: T
+    sanitizers: ["escape($X)", "markupsafe.escape($X)"]
+  - id: py-taint-code
+    languages: [Python]
+    message: Request data evaluated as code or deserialized into objects (code injection).
+    note: Parse data with json.loads / ast.literal_eval and validate it; never eval, exec, pickle or yaml.load input.
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.files", "request.GET", "request.POST", "request.FILES", "request.query_params", "request.path_params", "request.headers", "request.cookies"]
+    sinks: ["eval($X, $$$R)", "exec($X, $$$R)", "pickle.loads($X)", "yaml.load($X, $$$R)", "marshal.loads($X)", "subprocess.$M($X, $$$R)", "os.system($X)", "os.popen($X, $$$R)"]
+    sink_arg: X
+    sanitizers: ["int($X)", "float($X)", "shlex.quote($X)", "ast.literal_eval($X)"]
+  - id: taint-log
+    languages: [TypeScript, Tsx, JavaScript]
+    severity: warning
+    message: Request data written to a log as is (log injection / forged log lines).
+    note: Log a fixed message and pass the value as a structured field, or strip CR/LF first (value.replace(/[\r\n]/g, '')).
+    sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies"]
+    sinks: ["console.$M($$$A)", "$L.info($$$A)", "$L.warn($$$A)", "$L.error($$$A)", "$L.debug($$$A)", "$L.log($$$A)"]
+    sanitizers: ["$S.replace($$$R)", "JSON.stringify($X)", "encodeURIComponent($X)", "Number($X)"]
+    param_types: { Request: req }
+  - id: py-taint-log
+    languages: [Python]
+    severity: warning
+    message: Request data written to a log as is (log injection / forged log lines).
+    note: Use logging's own formatting with %r, or strip CR/LF first.
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.GET", "request.POST", "request.query_params", "request.headers"]
+    sinks: ["logging.$M($$$A)", "logger.$M($$$A)", "log.$M($$$A)", "$APP.logger.$M($$$A)"]
+    sanitizers: ["$S.replace($$$R)", "json.dumps($X)", "int($X)", "repr($X)"]
   - id: py-taint-sql
     languages: [Python]
     message: Request data reaches a SQL query.

@@ -1,0 +1,10 @@
+id: taint-nosql
+valid:
+- 'app.post(''/login'', async (req, res) => { const u = await users.findOne({ name: String(req.body.name) }); res.json(u); });'
+- 'app.get(''/a'', async (req, res) => res.json(await Address.findOne({ where: { id: req.params.id }, include: [] })));'
+- 'app.get(''/a'', async (req, res) => res.json(await Basket.findOne({ where: { id: req.params.id } })));'
+- app.get('/a', (req, res) => res.json(fixes.find(({ id }) => id === req.body.fix)));
+- 'app.get(''/a'', async (req, res) => res.json(await Answer.findOne({ include: [{ model: User, where: { email: req.body.email } }] })));'
+invalid:
+- 'app.post(''/login'', async (req, res) => { const u = await users.findOne({ name: req.body.name, pass: req.body.pass }); res.json(u); });'
+- app.get('/p', async (req, res) => res.json(await products.find(req.query).toArray()));

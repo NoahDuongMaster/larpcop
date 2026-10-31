@@ -1,0 +1,6 @@
+id: taint-shell
+valid:
+- app.post('/p', (req, res) => execFile('ping', ['-c', '2', req.body.host]));
+invalid:
+- app.post('/p', (req, res) => exec('ping -c 2 ' + req.body.address, cb));
+- function h(req) { const cmd = `ls ${req.query.dir}`; child_process.execSync(cmd); }

@@ -1,0 +1,6 @@
+id: no-xml-external-entities
+valid:
+  - "const doc = libxmljs.parseXmlString(xml, { noblanks: true });"
+  - "const doc = libxmljs.parseXml(xml, { noent: false });"
+invalid:
+  - "const doc = libxmljs.parseXmlString(xml, { noent: true, noblanks: true });"

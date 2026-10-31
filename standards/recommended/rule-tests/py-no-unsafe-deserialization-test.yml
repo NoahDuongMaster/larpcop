@@ -1,0 +1,6 @@
+id: py-no-unsafe-deserialization
+valid:
+  - "data = json.loads(body)"
+invalid:
+  - "obj = pickle.loads(request.data)"
+  - "db = shelve.open(path)"

@@ -1,0 +1,5 @@
+id: taint-regex
+valid:
+- app.get('/s', (req, res) => res.json(items.filter(i => new RegExp(escapeRegExp(req.query.q)).test(i))));
+invalid:
+- app.get('/s', (req, res) => res.json(items.filter(i => new RegExp(req.query.q, 'i').test(i))));

@@ -1,0 +1,13 @@
+id: no-regex-redos
+valid:
+  - "const plus = /([+*])+/;"
+  - "const phone = /(\\d{3})-(\\d{4})/;"
+  - "const digits = /^[0-9]+$/;"
+  - "const pairs = /(ab)+/;"
+  - "const re = new RegExp('^[a-z]+$');"
+invalid:
+  - "const EMAIL_RE = /^([a-zA-Z0-9])(([\\-.]|[_]+)?([a-zA-Z0-9]+))*(@){1}[a-z0-9]+$/;"
+  - "const host = /^(?:\\w+\\.)+com$/;"
+  - "const re = /([0-9]+)+\\#/;"
+  - "if (/^(\\w+\\s?)*$/.test(name)) {}"
+  - "const re = new RegExp('(a+)+$', 'i');"

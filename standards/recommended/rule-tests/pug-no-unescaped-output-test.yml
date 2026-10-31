@@ -1,0 +1,11 @@
+id: pug-no-unescaped-output
+file: views/page.pug
+valid:
+- "p= user.name\nscript.\n  if (a != b) {}\n"
+invalid:
+- 'p!= user.bio
+
+  '
+- 'span !{raw}
+
+  '

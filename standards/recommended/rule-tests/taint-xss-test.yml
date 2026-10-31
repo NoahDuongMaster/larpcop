@@ -1,0 +1,11 @@
+id: taint-xss
+valid:
+- app.get('/a', (req, res) => res.type('image/png').send(fs.readFileSync('/img/' + req.query.f)));
+- app.get('/g', (req, res) => res.send('<h1>Hello ' + escapeHtml(req.query.name) + '</h1>'));
+- 'app.get(''/g'', (req, res) => res.json({ name: req.query.name }));'
+- app.get('/g', async (req, res) => res.send(await User.findById(req.params.id)));
+invalid:
+- app.get('/a', (req, res) => res.type("text/html").send(req.query.f));
+- app.get('/g', (req, res) => { const name = req.query.name || 'guest'; res.send('<h1>Hello ' + name + '</h1>'); });
+- app.get('/g', (req, res) => res.send(`<p>${req.query.q}</p>`));
+- app.get('/p', (req, res) => { const html = render(req.query.user); res.type('html').send(html); });

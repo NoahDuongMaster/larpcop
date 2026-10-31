@@ -1,0 +1,5 @@
+id: py-taint-path
+valid:
+- "def h():\n    return send_file(os.path.join(BASE, secure_filename(request.args['f'])))\n"
+invalid:
+- "def h():\n    name = request.args.get('f')\n    with open('/srv/files/' + name) as fh:\n        return fh.read()\n"

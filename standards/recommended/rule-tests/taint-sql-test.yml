@@ -1,0 +1,7 @@
+id: taint-sql
+valid:
+- app.get('/u', (req, res) => db.query('select * from u where id = $1', [req.query.id]));
+- app.get('/u', (req, res) => db.query('select * from u where id = ' + Number(req.query.id)));
+invalid:
+- app.get('/u', (req, res) => db.query('select * from u where id = ' + req.query.id));
+- function h(req) { const name = req.body.name; return pool.query(`select * from u where name = '${name}'`); }

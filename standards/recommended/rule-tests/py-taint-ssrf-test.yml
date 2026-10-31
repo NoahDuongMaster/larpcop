@@ -1,0 +1,6 @@
+id: py-taint-ssrf
+valid:
+- "def h():\n    return requests.get('https://api.example.com/items/' + quote(request.args['id'])).text\n"
+- "def h():\n    return requests.get(f\"https://api.example.com/items/{request.args['id']}\").text\n"
+invalid:
+- "def h():\n    url = request.json['url']\n    return requests.get(url, timeout=3).text\n"

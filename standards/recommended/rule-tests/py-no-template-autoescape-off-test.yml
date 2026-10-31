@@ -1,0 +1,5 @@
+id: py-no-template-autoescape-off
+valid:
+  - "env = Environment(loader=loader, autoescape=select_autoescape())"
+invalid:
+  - "env = Environment(loader=loader, autoescape=False)"

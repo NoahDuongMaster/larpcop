@@ -1,0 +1,6 @@
+id: no-inner-html-in-templates
+file: views/admin.ejs
+valid:
+- "<script>\n  cell.textContent = users[i].name;\n  if (a.innerHTML == b) {}\n</script>\n"
+invalid:
+- "<script>\n  cell.innerHTML = users[i].name;\n</script>\n"

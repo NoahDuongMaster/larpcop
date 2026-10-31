@@ -1,0 +1,10 @@
+id: py-taint-ldap
+file: app/views.py
+valid:
+- "from flask import Flask, request, session\nimport ldap\nfrom lxml import etree\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    u = ldap.filter.escape_filter_chars(request.args['u'])\n  \
+  \  conn.search_s('dc=x', ldap.SCOPE_SUBTREE, '(uid=' + u + ')')\n"
+- "from flask import Flask, request, session\nimport ldap\nfrom lxml import etree\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    m = re.search(r'\\d+', request.args['q'])\n"
+invalid:
+- "from flask import Flask, request, session\nimport ldap\nfrom lxml import etree\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    u = request.args['u']\n    conn.search_s('dc=x', ldap.SCOPE_SUBTREE,\
+  \ '(uid=' + u + ')')\n"
+- "from flask import Flask, request, session\nimport ldap\nfrom lxml import etree\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    conn.search('dc=x', '(&(objectClass=person)(cn=%s))' % request.form['cn'])\n"

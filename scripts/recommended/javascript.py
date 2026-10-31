@@ -167,13 +167,6 @@ RULES = [
              {"has": {"field": "key", "regex": "^['\"]?noent['\"]?$"}},
              {"has": {"field": "value", "regex": "^true$"}},
          ]}),
-    dict(id="py-no-xml-external-entities", langs=["Python"], severity="error",
-         message="XML parser resolves external entities (XXE).",
-         note="Use defusedxml, or lxml's XMLParser(resolve_entities=False, no_network=True).",
-         rule={"kind": "keyword_argument", "all": [
-             {"has": {"field": "name", "regex": "^resolve_entities$"}},
-             {"has": {"field": "value", "regex": "^True$"}},
-         ]}),
     dict(id="no-unsafe-deserialization", langs=JS, severity="error",
          message="Deserializer that can run code (node-serialize, funcster, serialize-to-js).",
          note="Parse data with JSON.parse and validate it with a schema; these libraries revive functions from input.",

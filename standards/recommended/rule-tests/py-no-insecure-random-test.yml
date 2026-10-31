@@ -1,0 +1,26 @@
+id: py-no-insecure-random
+file: app/tokens.py
+valid:
+- 'import secrets
+
+  token = secrets.token_hex(16)
+
+  '
+- 'import random
+
+  rng = random.SystemRandom()
+
+  n = rng.randint(0, 9)
+
+  '
+invalid:
+- 'import random
+
+  token = str(random.getrandbits(64))
+
+  '
+- 'import random
+
+  code = random.randint(100000, 999999)
+
+  '

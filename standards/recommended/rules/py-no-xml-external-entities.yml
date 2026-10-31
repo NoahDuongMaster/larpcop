@@ -3,22 +3,60 @@
   "id": "py-no-xml-external-entities",
   "language": "Python",
   "severity": "error",
-  "message": "XML parser resolves external entities (XXE).",
-  "note": "Use defusedxml, or lxml's XMLParser(resolve_entities=False, no_network=True).",
+  "message": "XML parser resolves external entities or loads DTDs (XXE).",
+  "note": "Use defusedxml, or lxml's XMLParser(resolve_entities=False, no_network=True); keep xml.sax's feature_external_ges/feature_external_pes off.",
   "rule": {
-    "kind": "keyword_argument",
-    "all": [
+    "any": [
       {
-        "has": {
-          "field": "name",
-          "regex": "^resolve_entities$"
-        }
+        "kind": "keyword_argument",
+        "all": [
+          {
+            "has": {
+              "field": "name",
+              "regex": "^(resolve_entities|load_dtd|dtd_validation)$"
+            }
+          },
+          {
+            "has": {
+              "field": "value",
+              "regex": "^True$"
+            }
+          }
+        ]
       },
       {
-        "has": {
-          "field": "value",
-          "regex": "^True$"
-        }
+        "kind": "keyword_argument",
+        "all": [
+          {
+            "has": {
+              "field": "name",
+              "regex": "^no_network$"
+            }
+          },
+          {
+            "has": {
+              "field": "value",
+              "regex": "^False$"
+            }
+          }
+        ]
+      },
+      {
+        "kind": "call",
+        "all": [
+          {
+            "has": {
+              "field": "function",
+              "regex": "\\.setFeature$"
+            }
+          },
+          {
+            "has": {
+              "field": "arguments",
+              "regex": "feature_external_(ges|pes)[^,]*,\\s*(True|1)\\s*\\)"
+            }
+          }
+        ]
       }
     ]
   },

@@ -1,0 +1,9 @@
+id: py-taint-xpath
+file: app/views.py
+valid:
+- "from flask import Flask, request, session\nimport ldap\nfrom lxml import etree\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    root = etree.parse('users.xml')\n    r = root.xpath('//user[@name=$n]',\
+  \ n=request.args['n'])\n"
+invalid:
+- "from flask import Flask, request, session\nimport ldap\nfrom lxml import etree\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    root = etree.parse('users.xml')\n    r = root.xpath(\"//user[@name='\"\
+  \ + request.args['n'] + \"']\")\n"
+- "from flask import Flask, request, session\nimport ldap\nfrom lxml import etree\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    expr = '//user[@id=%s]' % request.args['id']\n    find = etree.XPath(expr)\n"

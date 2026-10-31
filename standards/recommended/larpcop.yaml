@@ -867,3 +867,36 @@ taint:
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
     handler_decorators: "^\\w*(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
+  - id: py-taint-ldap
+    languages: [Python]
+    message: "Request data reaches an LDAP filter (LDAP injection)."
+    note: "Escape the value with ldap.filter.escape_filter_chars (ldap3: escape_filter_chars) before building the filter."
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.GET", "request.POST", "request.query_params", "await request.post()", "await request.json()", "await request.form()", "await request.text()", "request.query", "request.match_info", "request.rel_url.query", "self.get_argument($$$A)", "self.get_query_argument($$$A)", "self.get_body_argument($$$A)"]
+    sinks: ["conn.search_s($B, $S, $F, $$$R)", "conn.search_st($B, $S, $F, $$$R)", "conn.search_ext_s($B, $S, $F, $$$R)", "conn.search_ext($B, $S, $F, $$$R)", "conn.search($B, $F, $$$R)", "conn.search(search_base=$B, search_filter=$F, $$$R)", "conn.search($B, search_filter=$F, $$$R)", "connection.search_s($B, $S, $F, $$$R)", "connection.search_st($B, $S, $F, $$$R)", "connection.search_ext_s($B, $S, $F, $$$R)", "connection.search_ext($B, $S, $F, $$$R)", "connection.search($B, $F, $$$R)", "connection.search(search_base=$B, search_filter=$F, $$$R)", "connection.search($B, search_filter=$F, $$$R)", "ldap_conn.search_s($B, $S, $F, $$$R)", "ldap_conn.search_st($B, $S, $F, $$$R)", "ldap_conn.search_ext_s($B, $S, $F, $$$R)", "ldap_conn.search_ext($B, $S, $F, $$$R)", "ldap_conn.search($B, $F, $$$R)", "ldap_conn.search(search_base=$B, search_filter=$F, $$$R)", "ldap_conn.search($B, search_filter=$F, $$$R)", "ldap_connection.search_s($B, $S, $F, $$$R)", "ldap_connection.search_st($B, $S, $F, $$$R)", "ldap_connection.search_ext_s($B, $S, $F, $$$R)", "ldap_connection.search_ext($B, $S, $F, $$$R)", "ldap_connection.search($B, $F, $$$R)", "ldap_connection.search(search_base=$B, search_filter=$F, $$$R)", "ldap_connection.search($B, search_filter=$F, $$$R)", "l.search_s($B, $S, $F, $$$R)", "l.search_st($B, $S, $F, $$$R)", "l.search_ext_s($B, $S, $F, $$$R)", "l.search_ext($B, $S, $F, $$$R)", "l.search($B, $F, $$$R)", "l.search(search_base=$B, search_filter=$F, $$$R)", "l.search($B, search_filter=$F, $$$R)", "ld.search_s($B, $S, $F, $$$R)", "ld.search_st($B, $S, $F, $$$R)", "ld.search_ext_s($B, $S, $F, $$$R)", "ld.search_ext($B, $S, $F, $$$R)", "ld.search($B, $F, $$$R)", "ld.search(search_base=$B, search_filter=$F, $$$R)", "ld.search($B, search_filter=$F, $$$R)", "con.search_s($B, $S, $F, $$$R)", "con.search_st($B, $S, $F, $$$R)", "con.search_ext_s($B, $S, $F, $$$R)", "con.search_ext($B, $S, $F, $$$R)", "con.search($B, $F, $$$R)", "con.search(search_base=$B, search_filter=$F, $$$R)", "con.search($B, search_filter=$F, $$$R)", "ldap.search_s($B, $S, $F, $$$R)", "ldap.search_st($B, $S, $F, $$$R)", "ldap.search_ext_s($B, $S, $F, $$$R)", "ldap.search_ext($B, $S, $F, $$$R)", "ldap.search($B, $F, $$$R)", "ldap.search(search_base=$B, search_filter=$F, $$$R)", "ldap.search($B, search_filter=$F, $$$R)", "c.search_s($B, $S, $F, $$$R)", "c.search_st($B, $S, $F, $$$R)", "c.search_ext_s($B, $S, $F, $$$R)", "c.search_ext($B, $S, $F, $$$R)", "c.search($B, $F, $$$R)", "c.search(search_base=$B, search_filter=$F, $$$R)", "c.search($B, search_filter=$F, $$$R)"]
+    sink_arg: F
+    sanitizers: ["int($X)", "float($X)", "uuid.UUID($X)", "bool($X)", "escape_filter_chars($X, $$$R)", "ldap.filter.escape_filter_chars($X, $$$R)", "ldap3.utils.conv.escape_filter_chars($X, $$$R)", "escape_rdn($X)", "ldap.dn.escape_dn_chars($X)"]
+    handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
+    resolver_args: true
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
+  - id: py-taint-xpath
+    languages: [Python]
+    message: "Request data reaches an XPath expression (XPath injection)."
+    note: "Pass values as XPath variables (root.xpath(\"//user[@name=$name]\", name=value)); never build the expression from input."
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.GET", "request.POST", "request.query_params", "await request.post()", "await request.json()", "await request.form()", "await request.text()", "request.query", "request.match_info", "request.rel_url.query", "self.get_argument($$$A)", "self.get_query_argument($$$A)", "self.get_body_argument($$$A)"]
+    sinks: ["$T.xpath($E, $$$R)", "etree.XPath($E, $$$R)", "etree.ETXPath($E, $$$R)", "lxml.etree.XPath($E, $$$R)", "$EV.evaluate($E)", "root.find($E, $$$R)", "root.findall($E, $$$R)", "root.iterfind($E, $$$R)", "root.findtext($E, $$$R)", "tree.find($E, $$$R)", "tree.findall($E, $$$R)", "tree.iterfind($E, $$$R)", "tree.findtext($E, $$$R)", "doc.find($E, $$$R)", "doc.findall($E, $$$R)", "doc.xpath($E, $$$R)"]
+    sink_arg: E
+    sanitizers: ["int($X)", "float($X)", "uuid.UUID($X)", "bool($X)"]
+    handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
+    resolver_args: true
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
+  - id: py-taint-trust-boundary
+    languages: [Python]
+    message: "Request data stored in the session as if it were trusted (trust boundary)."
+    note: "Validate the value before it goes into the session; the session is read later as trusted server state."
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.GET", "request.POST", "request.query_params", "await request.post()", "await request.json()", "await request.form()", "await request.text()", "request.query", "request.match_info", "request.rel_url.query", "self.get_argument($$$A)", "self.get_query_argument($$$A)", "self.get_body_argument($$$A)"]
+    sinks: ["session[$K] = $V", "flask.session[$K] = $V", "request.session[$K] = $V", "session.update($V)", "request.session.update($V)", "session.__setitem__($K, $V)"]
+    sink_arg: V
+    sanitizers: ["int($X)", "float($X)", "uuid.UUID($X)", "bool($X)"]
+    handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
+    resolver_args: true
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]

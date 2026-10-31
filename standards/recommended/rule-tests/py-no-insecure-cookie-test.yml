@@ -1,0 +1,13 @@
+id: py-no-insecure-cookie
+file: app/views.py
+valid:
+- 'resp.set_cookie(''sid'', value, secure=True, httponly=True, samesite=''Lax'')
+
+  '
+invalid:
+- 'resp.set_cookie(''sid'', value)
+
+  '
+- 'resp.set_cookie(''sid'', value, secure=True, httponly=False)
+
+  '

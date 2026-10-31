@@ -18,3 +18,8 @@ install-path = ["$XDG_BIN_HOME/", "$XDG_DATA_HOME/../bin", "~/.local/bin"]
 hosting = "github"
 # Whether to install an updater program
 install-updater = false
+
+# dist 0.33 defaults to macos-14, which GitHub retires on 2026-11-02 (its
+# brownouts already cancel jobs).
+[dist.github-custom-runners]
+aarch64-apple-darwin = "macos-15"

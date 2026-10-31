@@ -37,6 +37,13 @@ taint:
     sources: ["req.query", "req.body", "req.params", "req.headers", "await request.json()"]
     sinks: ["exec($CMD, $$$REST)", "exec($CMD)", "execSync($CMD, $$$REST)", "execSync($CMD)", "$CP.exec($CMD, $$$REST)", "$CP.exec($CMD)", "$CP.execSync($CMD, $$$REST)", "$CP.execSync($CMD)"]
     sink_arg: CMD
+  - id: taint-redirect
+    languages: [TypeScript, Tsx, JavaScript]
+    message: Request data decides where a redirect goes (open redirect).
+    note: Redirect to a fixed path, or look the destination up in a map of allowed targets by key.
+    sources: ["req.query", "req.body", "req.params", "request.nextUrl.searchParams"]
+    sinks: ["$RES.redirect($URL)", "$RES.redirect($CODE, $URL)", "redirect($URL)", "NextResponse.redirect($URL)"]
+    sink_arg: URL
   - id: py-taint-sql
     languages: [Python]
     message: Request data reaches a SQL query.

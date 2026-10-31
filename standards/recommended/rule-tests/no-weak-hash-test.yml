@@ -1,0 +1,8 @@
+id: no-weak-hash
+valid:
+  - "crypto.createHash('sha256').update(data).digest('hex')"
+  - "crypto.createHash(algorithm)"
+  - "crypto.createHmac('sha256', key)"
+invalid:
+  - "crypto.createHash('md5').update(data).digest('hex')"
+  - "const h = createHash.call; crypto.createHash(\"sha1\")"

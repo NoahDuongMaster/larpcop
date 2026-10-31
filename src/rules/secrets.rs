@@ -157,7 +157,8 @@ impl Secrets {
             return Vec::new();
         }
         let lower = content.to_lowercase();
-        let mut out = Vec::new();
+        // (rule, line, secret, finding)
+        let mut hits: Vec<(&str, usize, &str, Violation)> = Vec::new();
         for rule in &self.rules {
             if !rule.keywords.is_empty() && !rule.keywords.iter().any(|k| lower.contains(k)) {
                 continue;
@@ -169,7 +170,7 @@ impl Secrets {
             }
             let Some(regex) = rule.regex() else {
                 if rule.pattern.is_none() {
-                    out.push(finding(rule, rel, 0, String::new()));
+                    hits.push((&rule.id, 0, "", finding(rule, rel, 0, String::new())));
                 }
                 continue;
             };
@@ -180,9 +181,7 @@ impl Secrets {
                     g => caps.get(g).unwrap_or(whole),
                 }
                 .as_str();
-                if rule
-                    .entropy
-                    .is_some_and(|min| entropy::shannon_entropy(secret) <= min)
+                if rule.entropy.is_some_and(|min| entropy(secret) <= min)
                     || (rule.id.starts_with("generic")
                         && !secret.chars().any(|c| c.is_ascii_digit()))
                 {
@@ -194,12 +193,44 @@ impl Secrets {
                     .chain(&rule.allows)
                     .any(|a| a.allows(rel, secret, whole.as_str(), line));
                 if !allowed {
-                    out.push(finding(rule, rel, line_no + 1, redact(line, secret)));
+                    let v = finding(rule, rel, line_no + 1, redact(line, secret));
+                    hits.push((&rule.id, line_no + 1, secret, v));
                 }
             }
         }
-        out
+        // As gitleaks does: a generic finding inside a specific one on the same
+        // line is the same secret, reported once.
+        let generic = |id: &str| id.to_lowercase().contains("generic");
+        let dup = |(id, line, secret, _): &(&str, usize, &str, Violation)| {
+            generic(id)
+                && hits.iter().any(|(id2, line2, secret2, _)| {
+                    line2 == line && id2 != id && !generic(id2) && secret2.contains(secret)
+                })
+        };
+        let keep: Vec<bool> = hits.iter().map(|h| !dup(h)).collect();
+        hits.into_iter()
+            .zip(keep)
+            .filter(|(_, k)| *k)
+            .map(|((.., v), _)| v)
+            .collect()
     }
+}
+
+/// Shannon entropy exactly as gitleaks computes it (character counts over the
+/// byte length), since its rules' thresholds are tuned to that formula; a
+/// per-byte entropy differs on non-ASCII text and flagged CJK translations.
+fn entropy(s: &str) -> f32 {
+    let mut counts: std::collections::HashMap<char, usize> = std::collections::HashMap::new();
+    for c in s.chars() {
+        *counts.entry(c).or_default() += 1;
+    }
+    let len = s.len() as f64;
+    let h: f64 = counts
+        .values()
+        .map(|&n| n as f64 / len)
+        .map(|f| -f * f.log2())
+        .sum();
+    h as f32
 }
 
 impl Rule {
@@ -243,40 +274,4 @@ fn redact(line: &str, secret: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn detects_known_formats_and_respects_allowlists() {
-        let s = Secrets::new().unwrap();
-        assert!(
-            s.detectors() >= 200,
-            "only {} gitleaks rules compiled",
-            s.detectors()
-        );
-        // Built at runtime so the repository never contains a scannable token.
-        let gh = format!("ghp_{}", "x7Rk2mQ9vTz4LpW8sYb3NcD6fJh1Ga5Ue0Ki");
-        let stripe = format!("sk_live_{}", "51HqLyjWDarjtT1zdp7dcXyz9Qa8RtUv");
-        let src = format!(
-            "const token = \"{gh}\";\nconst key = '{stripe}';\nconst ok = process.env.TOKEN;\n"
-        );
-        let found = s.check("src/a.ts", &src);
-        let ids: Vec<&str> = found.iter().map(|v| v.message.as_str()).collect();
-        assert!(ids.iter().any(|m| m.contains("github-pat")), "{ids:?}");
-        assert!(
-            ids.iter().any(|m| m.contains("stripe-access-token")),
-            "{ids:?}"
-        );
-        assert!(
-            found
-                .iter()
-                .all(|v| !v.snippet.as_deref().unwrap_or("").contains(&gh[8..]))
-        );
-        // Lockfiles are on gitleaks' global path allowlist.
-        assert!(s.check("package-lock.json", &src).is_empty());
-        assert!(
-            s.check("src/b.ts", "const t = process.env.GITHUB_TOKEN;\n")
-                .is_empty()
-        );
-    }
-}
+mod tests;

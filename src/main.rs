@@ -4,6 +4,7 @@ mod cli;
 mod commands;
 mod config;
 mod context;
+mod dashboard;
 mod deps;
 mod files;
 mod hook;

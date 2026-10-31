@@ -125,7 +125,7 @@ taint:
     sanitizers: ["Number($X)", "$S.parse($X)"]
 ```
 
-Bộ `recommended` có sẵn `taint-sql`, `taint-shell` (JS/TS: Express, Next.js) và `py-taint-sql` (Flask, Django, FastAPI). Lớp 1 bắt `db.query(\`…${id}\`)` ngay tại chỗ gọi; lớp 2 bắt trường hợp lớp 1 không thấy, khi chuỗi SQL được dựng ở biến trước đó:
+Bộ `recommended` có sẵn `taint-sql`, `taint-shell`, `taint-redirect` (JS/TS: Express, Next.js) và `py-taint-sql` (Flask, Django, FastAPI). Lớp 1 bắt ``db.query(`…${id}`)`` ngay tại chỗ gọi; lớp 2 bắt trường hợp lớp 1 không thấy, khi chuỗi SQL được dựng ở biến trước đó:
 
 ```ts
 const name = req.query.name as string;
@@ -178,6 +178,27 @@ llm:
 - `review --changed`: một hàm controller mới gọi `db.user.findUnique` bị báo đúng dòng 9, kèm gợi ý chuyển sang service (8,6 giây).
 - `learn "Never import moment; use date-fns. No default exports, only named exports. Never await inside a loop; collect the promises and use Promise.all."` cho ra 3 rule đều pass ngay vòng đầu (22 giây). Có 7–8 ví dụ mỗi rule, gồm cả trường hợp gần giống mà phải hợp lệ: `await` trong arrow function nằm trong vòng lặp thì không bị tính. Gắn 3 rule vào repo thì `agentkit check` bắt đúng 3 chỗ vi phạm có sẵn.
 
+## Dashboard và benchmark
+
+**`agentkit dashboard [--org OWNER] [--out FILE] [--json]`** tạo một file HTML duy nhất, không có script và không tải tài nguyên ngoài, nên có thể đính vào artifact của CI, đưa lên GitHub Pages hoặc mở thẳng từ đĩa. Trang gồm:
+
+- số vi phạm còn mở và số đã baseline theo từng rule;
+- nợ baseline theo thời gian, tính từ lịch sử git của `.agentkit-baseline.json`;
+- các hàm phức tạp nhất;
+- với `--org`: repo nào có config, repo nào đã chạy cổng CI, và lần chạy gần nhất.
+
+`--json` xuất cùng dữ liệu đó cho dashboard khác dùng.
+
+**Benchmark công khai**: [`bench/`](bench) (chạy lại bằng `bench/run.sh`). Đối tượng là OWASP Juice Shop, đáp án là 27 dòng mà chính nhóm Juice Shop đánh dấu là có lỗ hổng:
+
+| | agentkit | Semgrep OSS (`p/default`) | gitleaks |
+|---|---|---|---|
+| Thời gian | **2,91 s** | 33,44 s | 4,60 s |
+| Dòng lỗ hổng tìm thấy | **11/27** (8 nếu không tính quy ước validate) | 6/27 | – |
+| Secrets | 68/69 trùng khớp với gitleaks | – | 69 |
+
+Chi tiết từng dòng, khác biệt phạm vi (Semgrep có Terraform và GitHub Actions) và các rule được thêm sau lần chạy đầu (lần đầu agentkit chỉ được 5/27) nằm trong [bench/README.md](bench/README.md).
+
 ## Lệnh
 
 ```sh
@@ -188,6 +209,7 @@ agentkit test [STANDARDS_DIR] [--require-all]  # chạy fixture trong rule-tests
 agentkit metrics [paths…] [--top N] [--json]    # độ phức tạp, kích thước hàm
 agentkit review [--changed | --since REF]       # rule `llm`, chấm bằng model (warning)
 agentkit learn "<chuẩn>" | --reviews N          # sinh rule ast-grep + test từ lời / review comment
+agentkit dashboard [--org OWNER] [--json]       # trang HTML: vi phạm, nợ baseline, hotspot, repo có gate
 agentkit lsp | agentkit mcp    # language server / MCP server (stdio)
 agentkit org status|setup …    # trạng thái và triển khai trên GitHub
 agentkit rules                 # rule hiệu lực, nguồn, rule nào bị lock
@@ -225,9 +247,9 @@ extends:
   - https://github.com/NoahDuongMaster/agentkit.git#v0.2.0//standards/recommended
 ```
 
-(`URL#tag//thư-mục` lấy một thư mục con của repo standards.) Bộ này có 21 rule ast-grep (cộng 3 rule taint, secrets và `dependency-vulnerability`), mỗi rule kèm fixture và `agentkit test standards/recommended --require-all` chạy trong `cargo test`:
+(`URL#tag//thư-mục` lấy một thư mục con của repo standards.) Bộ này có 26 rule ast-grep (cộng 4 rule taint, secrets và `dependency-vulnerability`), mỗi rule kèm fixture và `agentkit test standards/recommended --require-all` chạy trong `cargo test`:
 
-- **Biến lỗi bảo mật thành quy ước cú pháp** (không cần taint): SQL chỉ qua tham số (`no-sql-interpolation`, `py-no-sql-interpolation`, `go-no-sql-sprintf`), lệnh shell chỉ qua mảng tham số (`no-shell-interpolation`, `py-no-shell-true`), không `eval`/`new Function`/`exec`, không gán HTML từ biến vào `innerHTML`, không `dangerouslySetInnerHTML`, không tắt kiểm chứng chỉ TLS (`py-no-tls-verify-off`, `go-no-insecure-tls`), `yaml.safe_load` (có auto-fix).
+- **Biến lỗi bảo mật thành quy ước cú pháp** (không cần taint): SQL chỉ qua tham số (`no-sql-interpolation`, `py-no-sql-interpolation`, `go-no-sql-sprintf`), lệnh shell chỉ qua mảng tham số (`no-shell-interpolation`, `py-no-shell-true`), không `eval`/`new Function`/`exec`, không gán HTML từ biến vào `innerHTML`, không `dangerouslySetInnerHTML` hay `bypassSecurityTrust*` (Angular), không `serve-index`, không MD5/SHA-1, không `$where` của MongoDB, input của request phải qua schema (`validate-request-input`), không tắt kiểm chứng chỉ TLS (`py-no-tls-verify-off`, `go-no-insecure-tls`), `yaml.safe_load` (có auto-fix).
 - **Không tắt kiểm tra**: `@ts-ignore`, `@ts-expect-error`, `eslint-disable`, `biome-ignore` là vi phạm; `any`, catch rỗng, `debugger` (có auto-fix).
 - **Kích thước và độ phức tạp**: hàm tối đa 80 dòng, độ phức tạp vòng (McCabe) tối đa 15, file tối đa 500 dòng.
 
@@ -370,9 +392,10 @@ Binary nặng 47 MB trên đĩa, nhưng chỉ khoảng **4 MB khi tải về** (
 
 ## Đã kiểm chứng
 
-`cargo test` có 79 test:
+`cargo test` có 81 test:
 
 - Unit: guard, tìm shell, path trong patch Codex; đọc lockfile thật của npm 11, pnpm 11, uv 0.11, cargo 1.98 (kèm yarn v1/Berry, Poetry, go.mod, và các entry registry riêng/git/workspace phải bị bỏ qua); manifest; nhận diện lệnh cài; thiết lập gate của 4 package manager.
+- Dashboard: số mở/baseline theo rule, xu hướng nợ qua lịch sử git, trang không có script.
 - AI (model giả bằng shell script): review chỉ báo dòng đã đổi, bỏ rule lạ, cache câu trả lời; learn gửi lại rule fail kèm lỗi, chỉ giữ rule pass test, rule ghi ra chạy được như rule thường.
 - Bảo mật: taint qua biến/destructuring/sanitizer/gán lại (TS, Python), secrets bị che khi in ra, OSV giả: mã độc luôn chặn, lỗ hổng chỉ chặn bản mới, theo ngưỡng, hook chặn lệnh cài.
 - Integration: check, locked, git extends theo tag, staged, `--changed`/`--since`, linter delegation, format github, chống né rule, hook của 4 agent, sync idempotent, phát hiện drift, CRLF, pre-commit thật; dependency: tuổi phiên bản (qua cache và qua một server deps.dev giả), merge-base của PR, ngoại lệ bản vá bảo mật, gate package manager, duyệt dependency mới (cả monorepo), hook chặn lệnh cài, lock chỉ được siết thêm.

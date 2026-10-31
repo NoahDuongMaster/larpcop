@@ -1,0 +1,9 @@
+id: py-no-weak-hash
+valid:
+  - "hashlib.sha256(data).hexdigest()"
+  - "hashlib.md5(data, usedforsecurity=False).hexdigest()"
+  - "hashlib.new('sha256', data)"
+invalid:
+  - "hashlib.md5(password.encode()).hexdigest()"
+  - "hashlib.sha1(data)"
+  - "hashlib.new('md5', data)"

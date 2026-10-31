@@ -1,0 +1,7 @@
+id: no-mongo-where
+valid:
+  - "db.orders.find({ orderId: { $eq: id } })"
+  - "const where = { $and: [a, b] }"
+invalid:
+  - "db.orders.find({ $where: `this.orderId === '${id}'` })"
+  - "db.orders.find({ '$where': 'this.x == ' + x })"

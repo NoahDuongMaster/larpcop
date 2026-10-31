@@ -1,0 +1,4 @@
+agentkit 0.1.0 | semgrep 1.183.0 | gitleaks 8.30.1 | juice-shop v20.3.0 | Darwin arm64 8 cpus
+agentkit_seconds 2.91
+semgrep_seconds 33.44
+gitleaks_seconds 4.6

@@ -21,7 +21,6 @@ dependencies = [
  "cvss",
  "dirs",
  "dunce",
- "entropy",
  "globset",
  "ignore",
  "jiff",
@@ -558,12 +557,6 @@ checksum = "fba3fe847045ecff794b9c138293a80db914678c453ad63fbf0c6a9eb6e00b22"
 dependencies = [
  "encoding_rs",
 ]
-
-[[package]]
-name = "entropy"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaddcf1b2c2d0a2c4fe3cf7fbbd7172d07e3fedc61dda7405a0560084d1a483e"
 
 [[package]]
 name = "equivalent"

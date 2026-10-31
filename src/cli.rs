@@ -157,6 +157,18 @@ pub enum Cmd {
         #[arg(long, default_value_t = 3)]
         attempts: usize,
     },
+    /// One HTML page: open violations per rule, baseline debt over time,
+    /// complexity hotspots and, with --org, which repositories run the gate.
+    Dashboard {
+        /// Also list a GitHub user's or organization's repositories (via `gh`).
+        #[arg(long, value_name = "OWNER")]
+        org: Option<String>,
+        #[arg(long, default_value = "agentkit-dashboard.html")]
+        out: PathBuf,
+        /// Print the data as JSON instead.
+        #[arg(long)]
+        json: bool,
+    },
     /// List the effective rules and where they come from.
     Rules,
     /// Generate AGENTS.md, CLAUDE.md and agent hook settings from the rules.

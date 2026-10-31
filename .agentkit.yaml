@@ -12,7 +12,6 @@ dependencies:
   approved:
     - cargo:base64
     - cargo:cvss
-    - cargo:entropy
     - cargo:jiff
     - cargo:lsp-server
     - cargo:lsp-types

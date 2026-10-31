@@ -1,0 +1,9 @@
+id: no-bypass-security-trust
+valid:
+  - "this.sanitizer.bypassSecurityTrustHtml('<b>static</b>')"
+  - "this.sanitizer.sanitize(SecurityContext.HTML, html)"
+  - "this.trustedHtml = html"
+invalid:
+  - "tableData[i].description = this.sanitizer.bypassSecurityTrustHtml(tableData[i].description)"
+  - "this.searchValue = this.sanitizer.bypassSecurityTrustHtml(queryParam)"
+  - "const u = sanitizer.bypassSecurityTrustResourceUrl(`https://x/${id}`)"

@@ -108,6 +108,17 @@ pub fn run(cli: Cli) -> Result<u8> {
             out,
             attempts,
         } => crate::ai::learn::run(&ctx()?, instruction, reviews, out, attempts),
+        Cmd::Dashboard { org, out, json } => {
+            let d = crate::dashboard::build(&ctx()?, org.as_deref())?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&d)?);
+            } else {
+                fs::write(&out, crate::dashboard::render(&d))
+                    .with_context(|| format!("writing {}", out.display()))?;
+                println!("agentkit: wrote {}", out.display());
+            }
+            Ok(0)
+        }
         Cmd::Rules => rules(&ctx()?),
         Cmd::Sync {
             check,

@@ -68,6 +68,29 @@ RULES = [
                    "field": "function", "all": [
                        {"regex": "\\.(parse|safeParse|parseAsync|safeParseAsync|validate|validateSync|validateAsync|assert|decode|cast)$"},
                        {"not": {"regex": "^JSON\\."}}]}}}}),
+    dict(id="no-bypass-security-trust", langs=TS, severity="error",
+         message="Angular `bypassSecurityTrust*` on a non-constant value turns off XSS protection.",
+         note="Bind the value normally and let Angular sanitize it, or sanitize it first with "
+              "DomSanitizer.sanitize(SecurityContext.HTML, value).",
+         rule={"kind": "call_expression", "all": [
+             {"has": {"field": "function", "kind": "member_expression", "has": {
+                 "field": "property", "regex": "^bypassSecurityTrust(Html|Script|Style|Url|ResourceUrl)$"}}},
+             {"not": {"has": {"field": "arguments", "has": {"nthChild": 1, "kind": "string"}}}},
+         ]}),
+    dict(id="no-directory-listing", langs=JS, severity="error",
+         message="`serve-index` publishes directory listings.",
+         note="Serve known files with express.static or explicit routes; never list a directory.",
+         rule={"any": [{"pattern": "serveIndex($$$ARGS)"}, {"pattern": "require('serve-index')"},
+                       {"pattern": "import $X from 'serve-index'"}]}),
+    dict(id="no-weak-hash", langs=JS, severity="error",
+         message="MD5 / SHA-1 are broken hash functions.",
+         note="Use SHA-256 for checksums and argon2/bcrypt/scrypt for passwords.",
+         rule={"pattern": "$C.createHash($ALG)", "has": {"field": "arguments", "has": {
+             "kind": "string", "regex": "^['\"](md5|sha1|md4|ripemd160)['\"]$"}}}),
+    dict(id="no-mongo-where", langs=JS, severity="error",
+         message="MongoDB `$where` runs JavaScript on the server (NoSQL injection).",
+         note="Express the condition with query operators ($eq, $in, $expr…) and validated values.",
+         rule={"kind": "pair", "has": {"field": "key", "regex": "^['\"]?\\$where['\"]?$"}}),
     # ---- JavaScript / TypeScript: no silencing the checks ---------------------
     dict(id="no-suppression-comment", langs=JS, severity="error",
          message="Suppression comment: it hides a check instead of fixing what it found.",
@@ -120,6 +143,18 @@ RULES = [
          message="`eval` / `exec` executes strings as code.",
          note="Use ast.literal_eval for literals, json for data, or a dispatch table.",
          rule={"kind": "call", "has": {"field": "function", "kind": "identifier", "regex": "^(eval|exec)$"}}),
+    dict(id="py-no-weak-hash", langs=["Python"], severity="error",
+         message="MD5 / SHA-1 are broken hash functions.",
+         note="Use hashlib.sha256 for checksums and argon2/bcrypt/scrypt for passwords "
+              "(or pass usedforsecurity=False for a non-security checksum).",
+         rule={"kind": "call", "all": [
+             {"has": {"field": "function", "regex": "^hashlib\\.(md5|sha1|new)$"}},
+             {"not": {"has": {"field": "arguments", "regex": "usedforsecurity\\s*=\\s*False"}}},
+             {"any": [
+                 {"has": {"field": "function", "regex": "^hashlib\\.(md5|sha1)$"}},
+                 {"has": {"field": "arguments", "has": {"nthChild": 1, "regex": "^['\"](md5|sha1)['\"]$"}}},
+             ]},
+         ]}),
     dict(id="py-yaml-safe-load", langs=["Python"], severity="error",
          message="`yaml.load` without a safe loader can construct arbitrary objects.",
          note="Use yaml.safe_load.",

@@ -1,0 +1,8 @@
+id: no-directory-listing
+valid:
+  - "app.use('/public', express.static('public'))"
+  - "app.get('/ftp/:file', servePublicFiles())"
+invalid:
+  - "app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true }))"
+  - "import serveIndex from 'serve-index'"
+  - "const serveIndex = require('serve-index')"

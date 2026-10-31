@@ -117,6 +117,15 @@ impl Baseline {
         self.entries.iter().map(|e| e.count).sum()
     }
 
+    /// Known violations per rule id.
+    pub fn per_rule(&self) -> BTreeMap<String, usize> {
+        let mut out = BTreeMap::new();
+        for e in &self.entries {
+            *out.entry(e.rule.clone()).or_insert(0) += e.count;
+        }
+        out
+    }
+
     /// Removes baselined violations; returns how many were hidden.
     pub fn apply(&self, violations: &mut Vec<Violation>) -> usize {
         let mut left = self.counts();

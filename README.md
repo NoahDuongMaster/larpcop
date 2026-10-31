@@ -258,7 +258,7 @@ Hook phân tích lệnh bằng tree-sitter-bash: quote, pipe, `&&`/`;`/`&`, redi
 
 ```yaml
 extends:
-  - https://github.com/NoahDuongMaster/larpcop.git#v0.2.0//standards/recommended
+  - https://github.com/NoahDuongMaster/larpcop.git#v0.2.1//standards/recommended
 ```
 
 (`URL#tag//thư-mục` lấy một thư mục con của repo standards.) Bộ này có 26 rule ast-grep (cộng 4 rule taint, secrets và `dependency-vulnerability`), mỗi rule kèm fixture và `larpcop test standards/recommended --require-all` chạy trong `cargo test`:
@@ -372,7 +372,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write   # comment trên PR; thêm security-events: write nếu bật sarif
-    uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.2.0
+    uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.2.1
     with:
       standards: https://github.com/<org>/standards.git#v1.0.0
     secrets:
@@ -422,7 +422,7 @@ Binary nặng 47 MB trên đĩa, nhưng chỉ khoảng **4 MB khi tải về** (
 Trên GitHub thật (repo private `NoahDuongMaster/larpcop`):
 
 - [`ci.yml`](.github/workflows/ci.yml) xanh trên ubuntu, macOS và **Windows**: fmt, clippy `-D warnings`, 29/29 test. Trên Windows có cả linter chạy qua `sh.exe` của Git, extends từ `file:///C:/…`, CRLF và pre-commit thật.
-- Release `v0.2.0`: [release.yml](.github/workflows/release.yml) build 5 target. Installer đã được cài thật vào `~/.local/bin` theo cách ở mục [Cài đặt](#cài-đặt).
+- Release `v0.2.1`: [release.yml](.github/workflows/release.yml) build 5 target. Installer đã được cài thật vào `~/.local/bin` theo cách ở mục [Cài đặt](#cài-đặt).
 - Cổng CI, thử bằng PR #1 (đã đóng, không merge):
   - Commit vi phạm bị pre-commit chặn ở máy local; được đẩy lên bằng `--no-verify`.
   - `enforce` tải binary từ release, **fail** và gắn annotation `no-explicit-any` / `no-console` vào đúng dòng trong PR.

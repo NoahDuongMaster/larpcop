@@ -3,7 +3,7 @@
 # size/complexity limits. Extend it, then tighten or add your own:
 #
 #   extends:
-#     - https://github.com/NoahDuongMaster/larpcop.git#v0.2.0//standards/recommended
+#     - https://github.com/NoahDuongMaster/larpcop.git#v0.2.1//standards/recommended
 rule_dirs: [rules]
 max_lines:
   max: 500

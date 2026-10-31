@@ -246,3 +246,41 @@ function c(req, res) {
         .collect();
     assert_eq!(lines, [11, 17]);
 }
+
+#[test]
+fn containers_hold_what_was_put_in() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("a.js"),
+        "\
+function a(req) {
+  const parts = [];
+  parts.push(req.query.id);
+  db.query('select ' + parts.join(','));
+}
+function b(req) {
+  const where = {};
+  Object.assign(where, req.body);
+  db.query(where);
+}
+function c(req) {
+  const parts = ['1'];
+  parts.push(Number(req.query.id));
+  db.query('select ' + parts.join(','));
+}
+",
+    )
+    .unwrap();
+    let r = rule(
+        "JavaScript",
+        dir.path(),
+        &["req.query", "req.body"],
+        &["$DB.query($X)"],
+        &["Number($X)"],
+    );
+    let lines: Vec<usize> = found(&r, dir.path(), "a.js")
+        .iter()
+        .map(|(l, _)| *l)
+        .collect();
+    assert_eq!(lines, [4, 9]);
+}

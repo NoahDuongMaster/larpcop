@@ -1,0 +1,4 @@
+- One responsibility per file; split before a file grows past the line limit.
+- Fail loudly: never swallow errors, never return placeholder data on failure.
+- Prefer the standard library and well-maintained packages over hand-rolled implementations.
+- No speculative abstraction: inline single-use helpers and one-entry lookup tables.

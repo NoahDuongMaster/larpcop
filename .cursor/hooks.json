@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": "agentkit hook cursor",
+        "matcher": "Shell|Write|Delete",
+        "timeout": 120
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "agentkit hook cursor",
+        "matcher": "Write",
+        "timeout": 120
+      }
+    ],
+    "stop": [
+      {
+        "command": "agentkit hook cursor",
+        "timeout": 120,
+        "loop_limit": 1
+      }
+    ],
+    "subagentStop": [
+      {
+        "command": "agentkit hook cursor",
+        "timeout": 120,
+        "loop_limit": 1
+      }
+    ]
+  }
+}

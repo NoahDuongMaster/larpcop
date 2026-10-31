@@ -1,0 +1,54 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agentkit hook codex",
+            "timeout": 120,
+            "statusMessage": "agentkit: checking rules"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^apply_patch$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agentkit hook codex",
+            "timeout": 120,
+            "statusMessage": "agentkit: checking rules"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agentkit hook codex",
+            "timeout": 120,
+            "statusMessage": "agentkit: checking rules"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agentkit hook codex",
+            "timeout": 120,
+            "statusMessage": "agentkit: checking rules"
+          }
+        ]
+      }
+    ]
+  }
+}

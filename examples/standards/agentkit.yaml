@@ -1,0 +1,9 @@
+# Company-wide baseline. Every repo extends this (and CI forces it via --extends).
+# Locked rules cannot be disabled or overridden by teams or repos.
+max_lines:
+  max: 300
+  exclude: ["**/*.test.*", "**/*_test.*", "**/generated/**"]
+rule_dirs: [rules]
+guidelines: guidelines.md
+exclude: ["**/node_modules/**", "**/dist/**", "**/vendor/**", "**/*.min.js"]
+locked: [max-lines, no-explicit-any, no-hardcoded-secret, py-no-bare-except, go-no-panic]

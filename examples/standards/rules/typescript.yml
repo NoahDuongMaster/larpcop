@@ -1,0 +1,39 @@
+id: no-explicit-any
+language: TypeScript
+severity: error
+message: "`any` disables type checking."
+note: "Use a precise type, a generic, or `unknown` narrowed with a type guard or schema."
+rule:
+  kind: predefined_type
+  regex: ^any$
+---
+# Written against the construct, not one spelling of it: a live Codex run dodged
+# the earlier `console.$METHOD(...)` pattern with `globalThis["console"]["log"](x)`.
+id: no-console
+language: TypeScript
+severity: error
+message: "`console` is not allowed in committed code."
+note: "Use the project logger (`import { logger } from '@/lib/logger'`). Reaching `console` indirectly (globalThis, window, aliases, computed keys) is the same violation."
+rule:
+  any:
+    - kind: identifier
+      regex: ^console$
+    - kind: property_identifier
+      regex: ^console$
+      inside:
+        kind: member_expression
+    - kind: string_fragment
+      regex: ^console$
+      inside:
+        kind: string
+        inside:
+          kind: subscript_expression
+---
+id: no-hardcoded-secret
+language: TypeScript
+severity: error
+message: Hard-coded credential.
+note: Read secrets from the environment or the secret manager; rotate the leaked key.
+rule:
+  kind: string
+  regex: (AKIA[0-9A-Z]{16}|sk_live_[0-9a-zA-Z]{8,}|ghp_[0-9a-zA-Z]{20,})

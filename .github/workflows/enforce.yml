@@ -1,0 +1,60 @@
+# Reusable workflow: the non-bypassable gate. Every repo calls it on pull requests
+# (or an org ruleset requires it), so no agent and no human can merge violations.
+#
+#   jobs:
+#     agentkit:
+#       uses: NoahDuongMaster/agentkit/.github/workflows/enforce.yml@v0.1.0
+#       with:
+#         standards: https://github.com/<org>/standards.git#v1.0.0
+#       secrets:
+#         agentkit-token: ${{ secrets.AGENTKIT_TOKEN }}   # only while agentkit is private
+name: agentkit-enforce
+
+on:
+  workflow_call:
+    inputs:
+      standards:
+        description: Company standards forced on the repo (path or git URL#tag). Empty = repo config only.
+        type: string
+        default: ""
+      agentkit-version:
+        description: agentkit release tag. Empty = latest release.
+        type: string
+        default: ""
+    secrets:
+      agentkit-token:
+        description: Token able to read agentkit releases and private standards (needed while they are private).
+        required: false
+
+jobs:
+  enforce:
+    runs-on: ubuntu-latest
+    env:
+      AGENTKIT_EXTENDS: ${{ inputs.standards }}
+      BASE_REF: ${{ github.base_ref }}
+      GH_TOKEN: ${{ secrets.agentkit-token || github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install agentkit
+        env:
+          VERSION: ${{ inputs.agentkit-version }}
+        run: |
+          gh release download ${VERSION:+"$VERSION"} --repo NoahDuongMaster/agentkit \
+            --pattern 'agentkit-x86_64-unknown-linux-gnu.tar.xz' --output agentkit.tar.xz
+          sudo tar -xJf agentkit.tar.xz --strip-components=1 -C /usr/local/bin
+          rm agentkit.tar.xz
+          agentkit --version
+
+      - name: Allow fetching private standards
+        if: env.GH_TOKEN != github.token
+        run: git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      # Only files changed by the PR: legacy debt does not block, new debt cannot land.
+      - name: Rules
+        run: agentkit check --since "origin/${BASE_REF}" --format github
+
+      - name: Generated agent files are current
+        run: agentkit sync --check

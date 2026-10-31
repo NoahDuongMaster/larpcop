@@ -1,0 +1,7 @@
+id: go-no-panic
+language: Go
+severity: error
+message: "`panic` in application code crashes the whole process."
+note: "Return an `error` and let the caller decide; wrap it with `fmt.Errorf(\"...: %w\", err)`."
+rule:
+  pattern: panic($$$ARGS)

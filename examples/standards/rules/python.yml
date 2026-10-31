@@ -1,0 +1,15 @@
+id: py-no-bare-except
+language: Python
+severity: error
+message: "Bare `except:` swallows every error, including KeyboardInterrupt."
+note: "Catch the specific exceptions you expect, e.g. `except (ValueError, KeyError) as exc:`."
+rule:
+  kind: except_clause
+  regex: '^except\s*:'
+---
+id: py-no-print
+language: Python
+severity: warning
+message: "Use `logging` instead of `print()`."
+rule:
+  pattern: print($$$ARGS)

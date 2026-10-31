@@ -1,0 +1,5 @@
+# Repo config: inherits the company standards, adds team rules.
+extends:
+  - ../standards
+rule_dirs: [team-rules]
+disable: [py-no-print]   # allowed: not locked by the company

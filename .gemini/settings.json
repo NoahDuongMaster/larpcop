@@ -1,0 +1,48 @@
+{
+  "hooks": {
+    "BeforeTool": [
+      {
+        "matcher": "^(run_shell_command|write_file|replace)$",
+        "hooks": [
+          {
+            "type": "command",
+            "name": "agentkit",
+            "command": "agentkit hook gemini",
+            "timeout": 120000
+          }
+        ]
+      }
+    ],
+    "AfterTool": [
+      {
+        "matcher": "^(write_file|replace)$",
+        "hooks": [
+          {
+            "type": "command",
+            "name": "agentkit",
+            "command": "agentkit hook gemini",
+            "timeout": 120000
+          }
+        ]
+      }
+    ],
+    "AfterAgent": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "name": "agentkit",
+            "command": "agentkit hook gemini",
+            "timeout": 120000
+          }
+        ]
+      }
+    ]
+  },
+  "context": {
+    "fileName": [
+      "AGENTS.md",
+      "GEMINI.md"
+    ]
+  }
+}

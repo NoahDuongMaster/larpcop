@@ -1,0 +1,7 @@
+id: no-default-export
+language: TypeScript
+severity: error
+message: Default exports are not allowed in this repo.
+note: "Use a named export: `export function x()` / `export const x =`."
+rule:
+  pattern: export default $X

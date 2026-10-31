@@ -57,7 +57,7 @@ impl TaintRule {
                 .map(|p| {
                     let compiled = pattern(&p, lang)
                         .with_context(|| format!("taint `{}`: pattern `{p}`", cfg.id))?;
-                    Ok((compiled, scan::needle(&p)))
+                    Ok((compiled, scan::needle(&p), scan::specificity(&p)))
                 })
                 .collect()
         };
@@ -72,6 +72,7 @@ impl TaintRule {
                     compile(lang, &cfg.sinks)?,
                     compile(lang, &cfg.sanitizers)?,
                     compile(lang, &cfg.guards)?,
+                    compile(lang, &cfg.rejects)?,
                 ]),
             ));
         }

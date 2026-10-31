@@ -1,0 +1,7 @@
+id: cs-taint-shell
+file: Controllers/UsersController.cs
+valid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        Process.Start(\"ping\", \"-c 1 localhost\");\n        return Ok();\n    }\n}\n"
+invalid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        var host = Request.Query[\"host\"];\n        Process.Start(\"/bin/sh -c ping \" + host);\n        return Ok();\n\
+  \    }\n}\n"

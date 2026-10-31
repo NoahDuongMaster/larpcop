@@ -1,0 +1,14 @@
+id: cs-taint-sql
+file: Controllers/UsersController.cs
+valid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        var cmd = new SqlCommand(\"SELECT * FROM Users WHERE Name = @name\", conn);\n        cmd.Parameters.AddWithValue(\"\
+  @name\", Request.Query[\"name\"].ToString());\n        return Ok();\n    }\n}\n"
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        int id = int.Parse(Request.Query[\"id\"]);\n        var cmd = new SqlCommand(\"SELECT * FROM Users WHERE Id\
+  \ = \" + id, conn);\n        return Ok();\n    }\n}\n"
+invalid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        string name = Request.Query[\"name\"];\n        var cmd = new SqlCommand(\"SELECT * FROM Users WHERE Name\
+  \ = '\" + name + \"'\", conn);\n        return Ok();\n    }\n}\n"
+- "public class UsersController : Controller\n{\n    [HttpGet(\"search\")]\n    public IActionResult Search(string name)\n    {\n        var users = connection.Query<User>($\"SELECT * FROM Users WHERE Name\
+  \ = '{name}'\");\n        return Ok(users);\n    }\n}\n"
+- "public class UsersController : Controller\n{\n    public IActionResult Find([FromQuery] string email)\n    {\n        _db.Users.FromSqlRaw(\"SELECT * FROM Users WHERE Email = '\" + email + \"'\");\n\
+  \        return Ok();\n    }\n}\n"

@@ -18,14 +18,17 @@ pub(super) fn leading<D: Doc>(node: &Node<D>) -> Option<String> {
     match node.kind().as_ref() {
         "binary_expression" | "binary_operator" => leading(&node.field("left")?),
         "parenthesized_expression" => leading(&node.child(1)?),
+        // C# and PHP wrap each call argument.
+        "argument" => leading(&node.children().filter(|c| c.is_named()).last()?),
         "raw_string_literal" => Some(node.text().trim_matches('`').to_string()),
         k if STRINGS.contains(&k) => {
             let mut fixed = String::new();
             for c in node.children() {
                 match c.kind().as_ref() {
-                    "string_fragment" | "string_content" | "interpreted_string_literal_content" => {
-                        fixed.push_str(&c.text())
-                    }
+                    "string_fragment"
+                    | "string_content"
+                    | "string_literal_content"
+                    | "interpreted_string_literal_content" => fixed.push_str(&c.text()),
                     "template_substitution" | "interpolation" => break,
                     _ => {}
                 }

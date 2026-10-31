@@ -1,0 +1,8 @@
+id: cs-taint-xss
+file: Controllers/UsersController.cs
+valid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        var q = Request.Query[\"q\"];\n        return Content(WebUtility.HtmlEncode(q), \"text/html\");\n    }\n}\n"
+invalid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        var q = Request.Query[\"q\"];\n        return Content(\"<p>No results for \" + q + \"</p>\", \"text/html\"\
+  );\n    }\n}\n"
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        Response.Write(\"<b>\" + Request.QueryString[\"name\"] + \"</b>\");\n        return null;\n    }\n}\n"

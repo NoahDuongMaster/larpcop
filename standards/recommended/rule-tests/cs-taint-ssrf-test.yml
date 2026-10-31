@@ -1,0 +1,6 @@
+id: cs-taint-ssrf
+file: Controllers/UsersController.cs
+valid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        var r = await client.GetAsync(\"https://api.example.com/status\");\n        return Ok();\n    }\n}\n"
+invalid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        var r = await httpClient.GetAsync(Request.Query[\"url\"]);\n        return Ok();\n    }\n}\n"

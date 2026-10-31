@@ -27,7 +27,11 @@ impl TaintRule {
         file: &SourceFile,
         depth: usize,
     ) -> Option<(Ctx, Hits<'a, D>)> {
-        let [sources, sinks, sanitizers, guards] = self.patterns(lang)?.scan(index);
+        let [sources, sinks, sanitizers, guards, rejects] = self.patterns(lang)?.scan(index);
+        let plain = |ms: Vec<(NodeMatch<'a, D>, usize)>| -> Vec<NodeMatch<'a, D>> {
+            ms.into_iter().map(|(m, _)| m).collect()
+        };
+        let (sources, sinks, sanitizers) = (plain(sources), plain(sinks), plain(sanitizers));
         let ranges = |ms: Vec<NodeMatch<'a, D>>| -> Vec<Range<usize>> {
             ms.iter().map(|m| m.range()).collect()
         };
@@ -64,12 +68,12 @@ impl TaintRule {
                 .chain(index.named(&self.source_names))
                 .collect(),
             sanitizers: ranges(sanitizers),
-            guards: ranges(
-                guards
-                    .into_iter()
-                    .filter(|m| prefix::guard_holds(m.get_node(), self.safe_prefix.as_ref()))
-                    .collect(),
-            ),
+            guards: guards
+                .iter()
+                .filter(|(m, _)| prefix::guard_holds(m.get_node(), self.safe_prefix.as_ref()))
+                .map(|(m, w)| (m.range(), true, *w))
+                .chain(rejects.iter().map(|(m, w)| (m.range(), false, *w)))
+                .collect(),
             summaries: Summaries::new(),
             source_texts: self.source_texts.clone(),
             sourcing: Default::default(),
@@ -186,7 +190,8 @@ impl TaintRule {
         self.param_decorators
             .iter()
             .any(|d| content.contains(&format!("@{d}")) || content.contains(&format!("[{d}")))
-            || (self.handler_decorators.is_some() && content.contains('@'))
+            || (self.handler_decorators.is_some()
+                && (content.contains('@') || content.contains('[')))
             || (self.resolver_args && (content.contains("args") || content.contains("info")))
     }
 }

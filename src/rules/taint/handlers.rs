@@ -10,16 +10,22 @@ use std::collections::HashSet;
 
 /// Parameter kinds that are never request data in a handler.
 const NOT_INPUT: [&str; 2] = ["self", "cls"];
-const NOT_INPUT_TYPES: [&str; 5] = [
+const NOT_INPUT_TYPES: [&str; 9] = [
     "Request",
     "Response",
     "WebSocket",
     "BackgroundTasks",
     "HTTPConnection",
+    "HttpServletRequest",
+    "HttpServletResponse",
+    "CancellationToken",
+    "Model",
 ];
 /// Types a handler framework validates before the call (FastAPI): an `int`
 /// parameter cannot carry an injection.
-const VALIDATED_TYPES: [&str; 8] = [
+/// Java and C# action parameters of numeric, boolean, id or date types are
+/// converted by the framework too.
+const VALIDATED_TYPES: [&str; 20] = [
     "int",
     "float",
     "bool",
@@ -28,6 +34,18 @@ const VALIDATED_TYPES: [&str; 8] = [
     "date",
     "datetime",
     "Decimal",
+    "long",
+    "Long",
+    "Integer",
+    "Boolean",
+    "double",
+    "Double",
+    "short",
+    "Guid",
+    "DateTime",
+    "decimal",
+    "LocalDate",
+    "boolean",
 ];
 /// NestJS pipes that convert a parameter before the handler sees it.
 const CONVERTING_PIPES: [&str; 5] = [
@@ -124,11 +142,22 @@ fn decorators_of<D: Doc>(function: &Node<D>) -> Vec<String> {
         .parent()
         .filter(|p| p.kind() == "decorated_definition")
         .unwrap_or_else(|| function.clone());
-    holder
-        .children()
-        .filter(|c| c.kind() == "decorator")
-        .map(|d| d.text().trim_start_matches('@').trim().to_string())
-        .collect()
+    // Python/TS decorators; C# `[HttpGet]` attribute lists; Java annotations
+    // in `modifiers`.
+    let mut out: Vec<String> = Vec::new();
+    for c in holder.children() {
+        match c.kind().as_ref() {
+            "decorator" => out.push(c.text().trim_start_matches('@').trim().to_string()),
+            "attribute_list" => out.push(c.text().trim_matches(['[', ']']).trim().to_string()),
+            "modifiers" => out.extend(
+                c.children()
+                    .filter(|a| matches!(a.kind().as_ref(), "annotation" | "marker_annotation"))
+                    .map(|a| a.text().trim_start_matches('@').trim().to_string()),
+            ),
+            _ => {}
+        }
+    }
+    out
 }
 
 /// Decorators of a parameter: TS `@Body()`, Java `@RequestParam("q")` (in

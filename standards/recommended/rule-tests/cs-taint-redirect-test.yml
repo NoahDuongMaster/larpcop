@@ -1,0 +1,10 @@
+id: cs-taint-redirect
+file: Controllers/UsersController.cs
+valid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        return Redirect(\"/account/\" + Request.Query[\"tab\"]);\n    }\n}\n"
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        var u = Request.Query[\"returnUrl\"];\n        if (Url.IsLocalUrl(u)) { return Redirect(u); }\n        return\
+  \ Redirect(\"/\");\n    }\n}\n"
+invalid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        return Redirect(Request.Query[\"returnUrl\"]);\n    }\n}\n"
+- "public class C : Controller\n{\n    public IActionResult Get()\n    {\n        var u = Request.Query[\"returnUrl\"];\n        if (!Url.IsLocalUrl(u)) { return Redirect(u); }\n        return Redirect(\"\
+  /\");\n    }\n}\n"

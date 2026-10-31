@@ -37,6 +37,7 @@ fn guarded(
             guards: s(guards),
             param_types: Default::default(),
             source_names: Vec::new(),
+            rejects: Vec::new(),
             param_decorators: Vec::new(),
             handler_decorators: None,
             resolver_args: false,
@@ -249,7 +250,8 @@ function c(req, res) {
         .iter()
         .map(|(l, _)| *l)
         .collect();
-    assert_eq!(lines, [11, 17]);
+    // c: `if (!next.startsWith('/')) { res.redirect(next) }` redirects when the check fails.
+    assert_eq!(lines, [11, 15, 17]);
 }
 
 #[test]

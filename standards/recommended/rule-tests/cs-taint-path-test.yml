@@ -1,0 +1,8 @@
+id: cs-taint-path
+file: Controllers/UsersController.cs
+valid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        var name = Path.GetFileName(Request.Query[\"file\"]);\n        return PhysicalFile(Path.Combine(\"/srv/files\"\
+  , name), \"application/octet-stream\");\n    }\n}\n"
+invalid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        var file = Request.Query[\"file\"];\n        var text = File.ReadAllText(\"/srv/files/\" + file);\n      \
+  \  return Ok(text);\n    }\n}\n"

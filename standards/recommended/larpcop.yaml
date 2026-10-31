@@ -123,6 +123,7 @@ taint:
     sink_arg: P
     sanitizers: ["jwt.verify($$$A)", "+$X", "path.basename($X, $$$R)", "basename($X, $$$R)", "Number($X)", "parseInt($X, $$$R)", "sanitizeFilename($X)", "sanitize($X)"]
     guards: ["$P.startsWith($B)", "$A.includes($B)", "$A.indexOf($B)", "$L.has($P)", "$R.test($P)", "isInside($$$A)", "isSubPath($$$A)"]
+    rejects: ["$P.includes(\"$S\")", "$P.includes('$S')", "$P.indexOf(\"$S\")", "$P.indexOf('$S')"]
     param_types: { Request: req, NextRequest: request }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
     resolver_args: true
@@ -178,7 +179,8 @@ taint:
     sinks: ["open($P, $$$R)", "send_file($P, $$$R)", "send_from_directory($D, $P, $$$R)", "FileResponse($P, $$$R)", "os.remove($P)", "os.unlink($P)", "shutil.rmtree($P, $$$R)", "Path($P, $$$R)", "pathlib.Path($P)"]
     sink_arg: P
     sanitizers: ["secure_filename($X)", "os.path.basename($X)", "int($X)", "uuid.UUID($X)"]
-    guards: ["$P.is_relative_to($B)", "$P.startswith($B)", "$X in $L"]
+    guards: ["$P.is_relative_to($B)", "$P.startswith($B)", "$X in $L", "\"$S\" not in $P", "'$S' not in $P"]
+    rejects: ["\"$S\" in $P", "'$S' in $P", "$X not in $L"]
     handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
     resolver_args: true
     exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
@@ -193,7 +195,8 @@ taint:
     sink_arg: U
     safe_prefix: '^https?://[^/?#]+[/?#]'
     sanitizers: ["int($X)", "quote($X)", "urllib.parse.quote($X)"]
-    guards: ["$H in $L", "$U.startswith($P)"]
+    guards: ["$H in $L", "$U.startswith($P)", "\"$S\" not in $P", "'$S' not in $P"]
+    rejects: ["\"$S\" in $P", "'$S' in $P", "$X not in $L"]
     handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
     resolver_args: true
     exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
@@ -288,7 +291,8 @@ taint:
     sinks: ["os.Open($P, $$$R)", "os.OpenFile($P, $$$R)", "os.ReadFile($P, $$$R)", "os.WriteFile($P, $$$R)", "os.Create($P, $$$R)", "os.Remove($P, $$$R)", "os.RemoveAll($P, $$$R)", "os.ReadDir($P, $$$R)", "os.Stat($P, $$$R)", "os.Mkdir($P, $$$R)", "os.MkdirAll($P, $$$R)", "ioutil.ReadFile($P)", "ioutil.WriteFile($P, $$$R)", "http.ServeFile($W, $R, $P)", "$C.File($P)", "$C.Attachment($P, $$$R)", "$C.SendFile($P, $$$R)"]
     sink_arg: P
     sanitizers: ["strconv.Atoi($X)", "strconv.ParseInt($X, $$$R)", "strconv.ParseUint($X, $$$R)", "strconv.ParseFloat($X, $$$R)", "strconv.ParseBool($X)", "uuid.Parse($X)", "filepath.Base($X)"]
-    guards: ["strings.HasPrefix($P, $B)", "strings.Contains($P, $B)"]
+    guards: ["strings.HasPrefix($P, $B)"]
+    rejects: ["strings.Contains($P, \"$S\")"]
     exclude: ["**/*_test.go", "**/testdata/**"]
   - id: go-taint-ssrf
     languages: [Go]
@@ -329,6 +333,7 @@ taint:
     sink_arg: SQL
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForSQL($C, $X)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
+    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-shell
     languages: [Java]
@@ -338,6 +343,7 @@ taint:
     sinks: ["$RT.exec($CMD, $$$R)", "new ProcessBuilder($$$CMD)", "$PB.command($$$CMD)"]
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForOS($C, $X)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
+    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-path
     languages: [Java]
@@ -346,8 +352,10 @@ taint:
     sources: ["request.getParameter($K)", "request.getParameterValues($K)", "request.getParameterMap()", "request.getParameterNames()", "request.getHeader($K)", "request.getHeaders($K)", "request.getHeaderNames()", "request.getCookies()", "request.getQueryString()", "request.getInputStream()", "request.getReader()", "request.getPathInfo()", "request.getRequestURI()", "request.getRequestURL()", "request.getPart($K)", "request.getParts()", "req.getParameter($K)", "req.getParameterValues($K)", "req.getParameterMap()", "req.getParameterNames()", "req.getHeader($K)", "req.getHeaders($K)", "req.getHeaderNames()", "req.getCookies()", "req.getQueryString()", "req.getInputStream()", "req.getReader()", "req.getPathInfo()", "req.getRequestURI()", "req.getRequestURL()", "req.getPart($K)", "req.getParts()", "httpRequest.getParameter($K)", "httpRequest.getParameterValues($K)", "httpRequest.getParameterMap()", "httpRequest.getParameterNames()", "httpRequest.getHeader($K)", "httpRequest.getHeaders($K)", "httpRequest.getHeaderNames()", "httpRequest.getCookies()", "httpRequest.getQueryString()", "httpRequest.getInputStream()", "httpRequest.getReader()", "httpRequest.getPathInfo()", "httpRequest.getRequestURI()", "httpRequest.getRequestURL()", "httpRequest.getPart($K)", "httpRequest.getParts()", "servletRequest.getParameter($K)", "servletRequest.getParameterValues($K)", "servletRequest.getParameterMap()", "servletRequest.getParameterNames()", "servletRequest.getHeader($K)", "servletRequest.getHeaders($K)", "servletRequest.getHeaderNames()", "servletRequest.getCookies()", "servletRequest.getQueryString()", "servletRequest.getInputStream()", "servletRequest.getReader()", "servletRequest.getPathInfo()", "servletRequest.getRequestURI()", "servletRequest.getRequestURL()", "servletRequest.getPart($K)", "servletRequest.getParts()", "httpServletRequest.getParameter($K)", "httpServletRequest.getParameterValues($K)", "httpServletRequest.getParameterMap()", "httpServletRequest.getParameterNames()", "httpServletRequest.getHeader($K)", "httpServletRequest.getHeaders($K)", "httpServletRequest.getHeaderNames()", "httpServletRequest.getCookies()", "httpServletRequest.getQueryString()", "httpServletRequest.getInputStream()", "httpServletRequest.getReader()", "httpServletRequest.getPathInfo()", "httpServletRequest.getRequestURI()", "httpServletRequest.getRequestURL()", "httpServletRequest.getPart($K)", "httpServletRequest.getParts()"]
     sinks: ["new File($P)", "new File($D, $P)", "new FileInputStream($P)", "new FileOutputStream($P, $$$R)", "new FileReader($P, $$$R)", "new FileWriter($P, $$$R)", "new RandomAccessFile($P, $M)", "new java.io.File($P)", "new java.io.File($D, $P)", "new java.io.FileInputStream($P)", "new java.io.FileOutputStream($P, $$$R)", "Paths.get($P, $$$R)", "Path.of($P, $$$R)", "java.nio.file.Paths.get($P, $$$R)", "Files.$M($P, $$$R)"]
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "FilenameUtils.getName($X)", "$P.getFileName()"]
-    guards: ["$P.startsWith($B)", "$P.contains($B)"]
+    guards: ["$P.startsWith($B)", "$L.contains($X)"]
+    rejects: ["$P.contains(\"$S\")", "$P.contains('$S')"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
+    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-xss
     languages: [Java]
@@ -357,6 +365,7 @@ taint:
     sinks: ["$RESP.getWriter().print($$$A)", "$RESP.getWriter().println($$$A)", "$RESP.getWriter().write($$$A)", "$RESP.getWriter().printf($$$A)", "$RESP.getWriter().format($$$A)", "$RESP.getWriter().append($$$A)", "$RESP.getOutputStream().print($$$A)", "$RESP.getOutputStream().println($$$A)", "out.print($$$A)", "out.println($$$A)", "out.write($$$A)", "out.printf($$$A)", "out.format($$$A)", "writer.print($$$A)", "writer.println($$$A)", "writer.write($$$A)", "pw.print($$$A)", "pw.println($$$A)", "pw.write($$$A)"]
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForHTML($X)", "ESAPI.encoder().encodeForHTMLAttribute($X)", "ESAPI.encoder().encodeForJavaScript($X)", "Encode.forHtml($X)", "Encode.forHtmlContent($X)", "Encode.forHtmlAttribute($X)", "Encode.forJavaScript($X)", "StringEscapeUtils.escapeHtml4($X)", "StringEscapeUtils.escapeHtml($X)", "HtmlUtils.htmlEscape($X)", "org.springframework.web.util.HtmlUtils.htmlEscape($X)", "Jsoup.clean($X, $$$R)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
+    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-ldap
     languages: [Java]
@@ -367,6 +376,7 @@ taint:
     sink_arg: FILTER
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForLDAP($X)", "LdapEncoder.filterEncode($X)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
+    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-xpath
     languages: [Java]
@@ -377,6 +387,7 @@ taint:
     sink_arg: E
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)", "ESAPI.encoder().encodeForXPath($X)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
+    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-redirect
     languages: [Java]
@@ -389,6 +400,7 @@ taint:
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)"]
     guards: ["$U.startsWith($P)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
+    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: java-taint-trust-boundary
     languages: [Java]
@@ -398,6 +410,7 @@ taint:
     sinks: ["$R.getSession().setAttribute($K, $V)", "$R.getSession().putValue($K, $V)", "session.setAttribute($K, $V)", "session.putValue($K, $V)", "httpSession.setAttribute($K, $V)"]
     sanitizers: ["Integer.parseInt($X)", "Integer.valueOf($X)", "Long.parseLong($X)", "Long.valueOf($X)", "Double.parseDouble($X)", "Boolean.parseBoolean($X)", "UUID.fromString($X)"]
     param_decorators: ["RequestParam", "PathVariable", "RequestBody", "RequestHeader", "CookieValue", "ModelAttribute", "RequestPart", "MatrixVariable"]
+    handler_decorators: "^(Get|Post|Put|Delete|Patch|Request)Mapping\\b"
     exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
   - id: php-taint-sql
     languages: [Php]
@@ -439,7 +452,8 @@ taint:
     source_names: ["$_GET", "$_POST", "$_REQUEST", "$_COOKIE", "$_FILES", "$HTTP_RAW_POST_DATA", "$_SERVER['HTTP_", "$_SERVER[\"HTTP_", "$_SERVER['REQUEST_URI", "$_SERVER[\"REQUEST_URI", "$_SERVER['QUERY_STRING", "$_SERVER[\"QUERY_STRING", "$_SERVER['PHP_SELF", "$_SERVER[\"PHP_SELF", "$_SERVER['PATH_INFO", "$_SERVER[\"PATH_INFO", "$_SERVER['PATH_TRANSLATED", "$_SERVER[\"PATH_TRANSLATED", "$_SERVER['ORIG_PATH_INFO", "$_SERVER[\"ORIG_PATH_INFO"]
     sinks: ["include $P", "include_once $P", "require $P", "require_once $P", "file_get_contents($P, $$$R)", "fopen($P, $$$R)", "readfile($P, $$$R)", "file($P, $$$R)", "file_put_contents($P, $$$R)", "unlink($P)", "copy($P, $$$R)", "rename($P, $$$R)", "move_uploaded_file($F, $P)", "fpassthru($P)", "parse_ini_file($P, $$$R)", "simplexml_load_file($P, $$$R)", "show_source($P)", "highlight_file($P, $$$R)"]
     sanitizers: ["intval($X)", "(int) $X", "(int)$X", "(float) $X", "floatval($X)", "boolval($X)", "abs($X)", "filter_var($X, FILTER_VALIDATE_INT)", "filter_var($X, FILTER_VALIDATE_INT, $$$R)", "md5($X)", "sha1($X)", "hash($A, $X, $$$R)", "crc32($X)", "uniqid($$$A)", "basename($X)"]
-    guards: ["in_array($X, $L, $$$R)", "str_contains($P, $B)", "strpos($P, $B)", "is_numeric($X)", "ctype_digit($X)", "ctype_alnum($X)", "filter_var($X, $$$R)", "preg_match($P, $X, $$$R)"]
+    guards: ["in_array($X, $L, $$$R)", "is_numeric($X)", "ctype_digit($X)", "ctype_alnum($X)", "filter_var($X, $$$R)", "preg_match($P, $X, $$$R)"]
+    rejects: ["str_contains($P, \"$S\")", "str_contains($P, '$S')", "strpos($P, \"$S\")", "strpos($P, '$S')"]
     exclude: ["**/tests/**", "**/test/**", "**/*Test.php", "**/vendor/**"]
   - id: php-taint-xss
     languages: [Php]
@@ -485,3 +499,88 @@ taint:
     sanitizers: ["intval($X)", "(int) $X", "(int)$X", "(float) $X", "floatval($X)", "boolval($X)", "abs($X)", "filter_var($X, FILTER_VALIDATE_INT)", "filter_var($X, FILTER_VALIDATE_INT, $$$R)", "md5($X)", "sha1($X)", "hash($A, $X, $$$R)", "crc32($X)", "uniqid($$$A)"]
     guards: ["is_numeric($X)", "ctype_digit($X)", "ctype_alnum($X)", "filter_var($X, $$$R)", "preg_match($P, $X, $$$R)"]
     exclude: ["**/tests/**", "**/test/**", "**/*Test.php", "**/vendor/**"]
+  - id: cs-taint-sql
+    languages: [CSharp]
+    message: "Request data reaches a SQL query."
+    note: "Use SqlParameter / parameterized queries (Dapper: anonymous-object parameters; EF Core: FromSqlInterpolated or LINQ)."
+    sources: ["Request.Query", "Request.Form", "Request.Cookies", "Request.Headers", "Request.QueryString", "Request.Params", "Request.RouteValues", "Request.Body", "Request.Path", "Request.Files", "HttpContext.Request.Query", "HttpContext.Request.Form", "HttpContext.Request.Cookies", "HttpContext.Request.Headers", "HttpContext.Request.QueryString", "HttpContext.Request.Params", "HttpContext.Request.RouteValues", "HttpContext.Request.Body", "HttpContext.Request.Path", "HttpContext.Request.Files", "context.Request.Query", "context.Request.Form", "context.Request.Cookies", "context.Request.Headers", "context.Request.QueryString", "context.Request.Params", "context.Request.RouteValues", "context.Request.Body", "context.Request.Path", "context.Request.Files", "httpContext.Request.Query", "httpContext.Request.Form", "httpContext.Request.Cookies", "httpContext.Request.Headers", "httpContext.Request.QueryString", "httpContext.Request.Params", "httpContext.Request.RouteValues", "httpContext.Request.Body", "httpContext.Request.Path", "httpContext.Request.Files", "req.Query", "req.Form", "req.Cookies", "req.Headers", "req.QueryString", "req.Params", "req.RouteValues", "req.Body", "req.Path", "req.Files", "request.Query", "request.Form", "request.Cookies", "request.Headers", "request.QueryString", "request.Params", "request.RouteValues", "request.Body", "request.Path", "request.Files", "Request[$K]", "HttpContext.Request[$K]", "context.Request[$K]", "httpContext.Request[$K]", "req[$K]", "request[$K]", "Request.QueryString[$K]", "Request.Form[$K]", "Request.Params[$K]", "Request.Cookies[$K].Value", "Request.ServerVariables[$K]", "Request.RawUrl", "Request.Url"]
+    sinks: ["new SqlCommand($SQL, $$$R)", "new SqliteCommand($SQL, $$$R)", "new NpgsqlCommand($SQL, $$$R)", "new MySqlCommand($SQL, $$$R)", "new OleDbCommand($SQL, $$$R)", "new SqlDataAdapter($SQL, $$$R)", "$C.CommandText = $SQL", "$DB.Database.ExecuteSqlRaw($SQL, $$$R)", "$DB.Database.ExecuteSqlRawAsync($SQL, $$$R)", "$SET.FromSqlRaw($SQL, $$$R)", "$DB.Database.SqlQueryRaw($SQL, $$$R)", "connection.Query($SQL, $$$R)", "connection.QueryAsync($SQL, $$$R)", "connection.QueryFirst($SQL, $$$R)", "connection.QueryFirstOrDefault($SQL, $$$R)", "connection.QuerySingle($SQL, $$$R)", "connection.Execute($SQL, $$$R)", "connection.ExecuteAsync($SQL, $$$R)", "connection.ExecuteScalar($SQL, $$$R)", "connection.QueryFirstOrDefaultAsync($SQL, $$$R)", "conn.Query($SQL, $$$R)", "conn.QueryAsync($SQL, $$$R)", "conn.QueryFirst($SQL, $$$R)", "conn.QueryFirstOrDefault($SQL, $$$R)", "conn.QuerySingle($SQL, $$$R)", "conn.Execute($SQL, $$$R)", "conn.ExecuteAsync($SQL, $$$R)", "conn.ExecuteScalar($SQL, $$$R)", "conn.QueryFirstOrDefaultAsync($SQL, $$$R)", "db.Query($SQL, $$$R)", "db.QueryAsync($SQL, $$$R)", "db.QueryFirst($SQL, $$$R)", "db.QueryFirstOrDefault($SQL, $$$R)", "db.QuerySingle($SQL, $$$R)", "db.Execute($SQL, $$$R)", "db.ExecuteAsync($SQL, $$$R)", "db.ExecuteScalar($SQL, $$$R)", "db.QueryFirstOrDefaultAsync($SQL, $$$R)", "_db.Query($SQL, $$$R)", "_db.QueryAsync($SQL, $$$R)", "_db.QueryFirst($SQL, $$$R)", "_db.QueryFirstOrDefault($SQL, $$$R)", "_db.QuerySingle($SQL, $$$R)", "_db.Execute($SQL, $$$R)", "_db.ExecuteAsync($SQL, $$$R)", "_db.ExecuteScalar($SQL, $$$R)", "_db.QueryFirstOrDefaultAsync($SQL, $$$R)", "_connection.Query($SQL, $$$R)", "_connection.QueryAsync($SQL, $$$R)", "_connection.QueryFirst($SQL, $$$R)", "_connection.QueryFirstOrDefault($SQL, $$$R)", "_connection.QuerySingle($SQL, $$$R)", "_connection.Execute($SQL, $$$R)", "_connection.ExecuteAsync($SQL, $$$R)", "_connection.ExecuteScalar($SQL, $$$R)", "_connection.QueryFirstOrDefaultAsync($SQL, $$$R)", "cnn.Query($SQL, $$$R)", "cnn.QueryAsync($SQL, $$$R)", "cnn.QueryFirst($SQL, $$$R)", "cnn.QueryFirstOrDefault($SQL, $$$R)", "cnn.QuerySingle($SQL, $$$R)", "cnn.Execute($SQL, $$$R)", "cnn.ExecuteAsync($SQL, $$$R)", "cnn.ExecuteScalar($SQL, $$$R)", "cnn.QueryFirstOrDefaultAsync($SQL, $$$R)", "Connection.Query($SQL, $$$R)", "Connection.QueryAsync($SQL, $$$R)", "Connection.QueryFirst($SQL, $$$R)", "Connection.QueryFirstOrDefault($SQL, $$$R)", "Connection.QuerySingle($SQL, $$$R)", "Connection.Execute($SQL, $$$R)", "Connection.ExecuteAsync($SQL, $$$R)", "Connection.ExecuteScalar($SQL, $$$R)", "Connection.QueryFirstOrDefaultAsync($SQL, $$$R)", "connection.Query<$T>($SQL, $$$R)", "connection.QueryAsync<$T>($SQL, $$$R)", "connection.QueryFirst<$T>($SQL, $$$R)", "connection.QueryFirstOrDefault<$T>($SQL, $$$R)", "connection.QuerySingle<$T>($SQL, $$$R)", "connection.ExecuteScalar<$T>($SQL, $$$R)", "connection.QueryFirstOrDefaultAsync<$T>($SQL, $$$R)", "conn.Query<$T>($SQL, $$$R)", "conn.QueryAsync<$T>($SQL, $$$R)", "conn.QueryFirst<$T>($SQL, $$$R)", "conn.QueryFirstOrDefault<$T>($SQL, $$$R)", "conn.QuerySingle<$T>($SQL, $$$R)", "conn.ExecuteScalar<$T>($SQL, $$$R)", "conn.QueryFirstOrDefaultAsync<$T>($SQL, $$$R)", "db.Query<$T>($SQL, $$$R)", "db.QueryAsync<$T>($SQL, $$$R)", "db.QueryFirst<$T>($SQL, $$$R)", "db.QueryFirstOrDefault<$T>($SQL, $$$R)", "db.QuerySingle<$T>($SQL, $$$R)", "db.ExecuteScalar<$T>($SQL, $$$R)", "db.QueryFirstOrDefaultAsync<$T>($SQL, $$$R)", "_db.Query<$T>($SQL, $$$R)", "_db.QueryAsync<$T>($SQL, $$$R)", "_db.QueryFirst<$T>($SQL, $$$R)", "_db.QueryFirstOrDefault<$T>($SQL, $$$R)", "_db.QuerySingle<$T>($SQL, $$$R)", "_db.ExecuteScalar<$T>($SQL, $$$R)", "_db.QueryFirstOrDefaultAsync<$T>($SQL, $$$R)", "_connection.Query<$T>($SQL, $$$R)", "_connection.QueryAsync<$T>($SQL, $$$R)", "_connection.QueryFirst<$T>($SQL, $$$R)", "_connection.QueryFirstOrDefault<$T>($SQL, $$$R)", "_connection.QuerySingle<$T>($SQL, $$$R)", "_connection.ExecuteScalar<$T>($SQL, $$$R)", "_connection.QueryFirstOrDefaultAsync<$T>($SQL, $$$R)", "cnn.Query<$T>($SQL, $$$R)", "cnn.QueryAsync<$T>($SQL, $$$R)", "cnn.QueryFirst<$T>($SQL, $$$R)", "cnn.QueryFirstOrDefault<$T>($SQL, $$$R)", "cnn.QuerySingle<$T>($SQL, $$$R)", "cnn.ExecuteScalar<$T>($SQL, $$$R)", "cnn.QueryFirstOrDefaultAsync<$T>($SQL, $$$R)", "Connection.Query<$T>($SQL, $$$R)", "Connection.QueryAsync<$T>($SQL, $$$R)", "Connection.QueryFirst<$T>($SQL, $$$R)", "Connection.QueryFirstOrDefault<$T>($SQL, $$$R)", "Connection.QuerySingle<$T>($SQL, $$$R)", "Connection.ExecuteScalar<$T>($SQL, $$$R)", "Connection.QueryFirstOrDefaultAsync<$T>($SQL, $$$R)", "$DB.Database.SqlQueryRaw<$T>($SQL, $$$R)"]
+    sink_arg: SQL
+    sanitizers: ["int.Parse($X)", "int.Parse($X, $$$R)", "long.Parse($X)", "Guid.Parse($X)", "Convert.ToInt32($X)", "Convert.ToInt64($X)", "decimal.Parse($X)", "double.Parse($X)", "bool.Parse($X)"]
+    guards: ["int.TryParse($X, $$$R)", "long.TryParse($X, $$$R)", "Guid.TryParse($X, $$$R)", "Regex.IsMatch($X, $$$R)", "$L.Contains($X)"]
+    param_decorators: ["FromQuery", "FromBody", "FromRoute", "FromForm", "FromHeader"]
+    handler_decorators: "^(Http(Get|Post|Put|Delete|Patch)|Route)\\b"
+    exclude: ["**/*Tests/**", "**/*.Tests/**", "**/Tests/**", "**/test/**", "**/*Test.cs", "**/*Tests.cs"]
+  - id: cs-taint-shell
+    languages: [CSharp]
+    message: "Request data reaches an OS command."
+    note: "Start a fixed program with ArgumentList entries (no shell), and validate the value."
+    sources: ["Request.Query", "Request.Form", "Request.Cookies", "Request.Headers", "Request.QueryString", "Request.Params", "Request.RouteValues", "Request.Body", "Request.Path", "Request.Files", "HttpContext.Request.Query", "HttpContext.Request.Form", "HttpContext.Request.Cookies", "HttpContext.Request.Headers", "HttpContext.Request.QueryString", "HttpContext.Request.Params", "HttpContext.Request.RouteValues", "HttpContext.Request.Body", "HttpContext.Request.Path", "HttpContext.Request.Files", "context.Request.Query", "context.Request.Form", "context.Request.Cookies", "context.Request.Headers", "context.Request.QueryString", "context.Request.Params", "context.Request.RouteValues", "context.Request.Body", "context.Request.Path", "context.Request.Files", "httpContext.Request.Query", "httpContext.Request.Form", "httpContext.Request.Cookies", "httpContext.Request.Headers", "httpContext.Request.QueryString", "httpContext.Request.Params", "httpContext.Request.RouteValues", "httpContext.Request.Body", "httpContext.Request.Path", "httpContext.Request.Files", "req.Query", "req.Form", "req.Cookies", "req.Headers", "req.QueryString", "req.Params", "req.RouteValues", "req.Body", "req.Path", "req.Files", "request.Query", "request.Form", "request.Cookies", "request.Headers", "request.QueryString", "request.Params", "request.RouteValues", "request.Body", "request.Path", "request.Files", "Request[$K]", "HttpContext.Request[$K]", "context.Request[$K]", "httpContext.Request[$K]", "req[$K]", "request[$K]", "Request.QueryString[$K]", "Request.Form[$K]", "Request.Params[$K]", "Request.Cookies[$K].Value", "Request.ServerVariables[$K]", "Request.RawUrl", "Request.Url"]
+    sinks: ["Process.Start($CMD, $$$R)", "new ProcessStartInfo($CMD, $$$R)", "$PSI.FileName = $CMD", "$PSI.Arguments = $CMD"]
+    sink_arg: CMD
+    sanitizers: ["int.Parse($X)", "int.Parse($X, $$$R)", "long.Parse($X)", "Guid.Parse($X)", "Convert.ToInt32($X)", "Convert.ToInt64($X)", "decimal.Parse($X)", "double.Parse($X)", "bool.Parse($X)"]
+    guards: ["int.TryParse($X, $$$R)", "long.TryParse($X, $$$R)", "Guid.TryParse($X, $$$R)", "Regex.IsMatch($X, $$$R)", "$L.Contains($X)"]
+    param_decorators: ["FromQuery", "FromBody", "FromRoute", "FromForm", "FromHeader"]
+    handler_decorators: "^(Http(Get|Post|Put|Delete|Patch)|Route)\\b"
+    exclude: ["**/*Tests/**", "**/*.Tests/**", "**/Tests/**", "**/test/**", "**/*Test.cs", "**/*Tests.cs"]
+  - id: cs-taint-path
+    languages: [CSharp]
+    message: "Request data used as a file path (path traversal)."
+    note: "Keep only Path.GetFileName of the value, combine it with a base directory and check the full path stays inside."
+    sources: ["Request.Query", "Request.Form", "Request.Cookies", "Request.Headers", "Request.QueryString", "Request.Params", "Request.RouteValues", "Request.Body", "Request.Path", "Request.Files", "HttpContext.Request.Query", "HttpContext.Request.Form", "HttpContext.Request.Cookies", "HttpContext.Request.Headers", "HttpContext.Request.QueryString", "HttpContext.Request.Params", "HttpContext.Request.RouteValues", "HttpContext.Request.Body", "HttpContext.Request.Path", "HttpContext.Request.Files", "context.Request.Query", "context.Request.Form", "context.Request.Cookies", "context.Request.Headers", "context.Request.QueryString", "context.Request.Params", "context.Request.RouteValues", "context.Request.Body", "context.Request.Path", "context.Request.Files", "httpContext.Request.Query", "httpContext.Request.Form", "httpContext.Request.Cookies", "httpContext.Request.Headers", "httpContext.Request.QueryString", "httpContext.Request.Params", "httpContext.Request.RouteValues", "httpContext.Request.Body", "httpContext.Request.Path", "httpContext.Request.Files", "req.Query", "req.Form", "req.Cookies", "req.Headers", "req.QueryString", "req.Params", "req.RouteValues", "req.Body", "req.Path", "req.Files", "request.Query", "request.Form", "request.Cookies", "request.Headers", "request.QueryString", "request.Params", "request.RouteValues", "request.Body", "request.Path", "request.Files", "Request[$K]", "HttpContext.Request[$K]", "context.Request[$K]", "httpContext.Request[$K]", "req[$K]", "request[$K]", "Request.QueryString[$K]", "Request.Form[$K]", "Request.Params[$K]", "Request.Cookies[$K].Value", "Request.ServerVariables[$K]", "Request.RawUrl", "Request.Url"]
+    sinks: ["File.ReadAllText($P, $$$R)", "File.ReadAllBytes($P, $$$R)", "File.ReadAllLines($P, $$$R)", "File.WriteAllText($P, $$$R)", "File.WriteAllBytes($P, $$$R)", "File.AppendAllText($P, $$$R)", "File.Open($P, $$$R)", "File.OpenRead($P, $$$R)", "File.OpenWrite($P, $$$R)", "File.Create($P, $$$R)", "File.Delete($P, $$$R)", "File.Copy($P, $$$R)", "File.Move($P, $$$R)", "File.Exists($P, $$$R)", "new FileStream($P, $$$R)", "new StreamReader($P, $$$R)", "new StreamWriter($P, $$$R)", "Directory.GetFiles($P, $$$R)", "Directory.Delete($P, $$$R)", "PhysicalFile($P, $$$R)", "File($P, $$$R)"]
+    sink_arg: P
+    sanitizers: ["int.Parse($X)", "int.Parse($X, $$$R)", "long.Parse($X)", "Guid.Parse($X)", "Convert.ToInt32($X)", "Convert.ToInt64($X)", "decimal.Parse($X)", "double.Parse($X)", "bool.Parse($X)", "Path.GetFileName($X)"]
+    guards: ["int.TryParse($X, $$$R)", "long.TryParse($X, $$$R)", "Guid.TryParse($X, $$$R)", "Regex.IsMatch($X, $$$R)", "$L.Contains($X)", "$P.StartsWith($B, $$$R)"]
+    rejects: ["$P.Contains(\"$S\")"]
+    param_decorators: ["FromQuery", "FromBody", "FromRoute", "FromForm", "FromHeader"]
+    handler_decorators: "^(Http(Get|Post|Put|Delete|Patch)|Route)\\b"
+    exclude: ["**/*Tests/**", "**/*.Tests/**", "**/Tests/**", "**/test/**", "**/*Test.cs", "**/*Tests.cs"]
+  - id: cs-taint-xss
+    languages: [CSharp]
+    message: "Request data written into the response without encoding (XSS)."
+    note: "Render through Razor (it encodes), or encode with HtmlEncoder.Default.Encode / WebUtility.HtmlEncode."
+    sources: ["Request.Query", "Request.Form", "Request.Cookies", "Request.Headers", "Request.QueryString", "Request.Params", "Request.RouteValues", "Request.Body", "Request.Path", "Request.Files", "HttpContext.Request.Query", "HttpContext.Request.Form", "HttpContext.Request.Cookies", "HttpContext.Request.Headers", "HttpContext.Request.QueryString", "HttpContext.Request.Params", "HttpContext.Request.RouteValues", "HttpContext.Request.Body", "HttpContext.Request.Path", "HttpContext.Request.Files", "context.Request.Query", "context.Request.Form", "context.Request.Cookies", "context.Request.Headers", "context.Request.QueryString", "context.Request.Params", "context.Request.RouteValues", "context.Request.Body", "context.Request.Path", "context.Request.Files", "httpContext.Request.Query", "httpContext.Request.Form", "httpContext.Request.Cookies", "httpContext.Request.Headers", "httpContext.Request.QueryString", "httpContext.Request.Params", "httpContext.Request.RouteValues", "httpContext.Request.Body", "httpContext.Request.Path", "httpContext.Request.Files", "req.Query", "req.Form", "req.Cookies", "req.Headers", "req.QueryString", "req.Params", "req.RouteValues", "req.Body", "req.Path", "req.Files", "request.Query", "request.Form", "request.Cookies", "request.Headers", "request.QueryString", "request.Params", "request.RouteValues", "request.Body", "request.Path", "request.Files", "Request[$K]", "HttpContext.Request[$K]", "context.Request[$K]", "httpContext.Request[$K]", "req[$K]", "request[$K]", "Request.QueryString[$K]", "Request.Form[$K]", "Request.Params[$K]", "Request.Cookies[$K].Value", "Request.ServerVariables[$K]", "Request.RawUrl", "Request.Url"]
+    sinks: ["Response.Write($X)", "$RESP.WriteAsync($X, $$$R)", "Content($X, \"text/html\", $$$R)", "new HtmlString($X)", "Html.Raw($X)", "$CTX.Response.WriteAsync($X, $$$R)"]
+    sanitizers: ["int.Parse($X)", "int.Parse($X, $$$R)", "long.Parse($X)", "Guid.Parse($X)", "Convert.ToInt32($X)", "Convert.ToInt64($X)", "decimal.Parse($X)", "double.Parse($X)", "bool.Parse($X)", "HtmlEncoder.Default.Encode($X)", "WebUtility.HtmlEncode($X)", "HttpUtility.HtmlEncode($X)", "Server.HtmlEncode($X)", "AntiXssEncoder.HtmlEncode($X, $$$R)", "_htmlEncoder.Encode($X)"]
+    guards: ["int.TryParse($X, $$$R)", "long.TryParse($X, $$$R)", "Guid.TryParse($X, $$$R)", "Regex.IsMatch($X, $$$R)", "$L.Contains($X)"]
+    param_decorators: ["FromQuery", "FromBody", "FromRoute", "FromForm", "FromHeader"]
+    handler_decorators: "^(Http(Get|Post|Put|Delete|Patch)|Route)\\b"
+    exclude: ["**/*Tests/**", "**/*.Tests/**", "**/Tests/**", "**/test/**", "**/*Test.cs", "**/*Tests.cs"]
+  - id: cs-taint-ssrf
+    languages: [CSharp]
+    message: "Request data used as the URL of an outgoing request (SSRF)."
+    note: "Allow-list the hosts (compare new Uri(value).Host to a fixed set) before the request."
+    sources: ["Request.Query", "Request.Form", "Request.Cookies", "Request.Headers", "Request.QueryString", "Request.Params", "Request.RouteValues", "Request.Body", "Request.Path", "Request.Files", "HttpContext.Request.Query", "HttpContext.Request.Form", "HttpContext.Request.Cookies", "HttpContext.Request.Headers", "HttpContext.Request.QueryString", "HttpContext.Request.Params", "HttpContext.Request.RouteValues", "HttpContext.Request.Body", "HttpContext.Request.Path", "HttpContext.Request.Files", "context.Request.Query", "context.Request.Form", "context.Request.Cookies", "context.Request.Headers", "context.Request.QueryString", "context.Request.Params", "context.Request.RouteValues", "context.Request.Body", "context.Request.Path", "context.Request.Files", "httpContext.Request.Query", "httpContext.Request.Form", "httpContext.Request.Cookies", "httpContext.Request.Headers", "httpContext.Request.QueryString", "httpContext.Request.Params", "httpContext.Request.RouteValues", "httpContext.Request.Body", "httpContext.Request.Path", "httpContext.Request.Files", "req.Query", "req.Form", "req.Cookies", "req.Headers", "req.QueryString", "req.Params", "req.RouteValues", "req.Body", "req.Path", "req.Files", "request.Query", "request.Form", "request.Cookies", "request.Headers", "request.QueryString", "request.Params", "request.RouteValues", "request.Body", "request.Path", "request.Files", "Request[$K]", "HttpContext.Request[$K]", "context.Request[$K]", "httpContext.Request[$K]", "req[$K]", "request[$K]", "Request.QueryString[$K]", "Request.Form[$K]", "Request.Params[$K]", "Request.Cookies[$K].Value", "Request.ServerVariables[$K]", "Request.RawUrl", "Request.Url"]
+    sinks: ["client.GetAsync($U, $$$R)", "client.PostAsync($U, $$$R)", "client.PutAsync($U, $$$R)", "client.DeleteAsync($U, $$$R)", "client.GetStringAsync($U, $$$R)", "client.GetStreamAsync($U, $$$R)", "client.GetByteArrayAsync($U, $$$R)", "client.SendAsync($U, $$$R)", "httpClient.GetAsync($U, $$$R)", "httpClient.PostAsync($U, $$$R)", "httpClient.PutAsync($U, $$$R)", "httpClient.DeleteAsync($U, $$$R)", "httpClient.GetStringAsync($U, $$$R)", "httpClient.GetStreamAsync($U, $$$R)", "httpClient.GetByteArrayAsync($U, $$$R)", "httpClient.SendAsync($U, $$$R)", "_httpClient.GetAsync($U, $$$R)", "_httpClient.PostAsync($U, $$$R)", "_httpClient.PutAsync($U, $$$R)", "_httpClient.DeleteAsync($U, $$$R)", "_httpClient.GetStringAsync($U, $$$R)", "_httpClient.GetStreamAsync($U, $$$R)", "_httpClient.GetByteArrayAsync($U, $$$R)", "_httpClient.SendAsync($U, $$$R)", "_client.GetAsync($U, $$$R)", "_client.PostAsync($U, $$$R)", "_client.PutAsync($U, $$$R)", "_client.DeleteAsync($U, $$$R)", "_client.GetStringAsync($U, $$$R)", "_client.GetStreamAsync($U, $$$R)", "_client.GetByteArrayAsync($U, $$$R)", "_client.SendAsync($U, $$$R)", "http.GetAsync($U, $$$R)", "http.PostAsync($U, $$$R)", "http.PutAsync($U, $$$R)", "http.DeleteAsync($U, $$$R)", "http.GetStringAsync($U, $$$R)", "http.GetStreamAsync($U, $$$R)", "http.GetByteArrayAsync($U, $$$R)", "http.SendAsync($U, $$$R)", "new HttpRequestMessage($M, $U)", "WebRequest.Create($U)", "new WebClient().DownloadString($U)", "$WC.DownloadString($U)", "$WC.DownloadFile($U, $$$R)"]
+    sink_arg: U
+    sanitizers: ["int.Parse($X)", "int.Parse($X, $$$R)", "long.Parse($X)", "Guid.Parse($X)", "Convert.ToInt32($X)", "Convert.ToInt64($X)", "decimal.Parse($X)", "double.Parse($X)", "bool.Parse($X)"]
+    guards: ["int.TryParse($X, $$$R)", "long.TryParse($X, $$$R)", "Guid.TryParse($X, $$$R)", "Regex.IsMatch($X, $$$R)", "$L.Contains($X)"]
+    param_decorators: ["FromQuery", "FromBody", "FromRoute", "FromForm", "FromHeader"]
+    handler_decorators: "^(Http(Get|Post|Put|Delete|Patch)|Route)\\b"
+    exclude: ["**/*Tests/**", "**/*.Tests/**", "**/Tests/**", "**/test/**", "**/*Test.cs", "**/*Tests.cs"]
+  - id: cs-taint-redirect
+    languages: [CSharp]
+    message: "Request data used as a redirect target (open redirect)."
+    note: "Use LocalRedirect / Url.IsLocalUrl, or map a key to a fixed URL."
+    sources: ["Request.Query", "Request.Form", "Request.Cookies", "Request.Headers", "Request.QueryString", "Request.Params", "Request.RouteValues", "Request.Body", "Request.Path", "Request.Files", "HttpContext.Request.Query", "HttpContext.Request.Form", "HttpContext.Request.Cookies", "HttpContext.Request.Headers", "HttpContext.Request.QueryString", "HttpContext.Request.Params", "HttpContext.Request.RouteValues", "HttpContext.Request.Body", "HttpContext.Request.Path", "HttpContext.Request.Files", "context.Request.Query", "context.Request.Form", "context.Request.Cookies", "context.Request.Headers", "context.Request.QueryString", "context.Request.Params", "context.Request.RouteValues", "context.Request.Body", "context.Request.Path", "context.Request.Files", "httpContext.Request.Query", "httpContext.Request.Form", "httpContext.Request.Cookies", "httpContext.Request.Headers", "httpContext.Request.QueryString", "httpContext.Request.Params", "httpContext.Request.RouteValues", "httpContext.Request.Body", "httpContext.Request.Path", "httpContext.Request.Files", "req.Query", "req.Form", "req.Cookies", "req.Headers", "req.QueryString", "req.Params", "req.RouteValues", "req.Body", "req.Path", "req.Files", "request.Query", "request.Form", "request.Cookies", "request.Headers", "request.QueryString", "request.Params", "request.RouteValues", "request.Body", "request.Path", "request.Files", "Request[$K]", "HttpContext.Request[$K]", "context.Request[$K]", "httpContext.Request[$K]", "req[$K]", "request[$K]", "Request.QueryString[$K]", "Request.Form[$K]", "Request.Params[$K]", "Request.Cookies[$K].Value", "Request.ServerVariables[$K]", "Request.RawUrl", "Request.Url"]
+    sinks: ["Redirect($U)", "RedirectPermanent($U)", "Response.Redirect($U, $$$R)", "new RedirectResult($U, $$$R)"]
+    sink_arg: U
+    safe_prefix: '^/[^/\\]'
+    sanitizers: ["int.Parse($X)", "int.Parse($X, $$$R)", "long.Parse($X)", "Guid.Parse($X)", "Convert.ToInt32($X)", "Convert.ToInt64($X)", "decimal.Parse($X)", "double.Parse($X)", "bool.Parse($X)"]
+    guards: ["int.TryParse($X, $$$R)", "long.TryParse($X, $$$R)", "Guid.TryParse($X, $$$R)", "Regex.IsMatch($X, $$$R)", "$L.Contains($X)", "Url.IsLocalUrl($U)"]
+    param_decorators: ["FromQuery", "FromBody", "FromRoute", "FromForm", "FromHeader"]
+    handler_decorators: "^(Http(Get|Post|Put|Delete|Patch)|Route)\\b"
+    exclude: ["**/*Tests/**", "**/*.Tests/**", "**/Tests/**", "**/test/**", "**/*Test.cs", "**/*Tests.cs"]
+  - id: cs-taint-deserialization
+    languages: [CSharp]
+    message: "Request data deserialized with a type-confused serializer (remote code execution)."
+    note: "Use System.Text.Json with a fixed type; never BinaryFormatter, and keep TypeNameHandling.None in Json.NET."
+    sources: ["Request.Query", "Request.Form", "Request.Cookies", "Request.Headers", "Request.QueryString", "Request.Params", "Request.RouteValues", "Request.Body", "Request.Path", "Request.Files", "HttpContext.Request.Query", "HttpContext.Request.Form", "HttpContext.Request.Cookies", "HttpContext.Request.Headers", "HttpContext.Request.QueryString", "HttpContext.Request.Params", "HttpContext.Request.RouteValues", "HttpContext.Request.Body", "HttpContext.Request.Path", "HttpContext.Request.Files", "context.Request.Query", "context.Request.Form", "context.Request.Cookies", "context.Request.Headers", "context.Request.QueryString", "context.Request.Params", "context.Request.RouteValues", "context.Request.Body", "context.Request.Path", "context.Request.Files", "httpContext.Request.Query", "httpContext.Request.Form", "httpContext.Request.Cookies", "httpContext.Request.Headers", "httpContext.Request.QueryString", "httpContext.Request.Params", "httpContext.Request.RouteValues", "httpContext.Request.Body", "httpContext.Request.Path", "httpContext.Request.Files", "req.Query", "req.Form", "req.Cookies", "req.Headers", "req.QueryString", "req.Params", "req.RouteValues", "req.Body", "req.Path", "req.Files", "request.Query", "request.Form", "request.Cookies", "request.Headers", "request.QueryString", "request.Params", "request.RouteValues", "request.Body", "request.Path", "request.Files", "Request[$K]", "HttpContext.Request[$K]", "context.Request[$K]", "httpContext.Request[$K]", "req[$K]", "request[$K]", "Request.QueryString[$K]", "Request.Form[$K]", "Request.Params[$K]", "Request.Cookies[$K].Value", "Request.ServerVariables[$K]", "Request.RawUrl", "Request.Url"]
+    sinks: ["$F.Deserialize($X, $$$R)", "JsonConvert.DeserializeObject($X, $S)", "new LosFormatter().Deserialize($X)", "$F.UnsafeDeserialize($X, $$$R)"]
+    sink_arg: X
+    sanitizers: ["int.Parse($X)", "int.Parse($X, $$$R)", "long.Parse($X)", "Guid.Parse($X)", "Convert.ToInt32($X)", "Convert.ToInt64($X)", "decimal.Parse($X)", "double.Parse($X)", "bool.Parse($X)"]
+    guards: ["int.TryParse($X, $$$R)", "long.TryParse($X, $$$R)", "Guid.TryParse($X, $$$R)", "Regex.IsMatch($X, $$$R)", "$L.Contains($X)"]
+    param_decorators: ["FromQuery", "FromBody", "FromRoute", "FromForm", "FromHeader"]
+    handler_decorators: "^(Http(Get|Post|Put|Delete|Patch)|Route)\\b"
+    exclude: ["**/*Tests/**", "**/*.Tests/**", "**/Tests/**", "**/test/**", "**/*Test.cs", "**/*Tests.cs"]

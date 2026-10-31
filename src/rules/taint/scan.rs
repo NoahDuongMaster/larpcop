@@ -14,8 +14,8 @@ use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::path::Path;
 
-/// Pattern groups, in this order: sources, sinks, sanitizers, guards.
-pub(super) const GROUPS: usize = 4;
+/// Pattern groups, in this order: sources, sinks, sanitizers, guards, rejects.
+pub(super) const GROUPS: usize = 5;
 
 type Defs<'a, D> = Vec<(String, Node<'a, D>, Vec<String>)>;
 
@@ -86,7 +86,26 @@ impl<'a, D: Doc> FileIndex<'a, D> {
 /// A pattern and the longest name it spells out (`FormValue` in
 /// `$R.FormValue($K)`): a node whose text lacks it cannot match, which is far
 /// cheaper to find out than matching.
-pub(super) type Compiled = (Pattern, Option<String>);
+/// A pattern, its needle, and how specific it is (characters that are not
+/// metavariables): of a guard and a reject matching the same check, the more
+/// specific one says what it means (`"$S" not in $P` over `$X not in $L`).
+pub(super) type Compiled = (Pattern, Option<String>, usize);
+
+pub(super) fn specificity(pattern: &str) -> usize {
+    let mut n = 0;
+    let mut chars = pattern.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '$' {
+            while chars
+                .next_if(|c| *c == '$' || *c == '_' || c.is_ascii_uppercase() || c.is_ascii_digit())
+                .is_some()
+            {}
+        } else if !c.is_whitespace() {
+            n += 1;
+        }
+    }
+    n
+}
 
 /// The longest identifier of a pattern that is not a metavariable.
 pub(super) fn needle(pattern: &str) -> Option<String> {
@@ -124,7 +143,7 @@ impl Indexed {
         let mut by_kind: HashMap<u16, Vec<(usize, usize)>> = HashMap::new();
         let mut any = Vec::new();
         for (g, patterns) in groups.iter().enumerate() {
-            for (i, (p, _)) in patterns.iter().enumerate() {
+            for (i, (p, ..)) in patterns.iter().enumerate() {
                 match p.potential_kinds() {
                     Some(kinds) => {
                         for k in kinds.iter() {
@@ -143,10 +162,14 @@ impl Indexed {
     }
 
     /// Matches of every group, each in tree order (as `find_all` gives them).
-    pub fn scan<'a, D: Doc>(&self, index: &FileIndex<'a, D>) -> [Vec<NodeMatch<'a, D>>; GROUPS] {
-        let mut found: [Vec<(usize, NodeMatch<'a, D>)>; GROUPS] = Default::default();
+    /// Each match comes with the specificity of its pattern.
+    pub fn scan<'a, D: Doc>(
+        &self,
+        index: &FileIndex<'a, D>,
+    ) -> [Vec<(NodeMatch<'a, D>, usize)>; GROUPS] {
+        let mut found: [Vec<(usize, NodeMatch<'a, D>, usize)>; GROUPS] = Default::default();
         let mut try_at = |at: usize, (g, i): (usize, usize)| {
-            let (pattern, needle) = &self.groups[g][i];
+            let (pattern, needle, weight) = &self.groups[g][i];
             let node = &index.nodes[at];
             if needle
                 .as_ref()
@@ -155,7 +178,7 @@ impl Indexed {
                 return;
             }
             if let Some(m) = pattern.match_node(node.clone()) {
-                found[g].push((at, m));
+                found[g].push((at, m, *weight));
             }
         };
         for (kind, patterns) in &self.by_kind {
@@ -167,8 +190,8 @@ impl Indexed {
             (0..index.nodes.len()).for_each(|at| try_at(at, p));
         }
         found.map(|mut ms| {
-            ms.sort_by_key(|(at, _)| *at);
-            ms.into_iter().map(|(_, m)| m).collect()
+            ms.sort_by_key(|(at, ..)| *at);
+            ms.into_iter().map(|(_, m, w)| (m, w)).collect()
         })
     }
 }

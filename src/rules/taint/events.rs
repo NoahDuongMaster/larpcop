@@ -5,12 +5,11 @@
 //! parameters, summary rounds or callers ask about it.
 
 use super::flow::{ASSIGNMENTS, CALLS, LOOPS, enclosing};
-use super::guards::Guard;
+use super::guards::{Check, Guard};
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::ops::Range;
 use std::rc::Rc;
 
 /// A sink match: (position, sink argument, typed metavariables).
@@ -83,7 +82,7 @@ impl<'a, D: Doc> Hits<'a, D> {
         }
     }
 
-    pub fn events(&self, scope: &Node<'a, D>, guards: &[Range<usize>]) -> Events<'a, D> {
+    pub fn events(&self, scope: &Node<'a, D>, guards: &[Check]) -> Events<'a, D> {
         if let Some(known) = self.events.borrow().get(&key(scope)) {
             return known.clone();
         }
@@ -103,7 +102,7 @@ impl<'a, D: Doc> Hits<'a, D> {
         built
     }
 
-    fn build(&self, scope: &Node<'a, D>, guards: &[Range<usize>]) -> Vec<(usize, Event<'a, D>)> {
+    fn build(&self, scope: &Node<'a, D>, guards: &[Check]) -> Vec<(usize, Event<'a, D>)> {
         let mut events: Vec<(usize, Event<D>)> = Vec::new();
         for (at, shape) in self.skeleton(scope).iter() {
             let event = match shape {
@@ -112,13 +111,14 @@ impl<'a, D: Doc> Hits<'a, D> {
                 Shape::Return(n) => Event::Return(n.clone()),
                 Shape::Nested(n) => Event::Nested(n.clone()),
                 Shape::If(n) => {
-                    match super::guards::of(n, guards) {
-                        Some(Guard::After(at, names)) => events.push((at, Event::Clean(names))),
-                        Some(Guard::Within(r, names)) => {
-                            events.push((r.start, Event::Enter(names)));
-                            events.push((r.end, Event::Restore));
+                    for guard in super::guards::of(n, guards) {
+                        match guard {
+                            Guard::After(at, names) => events.push((at, Event::Clean(names))),
+                            Guard::Within(r, names) => {
+                                events.push((r.start, Event::Enter(names)));
+                                events.push((r.end, Event::Restore));
+                            }
                         }
-                        None => {}
                     }
                     continue;
                 }
@@ -146,7 +146,13 @@ fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
             out.push((n.range().start, Shape::If(n.clone())));
         }
         if let Some((_, l, r)) = ASSIGNMENTS.iter().find(|(k, ..)| kind == *k)
-            && let (Some(left), Some(right)) = (n.field(l), n.field(r))
+            && let Some(left) = n.field(l)
+            // C#'s `var x = …` leaves the value without a field name.
+            && let Some(right) = n.field(r).or_else(|| {
+                n.children()
+                    .filter(|c| c.is_named() && c.range() != left.range())
+                    .last()
+            })
         {
             let at = if LOOPS.contains(&kind.as_ref()) {
                 right.range().end

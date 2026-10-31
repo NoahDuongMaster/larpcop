@@ -109,6 +109,11 @@ pub struct TaintConfig {
     /// inside a branch taken when the check passes.
     #[serde(default)]
     pub guards: Vec<String>,
+    /// Patterns true when the value is unsafe: `$P.includes("$S")`. After
+    /// `if ($P.includes("..")) return;` the name is clean; inside the `if`
+    /// it is not.
+    #[serde(default)]
+    pub rejects: Vec<String>,
     /// Destructured parameters by type: with `Request: req`, the parameter
     /// `{ query }: Request` reads `req.query`.
     #[serde(default)]

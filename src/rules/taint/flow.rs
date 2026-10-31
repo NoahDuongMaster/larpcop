@@ -72,7 +72,7 @@ enum Seen<'a, D: Doc> {
 pub(super) struct Ctx {
     pub sources: Vec<Range<usize>>,
     pub sanitizers: Vec<Range<usize>>,
-    pub guards: Vec<Range<usize>>,
+    pub guards: Vec<super::guards::Check>,
     pub summaries: Summaries,
     pub source_texts: Vec<String>,
     /// Does any known function return source data? (computed on first use)

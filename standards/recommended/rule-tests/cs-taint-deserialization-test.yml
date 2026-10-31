@@ -1,0 +1,7 @@
+id: cs-taint-deserialization
+file: Controllers/UsersController.cs
+valid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        var o = JsonSerializer.Deserialize<Prefs>(Request.Cookies[\"prefs\"]);\n        return Ok(o);\n    }\n}\n"
+invalid:
+- "public class UsersController : Controller\n{\n    public IActionResult Get()\n    {\n        var f = new BinaryFormatter();\n        var o = f.Deserialize(Request.Body);\n        return Ok(o);\n    }\n\
+  }\n"

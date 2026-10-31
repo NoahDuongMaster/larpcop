@@ -1,8 +1,10 @@
-//! Validation in `if` conditions (`guards:` patterns). After
-//! `if (!url.startsWith("/")) return …;` the checked names are clean for the
-//! rest of the scope; inside `if (isSafe(url)) { … }` they are clean in that
-//! block only. Polarity is not judged: `if (!name.includes("/")) { … }` is a
-//! check as much as `if (allowed.has(name)) { … }`.
+//! Validation in `if` conditions. A `guards:` pattern is true when the value
+//! is safe (`isLocalUrl(u)`, `allowed.includes(h)`), a `rejects:` pattern when
+//! it is not (`name.includes("..")`). The condition is read with its `!`,
+//! `&&`, `||` and comparisons to `false`/`-1`, giving the names that are safe
+//! when it holds (clean in the `then` branch, and after the `if` when the
+//! `else` leaves) and those safe when it fails (clean in the `else` branch,
+//! and after the `if` when the `then` branch leaves: `if (!ok(u)) return;`).
 
 use super::NAMES;
 use ast_grep_core::{Doc, Node};
@@ -10,7 +12,21 @@ use std::collections::HashSet;
 use std::ops::Range;
 
 pub(super) const IFS: [&str; 2] = ["if_statement", "if_expression"];
-const EXITS: [&str; 6] = [
+/// Calls that end the request: PHP `die()`, Go `panic()`, Flask `abort()`.
+const EXIT_CALLS: [&str; 10] = [
+    "die(",
+    "exit(",
+    "panic(",
+    "abort(",
+    "sys.exit(",
+    "os.Exit(",
+    "process.exit(",
+    "log.Fatal(",
+    "log.Fatalf(",
+    "log.Fatalln(",
+];
+const EXITS: [&str; 7] = [
+    "exit_statement",
     "return_statement",
     "return_expression",
     "throw_statement",
@@ -18,35 +34,181 @@ const EXITS: [&str; 6] = [
     "continue_statement",
     "break_statement",
 ];
+/// Negations: JS/TS/Java/Go/Rust `!x`, C# `!x`, PHP `!x`, Python `not x`.
+const NOTS: [&str; 5] = [
+    "unary_expression",
+    "prefix_unary_expression",
+    "unary_op_expression",
+    "not_operator",
+    "prefix_expression",
+];
+const BINARIES: [&str; 4] = [
+    "binary_expression",
+    "boolean_operator",
+    "comparison_operator",
+    "binary_op_expression",
+];
+/// Blocks that may end in the exit: Go's `statement_list`, the block of an `else`.
+const BLOCKS: [&str; 5] = [
+    "statement_list",
+    "block",
+    "statement_block",
+    "compound_statement",
+    "else_clause",
+];
 
+/// A guard match: its range, whether it holds when the value is safe
+/// (`guards:`) rather than unsafe (`rejects:`), and its pattern's specificity.
+pub(super) type Check = (Range<usize>, bool, usize);
+
+/// Names clean from an offset to the end of the scope, or within a range.
 pub(super) enum Guard {
-    /// The branch leaves the scope: names are clean from `at` on.
     After(usize, HashSet<String>),
-    /// Names are clean within this range only.
     Within(Range<usize>, HashSet<String>),
 }
 
-/// The guard an `if` node sets up, if its condition checks names with a guard.
-pub(super) fn of<D: Doc>(n: &Node<D>, guards: &[Range<usize>]) -> Option<Guard> {
-    if guards.is_empty() || !IFS.contains(&n.kind().as_ref()) {
-        return None;
+/// The guards an `if` node sets up.
+pub(super) fn of<D: Doc>(n: &Node<D>, checks: &[Check]) -> Vec<Guard> {
+    let mut out = Vec::new();
+    if checks.is_empty() || !IFS.contains(&n.kind().as_ref()) {
+        return out;
     }
-    let condition = n.field("condition")?;
-    // PHP names the branch `body`.
-    let consequence = n.field("consequence").or_else(|| n.field("body"))?;
-    let inside = |r: &Range<usize>| guards.iter().any(|g| g.start <= r.start && r.end <= g.end);
-    let names: HashSet<String> = condition
-        .dfs()
-        .filter(|c| NAMES.contains(&c.kind().as_ref()) && inside(&c.range()))
+    let (Some(condition), Some(then)) = (
+        n.field("condition"),
+        // PHP names the branch `body`.
+        n.field("consequence").or_else(|| n.field("body")),
+    ) else {
+        return out;
+    };
+    let (holds, fails) = safe(&condition, checks);
+    let otherwise = n.field("alternative");
+    if exits(&then) && !fails.is_empty() {
+        out.push(Guard::After(n.range().end, fails.clone()));
+    }
+    if let Some(alt) = &otherwise
+        && !matches!(
+            alt.kind().as_ref(),
+            "elif_clause" | "else_if_clause" | "if_statement"
+        )
+        && exits(alt)
+        && !holds.is_empty()
+    {
+        out.push(Guard::After(n.range().end, holds.clone()));
+    }
+    if !holds.is_empty() {
+        out.push(Guard::Within(then.range(), holds));
+    }
+    if let Some(alt) = otherwise
+        && !fails.is_empty()
+    {
+        // Every `elif`/`else` from the first alternative on runs on failure.
+        out.push(Guard::Within(alt.range().start..n.range().end, fails));
+    }
+    out
+}
+
+type Sets = (HashSet<String>, HashSet<String>);
+
+/// Names safe when `n` is true, and names safe when it is false.
+fn safe<D: Doc>(n: &Node<D>, checks: &[Check]) -> Sets {
+    let range = n.range();
+    // Of a guard and a reject matching the same node (`$A.includes($B)`,
+    // `$P.includes("$S")`), the more specific pattern wins; a tie rejects.
+    let exact = checks
+        .iter()
+        .filter(|(r, ..)| *r == range)
+        .max_by_key(|(_, safe, weight)| (*weight, !*safe));
+    if let Some((_, safe, _)) = exact {
+        let names = names(n);
+        return if *safe {
+            (names, HashSet::new())
+        } else {
+            (HashSet::new(), names)
+        };
+    }
+    if !checks
+        .iter()
+        .any(|(r, ..)| range.start <= r.start && r.end <= range.end)
+    {
+        return Default::default();
+    }
+    let kind = n.kind();
+    let named: Vec<Node<D>> = n.children().filter(|c| c.is_named()).collect();
+    if NOTS.contains(&kind.as_ref()) && n.text().trim_start().starts_with(['!', 'n']) {
+        return named
+            .last()
+            .map(|o| swap(safe(o, checks)))
+            .unwrap_or_default();
+    }
+    if BINARIES.contains(&kind.as_ref())
+        && let (Some(l), Some(r)) = (n.field("left"), n.field("right"))
+    {
+        return binary(&operator(n, &l, &r), &l, &r, checks);
+    }
+    match named.as_slice() {
+        // Parentheses and other wrappers.
+        [only] => safe(only, checks),
+        _ => Default::default(),
+    }
+}
+
+fn binary<'a, D: Doc>(op: &str, l: &Node<'a, D>, r: &Node<'a, D>, checks: &[Check]) -> Sets {
+    match op {
+        "&&" | "and" => {
+            let ((lh, lf), (rh, rf)) = (safe(l, checks), safe(r, checks));
+            (&lh | &rh, &lf & &rf)
+        }
+        "||" | "or" => {
+            let ((lh, lf), (rh, rf)) = (safe(l, checks), safe(r, checks));
+            (&lh & &rh, &lf | &rf)
+        }
+        _ => {
+            // `check(x) === false`, `s.indexOf("..") !== -1`, `i < 0`.
+            let (value, constant) = if is_constant(r) {
+                (l, r.text().to_string())
+            } else {
+                (r, l.text().to_string())
+            };
+            let negative = matches!(
+                constant.as_str(),
+                "false" | "False" | "-1" | "null" | "nil" | "None"
+            );
+            let flip = match op {
+                "==" | "===" | "is" => negative,
+                "!=" | "!==" | "is not" => !negative && constant != "0",
+                "<" | "<=" => constant == "0",
+                _ => false,
+            };
+            let sets = safe(value, checks);
+            if flip { swap(sets) } else { sets }
+        }
+    }
+}
+
+/// The text between the operands: `&&`, `===`, `is not`.
+fn operator<'a, D: Doc>(n: &Node<'a, D>, l: &Node<'a, D>, r: &Node<'a, D>) -> String {
+    let start = n.range().start;
+    n.text()[l.range().end - start..r.range().start - start]
+        .trim()
+        .to_string()
+}
+
+fn is_constant<D: Doc>(n: &Node<D>) -> bool {
+    matches!(
+        n.text().as_ref(),
+        "true" | "false" | "True" | "False" | "null" | "nil" | "None" | "-1" | "0"
+    )
+}
+
+fn swap((a, b): Sets) -> Sets {
+    (b, a)
+}
+
+fn names<D: Doc>(n: &Node<D>) -> HashSet<String> {
+    n.dfs()
+        .filter(|c| NAMES.contains(&c.kind().as_ref()))
         .map(|c| c.text().to_string())
-        .collect();
-    if names.is_empty() {
-        return None;
-    }
-    if exits(&consequence) {
-        return Some(Guard::After(n.range().end, names));
-    }
-    Some(Guard::Within(consequence.range(), names))
+        .collect()
 }
 
 /// Does this branch always leave (return, throw, …)?
@@ -59,10 +221,10 @@ fn exits<D: Doc>(branch: &Node<D>) -> bool {
         .filter(|c| c.is_named() && c.kind() != "comment")
         .last();
     last.is_some_and(|l| {
-        // Go wraps a block's statements in a `statement_list`.
-        (l.kind() == "statement_list" && exits(&l))
+        (BLOCKS.contains(&l.kind().as_ref()) && exits(&l))
             || EXITS.contains(&l.kind().as_ref())
             || (l.kind() == "expression_statement"
-                && l.children().any(|c| EXITS.contains(&c.kind().as_ref())))
+                && (l.children().any(|c| EXITS.contains(&c.kind().as_ref()))
+                    || EXIT_CALLS.iter().any(|e| l.text().starts_with(e))))
     })
 }

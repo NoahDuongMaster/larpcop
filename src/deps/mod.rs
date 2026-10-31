@@ -10,7 +10,9 @@
 mod age;
 mod approval;
 mod ecosystem;
+mod gate;
 mod install;
+mod install_gate;
 mod lockfile;
 mod manifest;
 mod osv;
@@ -60,9 +62,29 @@ impl View<'_> {
     }
 }
 
+/// Lockfiles, manifests and package-manager configs: what the dependency rules read.
+pub fn is_dependency_file(file_name: &str) -> bool {
+    lockfile::parse(file_name, "").is_some()
+        || manifest::is_manifest(file_name)
+        || pm_config::relevant(file_name)
+}
+
 /// Cheap pre-filter: the agent hook loads the config only for commands that matter.
 pub fn concerns(command: &str) -> bool {
-    !install::requests(command).is_empty() || install::weakens_age_gate(command)
+    let script = crate::shell_ast::parse(command);
+    let lower = command.to_ascii_lowercase();
+    !install::invocations(&script).is_empty()
+        || install_gate::mentions(&script)
+        || [
+            "release-age",
+            "release_age",
+            "minimalagegate",
+            "minimal_age_gate",
+            "exclude-newer",
+            "exclude_newer",
+        ]
+        .iter()
+        .any(|k| lower.contains(k))
 }
 
 impl Deps {
@@ -163,8 +185,13 @@ or worse vulnerability (OSV.dev)."
         }
         if let Some(min) = self.vulns {
             // Every lockfile, not only changed ones: a package reported as malware
-            // today must block even a pull request that does not touch it.
-            for rel in files::list(root, &Scope::All)? {
+            // today must block even a pull request that does not touch it. Hook
+            // feedback on a few edited files only looks at those (Stop covers all).
+            let all = match scope {
+                Scope::Paths(_) | Scope::Touched(_) => files::list(root, scope)?,
+                _ => files::list(root, &Scope::All)?,
+            };
+            for rel in all {
                 if !self.exclude.is_match(&rel) {
                     locked.extend(self.locked(&rel, file_name(&rel), &view, audit));
                 }
@@ -188,47 +215,6 @@ or worse vulnerability (OSV.dev)."
             }
         }
         Ok(out)
-    }
-
-    /// Agent hook check on a shell command before it runs; `Some(reason)` blocks it.
-    pub fn gate_command(&self, root: &Path, cwd: &Path, command: &str) -> Option<String> {
-        if self.min_days.is_some() && install::weakens_age_gate(command) {
-            return Some(
-                "overriding the package manager's minimum release age is not allowed: the repo \
-sets it for everyone."
-                    .into(),
-            );
-        }
-        let requests = install::requests(command);
-        if requests.is_empty() {
-            return None;
-        }
-        if let Some(reason) = self
-            .vulns
-            .and_then(|min| self.gate_vulnerable(min, &requests))
-        {
-            return Some(reason);
-        }
-        if !self.approval {
-            return None;
-        }
-        let known = approval::known_now(root, cwd);
-        let blocked: Vec<String> = requests
-            .iter()
-            .filter(|r| match &r.name {
-                Some(n) => !self.approved.matches(r.eco, n) && !known.contains(&(r.eco, n.clone())),
-                None => !self.approved.matches(r.eco, &r.spec),
-            })
-            .map(|r| format!("`{}` ({})", r.name.as_deref().unwrap_or(&r.spec), r.eco))
-            .collect();
-        (!blocked.is_empty()).then(|| {
-            format!(
-                "installing {} needs a human's approval first: a new dependency is reviewed \
-before any of its code runs here. Solve the task without it, or stop and ask the user to approve \
-it (they add it to `dependencies.approved` in .larpcop.yaml).",
-                blocked.join(", ")
-            )
-        })
     }
 }
 

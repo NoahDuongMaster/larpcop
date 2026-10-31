@@ -44,7 +44,12 @@ struct Package {
 struct PackageVersion {
     version_key: VersionKey,
     published_at: Option<Timestamp>,
+    #[serde(default)]
+    is_default: bool,
 }
+
+/// A published version: (version, publish time, is the registry's default/latest).
+pub type Release = (String, Timestamp, bool);
 
 #[derive(Deserialize)]
 struct VersionKey {
@@ -127,29 +132,63 @@ impl Registry {
         }
     }
 
-    /// Newest stable release in the same major line as `p`, published by `cutoff`:
-    /// a concrete version an agent can pin instead.
-    pub fn newest_before(&self, p: &Pinned, cutoff: Timestamp) -> Option<(String, Timestamp)> {
-        let all: Vec<(String, Timestamp)> = if p.eco == Ecosystem::Packagist {
-            packagist::versions(&self.agent, &p.name).ok()??
-        } else {
-            let url = format!(
-                "{}/systems/{}/packages/{}",
-                self.api,
-                p.eco.deps_dev(),
-                enc(&p.name)
-            );
-            let package: Package = serde_json::from_str(&self.get(&url).ok()??).ok()?;
+    /// Every published version of a package; `None` if the registry does not know it.
+    pub fn releases(&self, eco: Ecosystem, name: &str) -> Result<Option<Vec<Release>>> {
+        if eco == Ecosystem::Packagist {
+            let Some(all) = packagist::versions(&self.agent, name)? else {
+                return Ok(None);
+            };
+            // Packagist has no "default" flag: the newest stable release is what installs.
+            let newest = all
+                .iter()
+                .filter(|(v, _)| is_stable(v))
+                .max_by_key(|(_, t)| *t)
+                .map(|(v, _)| v.clone());
+            return Ok(Some(
+                all.into_iter()
+                    .map(|(v, t)| {
+                        let d = Some(&v) == newest.as_ref();
+                        (v, t, d)
+                    })
+                    .collect(),
+            ));
+        }
+        let url = format!(
+            "{}/systems/{}/packages/{}",
+            self.api,
+            eco.deps_dev(),
+            enc(name)
+        );
+        let Some(body) = self.get(&url)? else {
+            return Ok(None);
+        };
+        let package: Package = serde_json::from_str(&body)?;
+        Ok(Some(
             package
                 .versions
                 .into_iter()
-                .filter_map(|v| Some((v.version_key.version, v.published_at?)))
-                .collect()
-        };
+                .filter_map(|v| Some((v.version_key.version, v.published_at?, v.is_default)))
+                .collect(),
+        ))
+    }
+
+    /// Newest stable release in the same major line as `p`, published by `cutoff`:
+    /// a concrete version an agent can pin instead.
+    pub fn newest_before(&self, p: &Pinned, cutoff: Timestamp) -> Option<(String, Timestamp)> {
         let line = major_line(&p.version);
-        all.into_iter()
-            .filter(|(v, t)| *t <= cutoff && is_stable(v) && major_line(v) == line)
-            .max_by_key(|(_, t)| *t)
+        newest_stable(self.releases(p.eco, &p.name).ok()??, cutoff, |v| {
+            major_line(v) == line
+        })
+    }
+
+    /// Newest stable release of any line published by `cutoff`.
+    pub fn newest_any_before(
+        &self,
+        eco: Ecosystem,
+        name: &str,
+        cutoff: Timestamp,
+    ) -> Option<(String, Timestamp)> {
+        newest_stable(self.releases(eco, name).ok()??, cutoff, |_| true)
     }
 
     fn get(&self, url: &str) -> Result<Option<String>> {
@@ -160,6 +199,17 @@ impl Registry {
             status => bail!("deps.dev answered HTTP {status}"),
         }
     }
+}
+
+fn newest_stable(
+    all: Vec<Release>,
+    cutoff: Timestamp,
+    keep: impl Fn(&str) -> bool,
+) -> Option<(String, Timestamp)> {
+    all.into_iter()
+        .filter(|(v, t, _)| *t <= cutoff && is_stable(v) && keep(v))
+        .map(|(v, t, _)| (v, t))
+        .max_by_key(|(_, t)| *t)
 }
 
 fn enc(s: &str) -> String {

@@ -13,7 +13,7 @@
   ],
   "PostToolUse": [
     {
-      "matcher": "Create|Edit|ApplyPatch",
+      "matcher": "Execute|Create|Edit|ApplyPatch",
       "hooks": [
         {
           "type": "command",

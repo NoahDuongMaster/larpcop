@@ -42,7 +42,7 @@ pub fn emit(agent: Agent, event: &Event, hook_event: &str, verdict: &Verdict) ->
 /// Copilot CLI parses stdout only on exit 0 (exit 2 on Stop is a mere warning).
 fn copilot_response(event: &Event, message: &str) -> serde_json::Value {
     match event {
-        Event::AfterEdit(_) => json!({ "additionalContext": message }),
+        Event::AfterEdit(_) | Event::AfterShell(_) => json!({ "additionalContext": message }),
         Event::Stop { .. } => json!({ "decision": "block", "reason": message }),
         _ => json!({ "permissionDecision": "deny", "permissionDecisionReason": message }),
     }
@@ -60,7 +60,9 @@ fn cursor_response(event: &Event, hook_event: &str, verdict: &Verdict) -> serde_
                 "agent_message": msg,
             })
         }
-        (Verdict::Block(msg), Event::AfterEdit(_)) => json!({ "additional_context": msg }),
+        (Verdict::Block(msg), Event::AfterEdit(_) | Event::AfterShell(_)) => {
+            json!({ "additional_context": msg })
+        }
         (Verdict::Block(msg), Event::Stop { .. }) => json!({ "followup_message": msg }),
         _ if is_permission_hook => json!({ "permission": "allow" }),
         _ => json!({}),

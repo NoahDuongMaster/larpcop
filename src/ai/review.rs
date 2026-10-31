@@ -132,7 +132,7 @@ fn changed_lines(root: &Path, scope: &Scope) -> Option<BTreeMap<String, BTreeSet
         Scope::Staged => vec!["--cached".to_string()],
         Scope::Changed => vec!["HEAD".to_string()],
         Scope::Since(base) => vec![format!("{base}...HEAD")],
-        Scope::All | Scope::Paths(_) => return None,
+        Scope::All | Scope::Paths(_) | Scope::Touched(_) => return None,
     };
     let out = Command::new("git")
         .args(["diff", "-U0", "--no-color", "--relative"])

@@ -16,7 +16,7 @@
         "bash": "larpcop hook copilot",
         "powershell": "larpcop hook copilot",
         "timeoutSec": 120,
-        "matcher": "Edit|Write"
+        "matcher": "Bash|Edit|Write"
       }
     ],
     "Stop": [

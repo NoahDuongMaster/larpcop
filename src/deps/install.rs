@@ -1,147 +1,205 @@
 //! Package installs inside a shell command, so an agent hook can stop an
-//! unapproved package before any of its install scripts run.
+//! unapproved, malicious or too-new package before any of its code runs.
 
 use super::ecosystem::{Ecosystem, npm_spec_name};
 use super::manifest::pep508_name;
-use regex::Regex;
-use std::sync::LazyLock;
+use super::vulns::pinned_version;
+use crate::shell_ast::Script;
+
+mod flags;
+mod overrides;
+use flags::*;
+pub use overrides::{uv_ok, weakens_age_gate};
 
 pub struct Request {
     pub eco: Ecosystem,
     pub spec: String,
     /// Registry package name; `None` for git URLs, tarballs and paths.
     pub name: Option<String>,
+    /// Exact version asked for (`x@1.2.3`, `-v 1.2.3`); `None`: whatever is newest.
+    pub version: Option<String>,
+    /// How it gets installed: `"cargo install"`, `"npx"`, …
+    pub via: &'static str,
 }
 
-/// Flags that take a separate value, per tool: their value is not a package.
-const NPM_FLAGS: &[&str] = &[
-    "--registry",
-    "--prefix",
-    "-w",
-    "--workspace",
-    "--tag",
-    "--cache",
-    "--userconfig",
-    "--omit",
-    "--include",
-];
-const PNPM_FLAGS: &[&str] = &["--filter", "-F", "--dir", "-C", "--registry", "--store-dir"];
-const YARN_FLAGS: &[&str] = &["--cwd", "--registry"];
-const BUN_FLAGS: &[&str] = &[
-    "--cwd",
-    "--registry",
-    "-c",
-    "--config",
-    "--cache-dir",
-    "--backend",
-];
-const PIP_FLAGS: &[&str] = &[
-    "-r",
-    "--requirement",
-    "-c",
-    "--constraint",
-    "-e",
-    "--editable",
-    "-i",
-    "--index-url",
-    "--extra-index-url",
-    "-f",
-    "--find-links",
-    "-t",
-    "--target",
-    "--prefix",
-    "--root",
-    "--python",
-    "-p",
-    "--group",
-    "--optional",
-    "--extra",
-    "--platform",
-    "--python-version",
-    "-P",
-    "--upgrade-package",
-];
-const GEM_FLAGS: &[&str] = &["-v", "--version", "--source", "--group", "--require"];
-const DOTNET_FLAGS: &[&str] = &["-v", "--version", "-f", "--framework", "-s", "--source"];
-const CARGO_FLAGS: &[&str] = &[
-    "--git",
-    "--path",
-    "-p",
-    "--package",
-    "-F",
-    "--features",
-    "--rename",
-    "--registry",
-    "--branch",
-    "--tag",
-    "--rev",
-    "--manifest-path",
-    "--target",
-];
+/// One package-manager command that installs or runs packages.
+pub struct Invocation {
+    /// `"npm install"`, `"npx"`, `"poetry add"`, …
+    pub via: &'static str,
+    pub eco: Ecosystem,
+    /// Words after the subcommand, unquoted.
+    pub args: Vec<String>,
+    /// `VAR=value` prefixes of this command.
+    pub env: Vec<(String, String)>,
+    /// Runs a tool: only its package is ours, the rest are the tool's arguments.
+    runs_tool: bool,
+    value_flags: &'static [&'static str],
+}
 
+#[cfg(test)]
 pub fn requests(command: &str) -> Vec<Request> {
-    crate::shell_ast::parse(command)
-        .commands
+    invocations(&crate::shell_ast::parse(command))
         .iter()
-        .flat_map(|c| parse(&c.words))
+        .flat_map(Invocation::requests)
         .collect()
 }
 
-/// Commands that switch off or shorten a package manager's minimum release age.
-pub fn weakens_age_gate(command: &str) -> bool {
-    static OVERRIDE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(
-            r"(?i)(--|\.)min(imum)?-release-age|\b(npm|pnpm)_config_min(imum)?_release_age\s*=|YARN_NPM_MINIMAL_AGE_GATE\s*=|\b(npm|pnpm|yarn|bun)\b[^;&|\n]*\bconfig\s+(set|delete|rm|unset)\b[^;&|\n]*(min(imum)?-?release-?age|npmMinimalAgeGate)|\buv\b[^;&|\n]*--exclude-newer|UV_EXCLUDE_NEWER\s*=",
-        )
-        .expect("static regex")
-    });
-    OVERRIDE.is_match(command)
+pub fn invocations(script: &Script) -> Vec<Invocation> {
+    script
+        .commands
+        .iter()
+        .filter_map(|c| {
+            let mut t: Vec<&str> = c.words.iter().map(String::as_str).collect();
+            if t.len() > 2 && t[0].starts_with("python") && t[1] == "-m" {
+                t.drain(..2); // python -m pip install …
+            }
+            let (via, eco, skip, value_flags, runs_tool) = classify(&t)?;
+            Some(Invocation {
+                via,
+                eco,
+                args: t[skip..].iter().map(|s| s.to_string()).collect(),
+                env: c.env.clone(),
+                runs_tool,
+                value_flags,
+            })
+        })
+        .collect()
 }
 
-fn parse(tokens: &[String]) -> Vec<Request> {
-    let mut t: Vec<&str> = tokens.iter().map(String::as_str).collect();
-    if t.len() > 2 && t[0].starts_with("python") && t[1] == "-m" {
-        t.drain(..2); // python -m pip install …
-    }
+type Kind = (
+    &'static str,
+    Ecosystem,
+    usize,
+    &'static [&'static str],
+    bool,
+);
+
+fn classify(t: &[&str]) -> Option<Kind> {
     use Ecosystem::*;
-    let (eco, args, value_flags) = match t.as_slice() {
-        ["npm", "install" | "i" | "add" | "in", rest @ ..] => (Npm, rest, NPM_FLAGS),
-        ["pnpm", "add" | "install" | "i", rest @ ..] => (Npm, rest, PNPM_FLAGS),
-        ["yarn", "add", rest @ ..] => (Npm, rest, YARN_FLAGS),
-        ["bun", "add" | "install" | "i", rest @ ..] => (Npm, rest, BUN_FLAGS),
-        ["pip" | "pip3", "install", rest @ ..]
-        | ["uv", "pip", "install", rest @ ..]
-        | ["uv" | "poetry", "add", rest @ ..] => (PyPI, rest, PIP_FLAGS),
-        ["cargo", "add", rest @ ..] => (Cargo, rest, CARGO_FLAGS),
-        ["go", "get", rest @ ..] => (Go, rest, &[][..]),
-        ["gem", "install", rest @ ..] | ["bundle", "add", rest @ ..] => (RubyGems, rest, GEM_FLAGS),
-        ["composer", "require", rest @ ..] => (Packagist, rest, &[][..]),
+    Some(match t {
+        ["npm", "install" | "i" | "add" | "in", ..] => ("npm install", Npm, 2, NPM_FLAGS, false),
+        ["npm", "exec" | "x", ..] => ("npx", Npm, 2, NPX_FLAGS, true),
+        ["npx", ..] => ("npx", Npm, 1, NPX_FLAGS, true),
+        ["pnpm", "add" | "install" | "i", ..] => ("pnpm add", Npm, 2, PNPM_FLAGS, false),
+        ["pnpm", "dlx", ..] => ("pnpm dlx", Npm, 2, NPX_FLAGS, true),
+        ["pnpx", ..] => ("pnpm dlx", Npm, 1, NPX_FLAGS, true),
+        ["yarn", "add", ..] => ("yarn add", Npm, 2, YARN_FLAGS, false),
+        ["yarn", "dlx", ..] => ("yarn dlx", Npm, 2, NPX_FLAGS, true),
+        ["bun", "add" | "install" | "i", ..] => ("bun add", Npm, 2, BUN_FLAGS, false),
+        ["bun", "x", ..] => ("bunx", Npm, 2, NPX_FLAGS, true),
+        ["bunx", ..] => ("bunx", Npm, 1, NPX_FLAGS, true),
+        ["pip" | "pip3", "install", ..] => ("pip install", PyPI, 2, PIP_FLAGS, false),
+        ["uv", "pip", "install", ..] => ("uv pip install", PyPI, 3, PIP_FLAGS, false),
+        ["uv", "add", ..] => ("uv add", PyPI, 2, PIP_FLAGS, false),
+        ["poetry", "add", ..] => ("poetry add", PyPI, 2, PIP_FLAGS, false),
+        ["uvx", ..] => ("uvx", PyPI, 1, UVX_FLAGS, true),
+        ["uv", "tool", "run" | "install", ..] => ("uvx", PyPI, 3, UVX_FLAGS, true),
+        ["pipx", "install" | "run", ..] => ("pipx", PyPI, 2, PIPX_FLAGS, true),
+        ["cargo", "add", ..] => ("cargo add", Cargo, 2, CARGO_FLAGS, false),
+        ["cargo", "install", ..] => ("cargo install", Cargo, 2, CARGO_INSTALL_FLAGS, false),
+        ["go", "get", ..] => ("go get", Go, 2, &[][..], false),
+        ["go", "install", ..] => ("go install", Go, 2, GO_FLAGS, false),
+        ["gem", "install", ..] => ("gem install", RubyGems, 2, GEM_FLAGS, false),
+        ["bundle", "add", ..] => ("bundle add", RubyGems, 2, GEM_FLAGS, false),
+        ["composer", "require", ..] => ("composer require", Packagist, 2, &[][..], false),
         // dotnet add [PROJECT] package NAME [--version V]
-        ["dotnet", "add", rest @ ..] => match rest.iter().position(|w| *w == "package") {
-            Some(at) => (NuGet, &rest[at + 1..], DOTNET_FLAGS),
-            None => return Vec::new(),
-        },
-        _ => return Vec::new(),
-    };
-    let mut out = Vec::new();
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        if arg.starts_with('-') {
-            if !arg.contains('=') && value_flags.contains(arg) {
-                args.next();
-            }
-            continue;
+        ["dotnet", "add", rest @ ..] => {
+            let at = rest.iter().position(|w| *w == "package")?;
+            ("dotnet add package", NuGet, at + 3, DOTNET_FLAGS, false)
         }
-        if eco == Go && (arg.starts_with('.') || arg.ends_with("@none")) {
-            continue; // local packages, or removing a module
-        }
-        out.push(Request {
-            eco,
-            spec: (*arg).to_string(),
-            name: registry_name(eco, arg),
-        });
+        _ => return None,
+    })
+}
+
+impl Invocation {
+    /// `--flag` given, alone or as `--flag=value`.
+    pub fn has(&self, flag: &str) -> bool {
+        self.args
+            .iter()
+            .any(|a| a == flag || a.strip_prefix(flag).is_some_and(|r| r.starts_with('=')))
     }
-    out
+
+    /// Value of the first of `flags` given (`--f v` or `--f=v`).
+    pub fn value(&self, flags: &[&str]) -> Option<&str> {
+        let mut args = self.args.iter();
+        while let Some(a) = args.next() {
+            for f in flags {
+                if a == f {
+                    return args.next().map(String::as_str);
+                }
+                if let Some(v) = a.strip_prefix(f).and_then(|r| r.strip_prefix('=')) {
+                    return Some(v);
+                }
+            }
+        }
+        None
+    }
+
+    pub fn requests(&self) -> Vec<Request> {
+        let flagged = match self.via {
+            "gem install" | "bundle add" | "dotnet add package" => self.value(&["-v", "--version"]),
+            "cargo install" => self.value(&["--version", "--vers"]),
+            _ => None,
+        }
+        .map(String::from);
+        self.packages()
+            .into_iter()
+            .map(|spec| {
+                let (name, version) = self.split(&spec);
+                Request {
+                    eco: self.eco,
+                    name,
+                    version: flagged.clone().or(version),
+                    spec,
+                    via: self.via,
+                }
+            })
+            .collect()
+    }
+
+    fn packages(&self) -> Vec<String> {
+        // `npx -p pkg cmd`, `uvx --from pkg cmd`, `pipx run --spec pkg cmd`.
+        let package_flags: &[&str] = match self.via {
+            "npx" | "bunx" | "pnpm dlx" | "yarn dlx" => &["-p", "--package"],
+            "uvx" => &["--from"],
+            "pipx" => &["--spec"],
+            _ => &[],
+        };
+        if let Some(p) = self.value(package_flags) {
+            return vec![p.to_string()];
+        }
+        let mut out = Vec::new();
+        let mut args = self.args.iter();
+        while let Some(arg) = args.next() {
+            if arg.starts_with('-') {
+                if !arg.contains('=') && self.value_flags.contains(&arg.as_str()) {
+                    args.next();
+                }
+                continue;
+            }
+            if self.eco == Ecosystem::Go && (arg.starts_with('.') || arg.ends_with("@none")) {
+                continue; // local packages, or removing a module
+            }
+            out.push(arg.clone());
+            if self.runs_tool {
+                break; // the rest are the tool's own arguments
+            }
+        }
+        out
+    }
+
+    fn split(&self, spec: &str) -> (Option<String>, Option<String>) {
+        // `uvx ruff@0.6.0`, `pipx install black==24.1`
+        if self.eco == Ecosystem::PyPI
+            && let Some((name, v)) = spec.split_once('@')
+            && !name.is_empty()
+            && !spec.contains("://")
+        {
+            return (registry_name(self.eco, name), Some(v.to_string()));
+        }
+        let version = pinned_version(self.eco, spec).map(String::from);
+        (registry_name(self.eco, spec), version)
+    }
 }
 
 fn registry_name(eco: Ecosystem, spec: &str) -> Option<String> {
@@ -178,98 +236,4 @@ fn registry_name(eco: Ecosystem, spec: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn names(cmd: &str) -> Vec<String> {
-        requests(cmd)
-            .into_iter()
-            .map(|r| {
-                format!(
-                    "{}:{}",
-                    r.eco,
-                    r.name.unwrap_or_else(|| format!("<{}>", r.spec))
-                )
-            })
-            .collect()
-    }
-
-    #[test]
-    fn finds_package_installs() {
-        assert_eq!(
-            names("npm i -D left-pad@1.3.0 @types/node"),
-            ["npm:left-pad", "npm:@types/node"]
-        );
-        assert_eq!(
-            names("cd web && pnpm --version; pnpm add --filter app zod"),
-            ["npm:zod"]
-        );
-        assert_eq!(names("CI=1 yarn add pad@npm:left-pad@^1"), ["npm:left-pad"]);
-        assert_eq!(
-            names("npm install github:acme/x ./local"),
-            ["npm:<github:acme/x>", "npm:<./local>"]
-        );
-        assert_eq!(
-            names("python3 -m pip install 'Requests[socks]>=2' -r req.txt"),
-            ["pypi:requests"]
-        );
-        assert_eq!(
-            names("uv add --group dev Pytest && poetry add django"),
-            ["pypi:pytest", "pypi:django"]
-        );
-        assert_eq!(names("cargo add serde@1 -F derive"), ["cargo:serde"]);
-        assert_eq!(
-            names("go get github.com/spf13/cobra@v1.8.1 ./..."),
-            ["go:github.com/spf13/cobra"]
-        );
-        // Regression (live Claude Code run): `2>&1` was read as a package.
-        assert_eq!(
-            names("npm view slugify version 2>&1 | head && npm install slugify 2>&1 | tail -5"),
-            ["npm:slugify"]
-        );
-        assert_eq!(names("npm i zod > install.log 2>/dev/null"), ["npm:zod"]);
-        assert_eq!(
-            names("gem install rack -v 2.2.3 && bundle add Nokogiri"),
-            ["rubygems:rack", "rubygems:Nokogiri"]
-        );
-        assert_eq!(
-            names("dotnet add src/App.csproj package Newtonsoft.Json --version 12.0.1"),
-            ["nuget:newtonsoft.json"]
-        );
-        assert_eq!(
-            names("composer require Guzzlehttp/Guzzle:7.4.0"),
-            ["composer:guzzlehttp/guzzle"]
-        );
-        assert_eq!(
-            names("npm i zod & pnpm add yup &> log"),
-            ["npm:zod", "npm:yup"]
-        );
-        for cmd in [
-            "npm install",
-            "npm ci",
-            "pnpm install --frozen-lockfile",
-            "yarn",
-            "npm test",
-            "cargo build",
-        ] {
-            assert!(requests(cmd).is_empty(), "{cmd}");
-        }
-    }
-
-    #[test]
-    fn spots_age_gate_overrides() {
-        for cmd in [
-            "npm install --min-release-age=0 x",
-            "pnpm add x --config.minimum-release-age=0",
-            "npm_config_min_release_age=0 npm i x",
-            "npm config set min-release-age 0",
-            "yarn config set npmMinimalAgeGate 0",
-            "uv add requests --exclude-newer 2099-01-01",
-            "UV_EXCLUDE_NEWER=2099-01-01 uv lock",
-        ] {
-            assert!(weakens_age_gate(cmd), "{cmd}");
-        }
-        assert!(!weakens_age_gate("npm config get min-release-age"));
-        assert!(!weakens_age_gate("npm install left-pad"));
-    }
-}
+mod tests;

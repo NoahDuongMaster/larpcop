@@ -26,7 +26,7 @@ impl Client {
         let (bin, args) = argv
             .split_first()
             .context("empty language server command")?;
-        let mut child = Command::new(resolve(bin))
+        let mut child = Command::new(crate::shell::which(bin))
             .args(args)
             .current_dir(root)
             .stdin(Stdio::piped())
@@ -129,23 +129,6 @@ impl Drop for Client {
         let _ = self.notify("exit", Value::Null);
         let _ = self.child.kill();
     }
-}
-
-/// npm installs language servers as `.cmd` shims on Windows, which a bare name
-/// does not find; look them up on PATH like a shell would.
-fn resolve(bin: &str) -> std::path::PathBuf {
-    let exts: &[&str] = if cfg!(windows) {
-        &[".exe", ".cmd", ".bat"]
-    } else {
-        &[""]
-    };
-    std::env::var_os("PATH")
-        .and_then(|paths| {
-            std::env::split_paths(&paths)
-                .flat_map(|d| exts.iter().map(move |e| d.join(format!("{bin}{e}"))))
-                .find(|p| p.is_file())
-        })
-        .unwrap_or_else(|| bin.into())
 }
 
 fn url(path: &Path) -> String {

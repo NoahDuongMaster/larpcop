@@ -15,7 +15,7 @@
     ],
     "AfterTool": [
       {
-        "matcher": "^(write_file|replace)$",
+        "matcher": "^(run_shell_command|write_file|replace)$",
         "hooks": [
           {
             "type": "command",

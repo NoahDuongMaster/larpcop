@@ -9,6 +9,8 @@ use std::path::{Path, PathBuf};
 pub enum Event {
     /// About to run a shell command.
     Shell(String),
+    /// A shell command finished; the uncommitted files before it ran (if recorded).
+    AfterShell(Option<super::shell_run::Snapshot>),
     /// About to create, modify or delete these files.
     BeforeEdit(Vec<PathBuf>),
     /// About to write this content to this file (agents without post-edit
@@ -55,6 +57,7 @@ pub fn parse(agent: Agent, input: &Value, cwd: &Path) -> Event {
         Agent::ClaudeCode if input.get("cursor_version").is_some() => Event::Ignore,
         Agent::ClaudeCode | Agent::Copilot => match (event, tool) {
             ("PreToolUse", "Bash") => Event::Shell(command(input)),
+            ("PostToolUse", "Bash") => Event::AfterShell(None),
             ("PreToolUse", t) if is_claude_edit(t) => Event::BeforeEdit(file_path(input, cwd)),
             ("PostToolUse", t) if is_claude_edit(t) => Event::AfterEdit(file_path(input, cwd)),
             ("Stop" | "SubagentStop" | "agentStop" | "subagentStop", _) => Event::Stop {
@@ -65,6 +68,7 @@ pub fn parse(agent: Agent, input: &Value, cwd: &Path) -> Event {
         // Factory Droid speaks Claude Code's protocol with its own tool names.
         Agent::Droid => match (event, tool) {
             ("PreToolUse", "Execute") => Event::Shell(command(input)),
+            ("PostToolUse", "Execute") => Event::AfterShell(None),
             ("PreToolUse", "Create" | "Edit") => Event::BeforeEdit(file_path(input, cwd)),
             ("PostToolUse", "Create" | "Edit") => Event::AfterEdit(file_path(input, cwd)),
             ("PreToolUse", "ApplyPatch") => Event::BeforeEdit(patch_paths(&patch(input), cwd)),
@@ -84,6 +88,7 @@ pub fn parse(agent: Agent, input: &Value, cwd: &Path) -> Event {
         },
         Agent::Codex => match (event, tool) {
             ("PreToolUse", "Bash") => Event::Shell(command(input)),
+            ("PostToolUse", "Bash") => Event::AfterShell(None),
             ("PreToolUse", "apply_patch") => Event::BeforeEdit(patch_paths(&command(input), cwd)),
             ("PostToolUse", "apply_patch") => Event::AfterEdit(patch_paths(&command(input), cwd)),
             ("Stop" | "SubagentStop", _) => Event::Stop {
@@ -93,6 +98,7 @@ pub fn parse(agent: Agent, input: &Value, cwd: &Path) -> Event {
         },
         Agent::Gemini => match (event, tool) {
             ("BeforeTool", "run_shell_command") => Event::Shell(command(input)),
+            ("AfterTool", "run_shell_command") => Event::AfterShell(None),
             ("BeforeTool", "write_file" | "replace") => Event::BeforeEdit(file_path(input, cwd)),
             ("AfterTool", "write_file" | "replace") => Event::AfterEdit(file_path(input, cwd)),
             ("AfterAgent", _) => Event::Stop {
@@ -102,6 +108,7 @@ pub fn parse(agent: Agent, input: &Value, cwd: &Path) -> Event {
         },
         Agent::Cursor => match (event, tool) {
             ("preToolUse", "Shell") => Event::Shell(command(input)),
+            ("postToolUse", "Shell") => Event::AfterShell(None),
             ("preToolUse", "Write" | "Delete") => Event::BeforeEdit(file_path(input, cwd)),
             ("postToolUse", "Write") => Event::AfterEdit(file_path(input, cwd)),
             // A user abort must end the turn at once, never be turned into a follow-up.

@@ -141,7 +141,7 @@ impl Ctx {
         if let Some(known) = Baseline::load(&cfg.root, staged)? {
             outcome.baselined = known.apply(&mut outcome.violations);
             let before = files::base(&cfg.root, scope)
-                .filter(|_| !matches!(scope, Scope::All | Scope::Paths(_)))
+                .filter(|_| !matches!(scope, Scope::All | Scope::Paths(_) | Scope::Touched(_)))
                 .and_then(|rev| files::show(&cfg.root, &rev, baseline::FILE));
             if let Some(before) = before {
                 let before = Baseline::parse(&before).unwrap_or_default();

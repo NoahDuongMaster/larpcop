@@ -6,7 +6,9 @@
 
 mod event;
 pub mod guard;
+mod inert;
 mod respond;
+mod shell_run;
 
 use crate::context::Ctx;
 use crate::files::Scope;
@@ -40,6 +42,9 @@ pub fn run(agent: Agent, extends: Vec<String>, refresh: bool) -> Result<i32> {
         None => std::env::current_dir()?,
     };
     let mut event = event::parse(agent, &input, &cwd);
+    if let Event::AfterShell(since) = &mut event {
+        *since = shell_run::take(&input);
+    }
     // Kiro reports no "already continued" flag: remember our own blocks per session.
     let marker = (agent == Agent::Kiro)
         .then(|| stop_marker(&input))
@@ -48,6 +53,9 @@ pub fn run(agent: Agent, extends: Vec<String>, refresh: bool) -> Result<i32> {
         *continued = std::fs::remove_file(m).is_ok();
     }
     let verdict = decide(&event, &cwd, &extends, refresh)?;
+    if let (Event::Shell(_), Verdict::Allow) = (&event, &verdict) {
+        shell_run::record(&input, &cwd);
+    }
     if let (Event::Stop { .. }, Verdict::Block(_), Some(m)) = (&event, &verdict, &marker) {
         let _ = m.parent().map(std::fs::create_dir_all);
         let _ = std::fs::write(m, b"");
@@ -100,7 +108,8 @@ fn decide(event: &Event, cwd: &Path, extends: &[String], refresh: bool) -> Resul
                     return Ok(v);
                 }
             }
-            if !crate::deps::concerns(command) {
+            let installs = crate::deps::concerns(command);
+            if !installs && !inert::runs_code(&script) {
                 return Ok(Verdict::Allow);
             }
             // A broken config must not wedge the agent: commit and CI still enforce.
@@ -109,8 +118,21 @@ fn decide(event: &Event, cwd: &Path, extends: &[String], refresh: bool) -> Resul
             };
             let reason = engine
                 .deps()
-                .and_then(|d| d.gate_command(&cfg.root, cwd, command));
+                .filter(|_| installs)
+                .and_then(|d| d.gate_command(&cfg.root, cwd, command))
+                .or_else(|| shell_run::exec_gate(&cfg, &engine, &script));
             Ok(blocked(reason))
+        }
+        Event::AfterShell(None) => Ok(Verdict::Allow),
+        Event::AfterShell(Some(since)) => {
+            let root = crate::context::find_root(cwd)?;
+            let changed = shell_run::changed_since(&root, since);
+            if changed.is_empty() {
+                return Ok(Verdict::Allow);
+            }
+            let header = "larpcop: the command you just ran changed files that break enforced \
+rules. Fix them now.";
+            check(&ctx(cwd)?, Scope::Touched(changed), header)
         }
         Event::BeforeEdit(paths) => {
             for path in paths {
@@ -133,7 +155,7 @@ fn decide(event: &Event, cwd: &Path, extends: &[String], refresh: bool) -> Resul
             let header = "larpcop: the file you just edited breaks enforced rules. Fix them now.";
             check(
                 &ctx(start_dir(&paths[0], cwd))?,
-                Scope::Paths(paths.clone()),
+                Scope::Touched(paths.clone()),
                 header,
             )
         }

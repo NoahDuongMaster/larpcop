@@ -40,6 +40,23 @@ pub fn git_bundled_sh(exec_path: &Path) -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
+/// A program on PATH, as a shell would find it: npm and RubyGems install
+/// `.cmd`/`.bat` shims on Windows, which a bare name does not find.
+pub fn which(bin: &str) -> std::path::PathBuf {
+    let exts: &[&str] = if cfg!(windows) {
+        &[".exe", ".cmd", ".bat"]
+    } else {
+        &[""]
+    };
+    std::env::var_os("PATH")
+        .and_then(|paths| {
+            std::env::split_paths(&paths)
+                .flat_map(|d| exts.iter().map(move |e| d.join(format!("{bin}{e}"))))
+                .find(|p| p.is_file())
+        })
+        .unwrap_or_else(|| bin.into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

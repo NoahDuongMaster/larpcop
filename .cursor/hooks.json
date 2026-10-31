@@ -11,7 +11,7 @@
     "postToolUse": [
       {
         "command": "larpcop hook cursor",
-        "matcher": "Write",
+        "matcher": "Shell|Write",
         "timeout": 120
       }
     ],

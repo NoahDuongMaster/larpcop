@@ -34,13 +34,14 @@ pub fn mcp_json(current: Option<&str>, _cmd: &str) -> Result<String> {
 }
 
 /// `.claude/settings.json`. PreToolUse guards bypasses, PostToolUse gives
-/// per-edit feedback, Stop refuses to let the agent finish with violations.
+/// feedback after each edit or shell command, Stop refuses to let the agent
+/// finish with violations.
 pub fn claude_settings(current: Option<&str>, cmd: &str) -> Result<String> {
     let mut doc = parse(current)?;
     let edit = "Edit|Write|MultiEdit|NotebookEdit";
     let events = [
         ("PreToolUse", Some("Bash|Edit|Write|MultiEdit|NotebookEdit")),
-        ("PostToolUse", Some(edit)),
+        ("PostToolUse", Some(&format!("Bash|{edit}"))),
         ("Stop", None),
         ("SubagentStop", None),
     ];
@@ -66,7 +67,7 @@ pub fn codex_hooks(current: Option<&str>, cmd: &str) -> Result<String> {
 
 pub const CODEX_EVENTS: [(&str, Option<&str>); 4] = [
     ("PreToolUse", Some("^(Bash|apply_patch)$")),
-    ("PostToolUse", Some("^apply_patch$")),
+    ("PostToolUse", Some("^(Bash|apply_patch)$")),
     ("Stop", None),
     ("SubagentStop", None),
 ];
@@ -80,7 +81,10 @@ pub fn gemini_settings(current: Option<&str>, cmd: &str) -> Result<String> {
             "BeforeTool",
             Some("^(run_shell_command|write_file|replace)$"),
         ),
-        ("AfterTool", Some("^(write_file|replace)$")),
+        (
+            "AfterTool",
+            Some("^(run_shell_command|write_file|replace)$"),
+        ),
         ("AfterAgent", None),
     ];
     let handler = json!({
@@ -125,7 +129,7 @@ pub fn cursor_hooks(current: Option<&str>, cmd: &str) -> Result<String> {
         ),
         (
             "postToolUse",
-            json!({ "command": cmd, "matcher": "Write", "timeout": TIMEOUT_SECS }),
+            json!({ "command": cmd, "matcher": "Shell|Write", "timeout": TIMEOUT_SECS }),
         ),
         ("stop", stop.clone()),
         ("subagentStop", stop),
@@ -148,7 +152,7 @@ pub fn copilot_hooks(_current: Option<&str>, cmd: &str) -> Result<String> {
         "version": 1,
         "hooks": {
             "PreToolUse": entry(Some("Bash|Edit|Write")),
-            "PostToolUse": entry(Some("Edit|Write")),
+            "PostToolUse": entry(Some("Bash|Edit|Write")),
             "Stop": entry(None),
         }
     });
@@ -161,7 +165,7 @@ pub fn droid_hooks(current: Option<&str>, cmd: &str) -> Result<String> {
     let mut wrapper = json!({ "hooks": parse(current)? });
     let events = [
         ("PreToolUse", Some("Execute|Create|Edit|ApplyPatch")),
-        ("PostToolUse", Some("Create|Edit|ApplyPatch")),
+        ("PostToolUse", Some("Execute|Create|Edit|ApplyPatch")),
         ("Stop", None),
         ("SubagentStop", None),
     ];

@@ -12,6 +12,9 @@ pub enum Scope {
     All,
     /// Explicit files or directories.
     Paths(Vec<PathBuf>),
+    /// Files an agent just changed, judged as changes against HEAD (hook feedback):
+    /// a lockfile's old entries are not this edit's doing.
+    Touched(Vec<PathBuf>),
     /// Staged content (what the commit will contain) — for pre-commit.
     Staged,
     /// Uncommitted changes + untracked files — for agent stop hooks.
@@ -55,7 +58,7 @@ pub fn list(root: &Path, scope: &Scope) -> Result<Vec<String>> {
     ];
     let mut rels = match scope {
         Scope::All => walk(root, root),
-        Scope::Paths(paths) => from_paths(root, paths)?,
+        Scope::Paths(paths) | Scope::Touched(paths) => from_paths(root, paths)?,
         Scope::Staged => git_list(root, &[&DIFF[..], &["--cached"]].concat())?,
         Scope::Changed => changed(root)?,
         Scope::Since(base) => git_list(root, &[&DIFF[..], &[&format!("{base}...HEAD")]].concat())?,

@@ -25,6 +25,8 @@ pub struct TaintRule {
     /// Sources as written, without whitespace (`req.query`), for destructuring.
     source_texts: Vec<String>,
     param_types: std::collections::BTreeMap<String, String>,
+    /// `sink_types`: metavariables whose type the project's language server must confirm.
+    typed: typed::Typed,
     /// Per language: (sources, sinks, sanitizers), compiled for that grammar.
     langs: Vec<(SupportLang, [Vec<Pattern>; 3])>,
 }
@@ -47,7 +49,7 @@ const VARIABLES: [&str; 3] = [
 ];
 
 impl TaintRule {
-    pub fn new(cfg: &TaintConfig) -> Result<Self> {
+    pub fn new(cfg: &TaintConfig, typed: typed::Typed) -> Result<Self> {
         let compile = |lang: SupportLang, list: &[String]| -> Result<Vec<Pattern>> {
             list.iter()
                 .map(|p| {
@@ -81,6 +83,7 @@ impl TaintRule {
                 .map(|s| s.split_whitespace().collect())
                 .collect(),
             param_types: cfg.param_types.clone(),
+            typed,
             langs,
         })
     }
@@ -120,8 +123,8 @@ impl TaintRule {
         if ctx.sources.is_empty() && !self.source_texts.iter().any(|s| property(s) == Some(true)) {
             return Vec::new();
         }
-        // (position, sink argument): judged when the walk reaches it.
-        let mut hits: Vec<(usize, Node<_>)> = Vec::new();
+        // (position, sink argument, typed metavariables): judged when the walk reaches it.
+        let mut hits: Vec<Hit<_>> = Vec::new();
         for p in sinks {
             for m in root.find_all(p) {
                 let arg = self
@@ -129,7 +132,8 @@ impl TaintRule {
                     .as_deref()
                     .and_then(|v| m.get_env().get_match(v).cloned());
                 let node = arg.unwrap_or_else(|| m.get_node().clone());
-                hits.push((m.range().start, node));
+                let typed = self.typed.metavariables(m.get_env());
+                hits.push((m.range().start, node, typed));
             }
         }
         let mut out = Vec::new();
@@ -142,9 +146,9 @@ impl TaintRule {
                     events.push((n.range().end, Event::Assign(left, right)));
                 }
             });
-            for (at, sink) in &hits {
+            for (at, sink, typed) in &hits {
                 if enclosing(sink, &root).range() == scope.range() {
-                    events.push((*at, Event::Sink(sink.clone())));
+                    events.push((*at, Event::Sink(sink.clone(), typed.clone())));
                 }
             }
             events.sort_by_key(|(at, _)| *at);
@@ -173,10 +177,12 @@ impl TaintRule {
                             ));
                         }
                     }
-                    Event::Sink(arg) if ctx.tainted(&arg, &names) => {
+                    Event::Sink(arg, typed)
+                        if ctx.tainted(&arg, &names) && self.typed.holds(lang, file, &typed) =>
+                    {
                         out.push(self.violation(file, &arg))
                     }
-                    Event::Sink(_) => {}
+                    Event::Sink(..) => {}
                 }
             }
         }
@@ -202,9 +208,12 @@ impl TaintRule {
     }
 }
 
+/// A sink match: (position, sink argument, typed metavariables).
+type Hit<'a, D> = (usize, Node<'a, D>, Vec<(usize, Node<'a, D>)>);
+
 enum Event<'a, D: Doc> {
     Assign(Node<'a, D>, Node<'a, D>),
-    Sink(Node<'a, D>),
+    Sink(Node<'a, D>, Vec<(usize, Node<'a, D>)>),
 }
 
 struct Ctx {
@@ -253,3 +262,4 @@ fn enclosing<'a, D: Doc>(node: &Node<'a, D>, root: &Node<'a, D>) -> Node<'a, D> 
 mod destructure;
 #[cfg(test)]
 mod tests;
+pub mod typed;

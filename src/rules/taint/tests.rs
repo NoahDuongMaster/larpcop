@@ -8,18 +8,22 @@ fn rule(
     sanitizers: &[&str],
 ) -> TaintRule {
     let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect();
-    TaintRule::new(&TaintConfig {
-        id: "sql-taint".into(),
-        languages: s(langs),
-        severity: None,
-        message: "request data reaches SQL".into(),
-        note: None,
-        sources: s(sources),
-        sinks: s(sinks),
-        sink_arg: arg.map(String::from),
-        sanitizers: s(sanitizers),
-        param_types: [("Request".to_string(), "req".to_string())].into(),
-    })
+    TaintRule::new(
+        &TaintConfig {
+            id: "sql-taint".into(),
+            languages: s(langs),
+            severity: None,
+            message: "request data reaches SQL".into(),
+            note: None,
+            sources: s(sources),
+            sinks: s(sinks),
+            sink_arg: arg.map(String::from),
+            sanitizers: s(sanitizers),
+            param_types: [("Request".to_string(), "req".to_string())].into(),
+            sink_types: Default::default(),
+        },
+        typed::Typed::default(),
+    )
     .unwrap()
 }
 

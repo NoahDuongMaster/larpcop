@@ -36,6 +36,7 @@ pub struct Config {
     pub secrets: Option<SecretsConfig>,
     pub taint: Vec<TaintConfig>,
     pub llm: LlmConfig,
+    pub language_servers: BTreeMap<String, Vec<String>>,
     /// Layers in application order, for traceability.
     pub sources: Vec<String>,
 }
@@ -198,6 +199,7 @@ impl Config {
             self.taint.retain(|t| t.id != rule.id);
             self.taint.push(rule);
         }
+        self.language_servers.extend(raw.language_servers);
         if let Some(llm) = raw.llm {
             self.llm.command = llm.command.or(self.llm.command.take());
             for rule in llm.rules {

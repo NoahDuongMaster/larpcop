@@ -20,6 +20,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
+      # A real language server, so the type-query test runs instead of skipping.
+      - run: npm install -g typescript-language-server@4 typescript@5
       - run: cargo test
       # agentkit enforces its own rules and keeps its generated agent files current
       - run: cargo run -- check

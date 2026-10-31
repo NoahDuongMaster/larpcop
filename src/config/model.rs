@@ -39,6 +39,10 @@ pub struct RawConfig {
     pub taint: Vec<TaintConfig>,
     /// Rules in plain language, judged by a model (`agentkit review`).
     pub llm: Option<LlmConfig>,
+    /// Language server commands by language (typescript, python, go, rust),
+    /// for rules that ask about types.
+    #[serde(default)]
+    pub language_servers: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -93,6 +97,10 @@ pub struct TaintConfig {
     /// `{ query }: Request` reads `req.query`.
     #[serde(default)]
     pub param_types: std::collections::BTreeMap<String, String>,
+    /// Sink metavariable → regex over its type as the project's language server
+    /// shows it (`DB: "Pool|PoolClient"`). Without a server the sink counts.
+    #[serde(default)]
+    pub sink_types: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

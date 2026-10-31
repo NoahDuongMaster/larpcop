@@ -110,7 +110,12 @@ impl Engine {
             .taint
             .iter()
             .filter(|t| !cfg.disabled.contains(&t.id))
-            .map(taint::TaintRule::new)
+            .map(|t| {
+                let servers = cfg.language_servers.clone();
+                let typed =
+                    taint::typed::Typed::new(&t.id, &t.sink_types, cfg.root.clone(), servers)?;
+                taint::TaintRule::new(t, typed)
+            })
             .collect::<Result<_>>()?;
         Ok(Self {
             max_lines,

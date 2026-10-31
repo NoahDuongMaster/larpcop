@@ -1,0 +1,7 @@
+id: tf-iam-wildcard
+valid:
+  - "data \"aws_iam_policy_document\" \"p\" {\n  statement {\n    actions = [\"s3:GetObject\"]\n  }\n}"
+  - "data \"aws_iam_policy_document\" \"p\" {\n  statement {\n    resources = [\"*\"]\n  }\n}"
+invalid:
+  - "data \"aws_iam_policy_document\" \"p\" {\n  statement {\n    actions = [\"*\"]\n  }\n}"
+  - "resource \"aws_iam_policy\" \"p\" {\n  policy = jsonencode({\n    Statement = [{ Action = \"*\", Effect = \"Allow\", Resource = \"*\" }]\n  })\n}"

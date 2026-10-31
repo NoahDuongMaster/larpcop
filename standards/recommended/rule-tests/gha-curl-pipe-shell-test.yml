@@ -1,0 +1,7 @@
+id: gha-curl-pipe-shell
+valid:
+  - "run: curl -sSLo install.sh https://x.dev/install.sh && sha256sum -c sums && sh install.sh"
+  - "run: curl https://api.github.com | jq ."
+invalid:
+  - "run: curl -sSL https://x.dev/install.sh | bash"
+  - "run: |\n  wget -qO- https://x.dev/i | sudo sh"

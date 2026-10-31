@@ -21,6 +21,8 @@ pub struct Script {
     pub written: Vec<String>,
     /// `export VAR=value` / `declare` assignments.
     pub exported: Vec<(String, String)>,
+    /// Files written with known content: `cat > f <<EOF`, `tee f <<EOF`, `echo … > f`.
+    pub file_writes: Vec<FileWrite>,
 }
 
 impl Script {
@@ -36,6 +38,10 @@ impl Script {
 /// Wrappers whose arguments are themselves a command.
 const WRAPPERS: [&str; 7] = ["sudo", "command", "exec", "nohup", "time", "env", "xargs"];
 const SHELLS: [&str; 5] = ["sh", "bash", "zsh", "dash", "ksh"];
+
+mod writes;
+pub use writes::FileWrite;
+use writes::file_writes;
 
 pub fn parse(src: &str) -> Script {
     let mut script = Script::default();
@@ -58,6 +64,7 @@ fn collect(src: &str, script: &mut Script, depth: usize) {
                 script.commands.push(cmd);
             }
             "file_redirect" => script.written.extend(written_target(&node)),
+            "redirected_statement" => script.file_writes.extend(file_writes(&node)),
             "declaration_command" => script.exported.extend(
                 node.children()
                     .filter(|c| c.kind() == "variable_assignment")
@@ -68,7 +75,7 @@ fn collect(src: &str, script: &mut Script, depth: usize) {
     }
 }
 
-fn command<D: Doc>(node: &Node<D>) -> Command {
+pub(super) fn command<D: Doc>(node: &Node<D>) -> Command {
     let mut cmd = Command::default();
     for child in node.children().filter(|c| c.is_named()) {
         match child.kind().as_ref() {
@@ -81,7 +88,7 @@ fn command<D: Doc>(node: &Node<D>) -> Command {
 }
 
 /// `sudo -u x env A=1 git …` → `git …` with `A=1` in `env`.
-fn unwrap(mut cmd: Command) -> Command {
+pub(super) fn unwrap(mut cmd: Command) -> Command {
     loop {
         let Some(first) = cmd.words.first() else {
             return cmd;
@@ -126,7 +133,7 @@ fn assignment<D: Doc>(node: &Node<D>) -> (String, String) {
     (name.unwrap_or_default(), value)
 }
 
-fn written_target<D: Doc>(node: &Node<D>) -> Option<String> {
+pub(super) fn written_target<D: Doc>(node: &Node<D>) -> Option<String> {
     let op = node.children().find(|c| !c.is_named())?.text().to_string();
     let dest = node.children().filter(|c| c.is_named()).last()?;
     let writes = op.contains('>') && dest.kind() != "number" && dest.kind() != "file_descriptor";

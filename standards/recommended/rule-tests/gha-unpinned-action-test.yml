@@ -1,0 +1,8 @@
+id: gha-unpinned-action
+valid:
+  - "uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6"
+  - "uses: ./.github/actions/setup"
+  - "uses: docker://alpine:3.20"
+invalid:
+  - "uses: actions/checkout@v4"
+  - "uses: tj-actions/changed-files@main"

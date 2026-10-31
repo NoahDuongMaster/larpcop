@@ -199,3 +199,31 @@ fn managed_policies_force_the_standards_with_an_absolute_binary() {
     let no_standards = repo.run(&["sync", "--managed", "--out", out.to_str().unwrap()]);
     assert_eq!(no_standards.code(), 3);
 }
+
+#[test]
+fn files_written_through_the_shell_are_checked_before_the_command_runs() {
+    let repo = Repo::with_standards();
+    repo.write("src/ok.ts", GOOD_TS);
+    repo.commit_all("base");
+    let dir = repo.path();
+    let bash = |cmd: &str| {
+        let input = hook_input("PreToolUse", "Bash", &dir, json!({ "command": cmd }));
+        repo.run_stdin(&["hook", "claude-code"], &input)
+    };
+    // A heredoc dodges Write/Edit hooks; its content is checked all the same.
+    let run = bash("cd src && cat > new.ts <<'EOF'\nconsole.log(1);\nEOF\n");
+    assert_eq!(run.code(), 2, "{}", run.stdout());
+    assert!(
+        run.stderr().contains("no-console") && run.stderr().contains("src/new.ts"),
+        "{}",
+        run.stderr()
+    );
+    assert!(!dir.join("src/new.ts").exists());
+    // Appending is judged on the whole resulting file; clean content passes.
+    assert_eq!(bash("echo 'console.log(2);' >> src/ok.ts").code(), 2);
+    assert_eq!(
+        bash("cat > src/clean.ts <<'EOF'\nexport const a = 1;\nEOF\n").code(),
+        0
+    );
+    assert_eq!(bash("npm test > log.txt").code(), 0);
+}

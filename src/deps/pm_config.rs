@@ -1,5 +1,6 @@
-//! JS package managers can refuse too-new versions themselves, while installing on
-//! the developer's machine — before any install script runs. The lockfile check
+//! Package managers that can refuse too-new versions themselves (npm, pnpm, yarn
+//! Berry, bun, uv), while installing on the developer's machine — before any
+//! install script runs. The lockfile check
 //! only sees a bad version after it was installed, so the repo must turn this on.
 
 use regex::Regex;
@@ -10,6 +11,7 @@ pub fn relevant(file_name: &str) -> bool {
     GATES
         .iter()
         .any(|g| g.lockfile == file_name || g.config == file_name)
+        || file_name == "uv.toml"
         || file_name == ".npmrc"
 }
 
@@ -31,7 +33,7 @@ struct Gate {
     fix: fn(u32) -> String,
 }
 
-const GATES: [Gate; 4] = [
+const GATES: [Gate; 5] = [
     Gate {
         pm: "npm",
         lockfile: "package-lock.json",
@@ -64,6 +66,21 @@ const GATES: [Gate; 4] = [
         days: |c| bunfig(c).map(|s| s / 86_400.0),
         fix: |d| format!("[install]\nminimumReleaseAge = {}", u64::from(d) * 86_400),
     },
+    Gate {
+        pm: "uv",
+        lockfile: "uv.lock",
+        config: "pyproject.toml",
+        key: "tool.uv.exclude-newer",
+        days: |c| {
+            uv_span(
+                toml::from_str::<toml::Table>(c)
+                    .ok()?
+                    .get("tool")?
+                    .get("uv")?,
+            )
+        },
+        fix: |d| format!("[tool.uv]\nexclude-newer = \"{d} days\""),
+    },
 ];
 
 /// Age gates missing or too short in `dir`. `read` gets a repo-relative file.
@@ -84,7 +101,13 @@ pub fn check(dir: &str, min_days: u32, read: &dyn Fn(&str) -> Option<String>) ->
         if g.pm == "yarn" && !lock.contains("__metadata:") {
             continue;
         }
-        let configured = read(&path(g.config)).and_then(|c| (g.days)(&c));
+        // uv.toml, when present, replaces `[tool.uv]` of pyproject.toml.
+        let configured = match read(&path("uv.toml")).filter(|_| g.pm == "uv") {
+            Some(c) => toml::from_str::<toml::Value>(&c)
+                .ok()
+                .and_then(|v| uv_span(&v)),
+            None => read(&path(g.config)).and_then(|c| (g.days)(&c)),
+        };
         if configured.is_some_and(|d| d >= f64::from(min_days)) {
             continue;
         }
@@ -163,6 +186,15 @@ fn bunfig(content: &str) -> Option<f64> {
     v.as_float().or_else(|| v.as_integer().map(|i| i as f64))
 }
 
+/// uv's `exclude-newer` as a rolling window in days: a friendly (`14 days`,
+/// `2 weeks`) or ISO 8601 (`P14D`) duration. A fixed date is not a gate: it
+/// freezes the index on that day and lets everything older through forever.
+fn uv_span(table: &toml::Value) -> Option<f64> {
+    let span: jiff::Span = table.get("exclude-newer")?.as_str()?.trim().parse().ok()?;
+    let relative = jiff::SpanRelativeTo::days_are_24_hours();
+    span.total((jiff::Unit::Day, relative)).ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,6 +221,18 @@ mod tests {
             bunfig("[install]\nminimumReleaseAge = 259200\n"),
             Some(259_200.0)
         );
+        let uv = |s: &str| {
+            uv_span(&toml::from_str::<toml::Value>(&format!("exclude-newer = \"{s}\"")).unwrap())
+        };
+        assert_eq!(uv("14 days"), Some(14.0));
+        assert_eq!(uv("2 weeks"), Some(14.0));
+        assert_eq!(uv("P14D"), Some(14.0));
+        assert_eq!(uv("336 hours"), Some(14.0));
+        assert_eq!(
+            uv("2026-10-01T00:00:00Z"),
+            None,
+            "a fixed date is not a rolling gate"
+        );
     }
 
     #[test]
@@ -199,6 +243,11 @@ mod tests {
                 "web/pnpm-workspace.yaml" => Some("minimumReleaseAge: 1440\n".into()),
                 "api/package-lock.json" => Some("{}".into()),
                 "old/yarn.lock" => Some("# yarn lockfile v1\n".into()),
+                "py/uv.lock" => Some("version = 1\n".into()),
+                "py/pyproject.toml" => Some("[tool.uv]\nexclude-newer = \"1 week\"\n".into()),
+                "py2/uv.lock" => Some("version = 1\n".into()),
+                "py2/pyproject.toml" => Some("[project]\nname = \"x\"\n".into()),
+                "py2/uv.toml" => Some("exclude-newer = \"P14D\"\n".into()),
                 _ => None,
             }
         };
@@ -217,5 +266,19 @@ mod tests {
             "Yarn 1 has no gate to require"
         );
         assert!(check("web", 1, &files).is_empty());
+        let py = check("py", 14, &files);
+        assert!(
+            py[0].message.contains("uv can still install")
+                && py[0].message.contains("only 7.0 day")
+        );
+        assert!(
+            py[0].note.contains("exclude-newer = \"14 days\""),
+            "{}",
+            py[0].note
+        );
+        assert!(
+            check("py2", 14, &files).is_empty(),
+            "uv.toml replaces [tool.uv]"
+        );
     }
 }

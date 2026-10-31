@@ -13,6 +13,7 @@ dependencies:
     - cargo:base64
     - cargo:cvss
     - cargo:jiff
+    - cargo:jsonc-parser
     - cargo:lsp-server
     - cargo:lsp-types
     - cargo:percent-encoding

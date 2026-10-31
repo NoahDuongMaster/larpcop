@@ -18,6 +18,7 @@ fn rule(
         sinks: s(sinks),
         sink_arg: arg.map(String::from),
         sanitizers: s(sanitizers),
+        param_types: [("Request".to_string(), "req".to_string())].into(),
     })
     .unwrap()
 }
@@ -86,4 +87,36 @@ def view():
     cur.execute(\"select * from u where name = %s\", (name,))
 ";
     assert_eq!(lines(&r, "app.py", src), [4]);
+}
+
+#[test]
+fn destructured_variables_and_typed_parameters() {
+    let r = rule(
+        &["TypeScript"],
+        &["req.query"],
+        &["$RES.redirect($URL)"],
+        Some("URL"),
+        &[],
+    );
+    let src = "\
+function a(req, res) {
+  const { query } = req;
+  res.redirect(query.to);
+}
+const b = ({ query }: Request, res: Response) => {
+  const toUrl = query.to as string;
+  res.redirect(toUrl);
+};
+function c(req, res) {
+  const { params } = req;
+  res.redirect(params.to);
+}
+const d = ({ query }: Other, res) => res.redirect(query.to);
+function e(req, res) {
+  const { query: q } = req;
+  res.redirect(q.to);
+}
+";
+    // c: `req.params` is not a source here; d: not a Request.
+    assert_eq!(lines(&r, "x.ts", src), [3, 7, 16]);
 }

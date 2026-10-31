@@ -85,6 +85,21 @@ fn decide(event: &Event, cwd: &Path, extends: &[String], refresh: bool) -> Resul
             if let Some(reason) = guard::bash_bypass(command) {
                 return Ok(blocked(Some(reason)));
             }
+            // Files written by the shell skip the agent's edit hooks: check them here.
+            let script = crate::shell_ast::parse(command);
+            let dir = script
+                .cd()
+                .map_or_else(|| cwd.to_path_buf(), |d| cwd.join(d));
+            for w in &script.file_writes {
+                let path = dir.join(&w.path);
+                let content = match (w.append, std::fs::read_to_string(&path)) {
+                    (true, Ok(old)) => old + &w.content,
+                    _ => w.content.clone(),
+                };
+                if let Some(v) = proposed(&ctx(start_dir(&path, cwd))?, &path, &content)? {
+                    return Ok(v);
+                }
+            }
             if !crate::deps::concerns(command) {
                 return Ok(Verdict::Allow);
             }
@@ -112,20 +127,7 @@ fn decide(event: &Event, cwd: &Path, extends: &[String], refresh: bool) -> Resul
         Event::AfterEdit(paths) if paths.is_empty() => Ok(Verdict::Allow),
         Event::Proposed(path, content) => {
             let ctx = ctx(start_dir(path, cwd))?;
-            let rule_dirs = ctx.load().map(|(cfg, _)| cfg.rule_dirs).unwrap_or_default();
-            if let Some(reason) = guard::protected_path(path, &rule_dirs) {
-                return Ok(blocked(Some(reason)));
-            }
-            let outcome = ctx.check_content(path, content)?;
-            if outcome.errors() == 0 {
-                return Ok(Verdict::Allow);
-            }
-            let header = "agentkit: this write was not applied: the content breaks enforced rules. \
-Write it again without these violations.";
-            Ok(Verdict::Block(format!(
-                "{header}\n\n{}",
-                report::text(&outcome)
-            )))
+            Ok(proposed(&ctx, path, content)?.unwrap_or(Verdict::Allow))
         }
         Event::AfterEdit(paths) => {
             let header = "agentkit: the file you just edited breaks enforced rules. Fix them now.";
@@ -145,6 +147,24 @@ rules. Fix every error below, then finish.";
             check(&ctx(cwd)?, Scope::Changed, header)
         }
     }
+}
+
+/// Verdict on content about to be written to `path`, if it must be blocked.
+fn proposed(ctx: &Ctx, path: &Path, content: &str) -> Result<Option<Verdict>> {
+    let rule_dirs = ctx.load().map(|(cfg, _)| cfg.rule_dirs).unwrap_or_default();
+    if let Some(reason) = guard::protected_path(path, &rule_dirs) {
+        return Ok(Some(blocked(Some(reason))));
+    }
+    let outcome = ctx.check_content(path, content)?;
+    if outcome.errors() == 0 {
+        return Ok(None);
+    }
+    let header = "agentkit: this write was not applied: the content breaks enforced rules. \
+Write it again without these violations.";
+    Ok(Some(Verdict::Block(format!(
+        "{header}\n\n{}",
+        report::text(&outcome)
+    ))))
 }
 
 fn start_dir<'a>(file: &'a Path, cwd: &'a Path) -> &'a Path {

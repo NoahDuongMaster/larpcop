@@ -1,0 +1,6 @@
+id: tf-public-bucket-acl
+valid:
+  - "resource \"aws_s3_bucket_acl\" \"b\" {\n  acl = \"private\"\n}"
+invalid:
+  - "resource \"aws_s3_bucket_acl\" \"b\" {\n  acl = \"public-read\"\n}"
+  - "resource \"google_storage_bucket_object\" \"o\" {\n  predefined_acl = \"publicRead\"\n}"

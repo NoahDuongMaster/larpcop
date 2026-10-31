@@ -113,13 +113,25 @@ that installed it as compromised: rotate the credentials they held."
         if wanted.is_empty() {
             return None;
         }
+        // Fail closed, like the lockfile check: an install that cannot be
+        // vetted does not run.
+        let unreachable = |e: anyhow::Error| {
+            format!(
+                "could not check this install against known malware and vulnerabilities \
+(OSV.dev: {e:#}). Retry when the network is back; do not install around the check."
+            )
+        };
         let osv = Osv::new();
-        let ids = osv.ids(&wanted).ok()?;
+        let ids = match osv.ids(&wanted) {
+            Ok(ids) => ids,
+            Err(e) => return Some(unreachable(e)),
+        };
         let mut reasons = Vec::new();
         for ((eco, name, version), ids) in wanted.iter().zip(ids) {
             for id in ids {
-                let Ok(a) = osv.advisory(&id, *eco, name) else {
-                    continue;
+                let a = match osv.advisory(&id, *eco, name) {
+                    Ok(a) => a,
+                    Err(e) => return Some(unreachable(e)),
                 };
                 let pinned_and_bad = version.is_some() && a.severity >= threshold;
                 if a.malicious || pinned_and_bad {

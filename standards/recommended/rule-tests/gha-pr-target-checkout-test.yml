@@ -1,0 +1,6 @@
+id: gha-pr-target-checkout
+valid:
+  - "on: pull_request\njobs:\n  t:\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}"
+  - "on: pull_request_target\njobs:\n  t:\n    steps:\n      - uses: actions/labeler@v5"
+invalid:
+  - "on: pull_request_target\njobs:\n  t:\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}"

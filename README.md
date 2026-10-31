@@ -89,7 +89,7 @@ dependencies:
 
 **`dependency-release-age`** chạy ở ba chỗ:
 
-1. **Lockfile** (pre-commit, CI, hook kết thúc lượt): mọi phiên bản, kể cả dependency bắc cầu, mà thay đổi này thêm vào hoặc đổi sang phải đủ `N` ngày tuổi. Ngày phát hành lấy từ [deps.dev](https://deps.dev), một API chung cho npm, PyPI, crates.io và Go, và được cache trên đĩa vì ngày phát hành không bao giờ đổi. Chỉ phiên bản *mới trong thay đổi* mới được tra, nên PR thường chỉ mất vài request. Lockfile đọc được: `package-lock.json` (v2/v3), `pnpm-lock.yaml` (v5–v9), `yarn.lock` (v1 và Berry), `Cargo.lock`, `uv.lock`, `poetry.lock` và `go.mod`. Khi chặn, thông báo đưa luôn một phiên bản cụ thể để pin, ví dụ: *"Use typescript@7.0.2 (published 2026-07-08)"*.
+1. **Lockfile** (pre-commit, CI, hook kết thúc lượt): mọi phiên bản, kể cả dependency bắc cầu, mà thay đổi này thêm vào hoặc đổi sang phải đủ `N` ngày tuổi. Ngày phát hành lấy từ [deps.dev](https://deps.dev), một API chung cho npm, PyPI, crates.io và Go, và được cache trên đĩa vì ngày phát hành không bao giờ đổi. Chỉ phiên bản *mới trong thay đổi* mới được tra, nên PR thường chỉ mất vài request. Lockfile đọc được: `package-lock.json` (v2/v3), `pnpm-lock.yaml` (v5–v9), `yarn.lock` (v1 và Berry), `bun.lock`, `Cargo.lock`, `uv.lock`, `poetry.lock` và `go.mod`. Khi chặn, thông báo đưa luôn một phiên bản cụ thể để pin, ví dụ: *"Use typescript@7.0.2 (published 2026-07-08)"*.
 2. **Package manager**: npm, pnpm, yarn Berry và bun tự chặn được bản quá mới ngay lúc cài, trên máy dev, *trước khi* install script chạy. Lockfile chỉ thấy được sau khi đã cài, nên repo bắt buộc phải bật tính năng này:
 
    | Package manager | File | Thiết lập cho 14 ngày |
@@ -98,9 +98,10 @@ dependencies:
    | pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge: 20160` |
    | yarn ≥ Berry | `.yarnrc.yml` | `npmMinimalAgeGate: "14d"` |
    | bun | `bunfig.toml` | `[install] minimumReleaseAge = 1209600` |
+   | uv ≥ 0.9 | `pyproject.toml` (`[tool.uv]`) hoặc `uv.toml` | `exclude-newer = "14 days"` |
 
    Đã chạy thật: npm 11.19 với `min-release-age=14`, khi được yêu cầu `typescript@next` thì tự chọn `7.0.2`. pnpm 11.2 chọn bản dev `20261017`, đúng 14 ngày tuổi.
-3. **Hook của agent**: chặn mọi lệnh ghi đè gate (`--min-release-age=0`, `npm config set min-release-age …`, `npm_config_min_release_age=…`).
+3. **Hook của agent**: chặn mọi lệnh ghi đè gate (`--min-release-age=0`, `npm config set min-release-age …`, `npm_config_min_release_age=…`, `uv … --exclude-newer`, `UV_EXCLUDE_NEWER=…`).
 
 Phiên bản không có trên deps.dev hoặc không tra được vì lỗi mạng đều bị chặn (fail closed). **Ngoại lệ là bản vá bảo mật**: một bản quá mới vẫn được cho qua, ở mức warning, nếu bản đủ tuổi mới nhất cùng dòng có advisory còn bản mới thì không, theo trường `advisoryKeys` của deps.dev. Không có ngoại lệ này thì rule sẽ ép hạ về bản có lỗ hổng: chính repo agentkit gặp trường hợp này với `rustls-webpki` 0.103.16 và `webpki-roots` 1.0.11, vì bản đủ tuổi trước đó dính RUSTSEC-2026-0382 và RUSTSEC-2026-0381.
 
@@ -146,7 +147,7 @@ dependencies:
 
 - Package bị báo là **mã độc** (`MAL-…`) luôn bị chặn, ở mọi lockfile và trong mọi PR, kể cả PR không đụng tới lockfile: mã độc thường được phát hiện sau khi đã vào repo.
 - Lỗ hổng từ mức đã chọn trở lên chặn phiên bản *mà thay đổi này đưa vào*. `agentkit check` không giới hạn phạm vi thì kiểm toàn bộ. Thông báo nêu luôn phiên bản đã vá.
-- Hook chặn lệnh cài **trước khi chạy**: tên package dính mã độc (`npm i aaa-evil`), hoặc phiên bản pin dính lỗ hổng (`npm i lodash@4.17.15`).
+- Hook chặn lệnh cài **trước khi chạy**: tên package dính mã độc (`npm i aaa-evil`), hoặc phiên bản pin dính lỗ hổng (`npm i lodash@4.17.15`). Không gọi được OSV thì lệnh cài cũng bị chặn (fail closed), giống phần lockfile.
 - Mức nghiêm trọng lấy theo đánh giá của advisory, nếu không có thì tính từ vector CVSS 3/4 (crate `cvss`).
 
 Đã chạy với dữ liệu thật (lockfile gồm `lodash@4.17.15`, `local-commander-agent@0.3.52`, `zod@3.23.8`):
@@ -429,12 +430,12 @@ Ngoài ra đã chạy agent thật trong repo demo:
 ## Giới hạn
 
 - **Cursor và Gemini chưa chạy agent thật.** Cursor cần đăng nhập `cursor-agent login` (qua trình duyệt); Gemini CLI chưa được cài hay đăng nhập trên máy dev. Adapter được test bằng đúng schema payload ở trên.
-- **File agent ghi bằng shell** (ví dụ `cat > f <<EOF`) không đi qua hook "sau khi sửa". Chúng vẫn bị bắt ở hook kết thúc lượt, ở pre-commit và ở CI.
+- **File agent ghi bằng shell**: `cat > f <<EOF`, `cat <<EOF >> f`, `tee f <<EOF` và `echo … > f` được hook đọc bằng tree-sitter-bash và kiểm nội dung *trước khi* lệnh chạy, kể cả sau `cd dir &&`. Các cách khác (`sed -i`, `cp`, script tự viết) thì không thấy trước được; chúng vẫn bị bắt ở hook kết thúc lượt, ở pre-commit và ở CI.
 - **Repo private** khiến installer `curl | sh`, Homebrew và npm chưa dùng được cho người ngoài (xem [Phân phối khi repo private](#phân-phối-khi-repo-private)). Repo khác muốn gọi `enforce.yml` thì cần quyền truy cập Actions; mục này đã được bật sẵn cho các repo cùng owner `NoahDuongMaster` (`access_level: user`). Repo gọi vẫn phải truyền secret `agentkit-token` để tải binary.
 - **Chi phí CI**: GitHub Actions của repo private tính phút chạy, với runner macOS nhân 10 và Windows nhân 2. Repo public thì miễn phí.
 - **Dependency**:
   - Rule tuổi phiên bản cần mạng tới deps.dev và fail closed khi không tra được. Package ở registry riêng phải được khai trong `exempt`.
-  - uv, Poetry, Cargo và Go không có thiết lập tuổi tối thiểu dạng tương đối (uv `exclude-newer` chỉ nhận một ngày cố định). Với các hệ sinh thái này, bản quá mới của một package *đã duyệt* vẫn cài được lên máy dev, rồi mới bị chặn ở lượt kết thúc, pre-commit và CI. Yarn 1 cũng không có gate.
-  - `bun.lock` chưa được đọc phiên bản; chỉ kiểm thiết lập `bunfig.toml`. Maven, Gradle, NuGet, RubyGems và Composer chưa hỗ trợ.
+  - Poetry, Cargo và Go không có thiết lập tuổi tối thiểu (uv thì có, từ 0.9, và đã bị bắt buộc). Với các hệ sinh thái này, bản quá mới của một package *đã duyệt* vẫn cài được lên máy dev, rồi mới bị chặn ở lượt kết thúc, pre-commit và CI. Yarn 1 cũng không có gate.
+  - Maven, Gradle, NuGet, RubyGems và Composer chưa hỗ trợ.
   - Hook chỉ nhận ra lệnh cài gõ trực tiếp. Cài qua script hay Makefile thì không thấy trước, nhưng vẫn bị bắt ở lockfile và manifest.
   - Bộ standards mẫu bật dependency rules từ bản sau `v0.1.0`. Workflow `self-enforce` tải binary bản release mới nhất, nên PR chỉ dùng được các khóa `dependencies` sau khi có release mới.

@@ -1,0 +1,5 @@
+id: tf-publicly-accessible-db
+valid:
+  - "resource \"aws_db_instance\" \"d\" {\n  publicly_accessible = false\n}"
+invalid:
+  - "resource \"aws_db_instance\" \"d\" {\n  publicly_accessible = true\n}"

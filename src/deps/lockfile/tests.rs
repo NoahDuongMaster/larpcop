@@ -1,6 +1,7 @@
-//! Samples are real lockfiles (npm 11, pnpm 11, uv 0.11, cargo 1.98), trimmed,
+//! Samples are real lockfiles (npm 11, pnpm 11, uv 0.11, cargo 1.98, bun 1.4), trimmed,
 //! plus private, git and workspace entries that must be skipped.
 
+use super::js::pnpm_key;
 use super::*;
 
 fn pins(file: &str, content: &str) -> Vec<String> {
@@ -238,4 +239,41 @@ fn other_ecosystems() {
         .collect();
     assert_eq!(direct.len(), 2);
     assert!(parse("README.md", "").is_none());
+}
+
+/// bun 1.4.4: a workspace package, a git dependency and an npm alias.
+const BUN: &str = r#"{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": { "name": "root", "dependencies": { "is-number": "github:jonschlinkert/is-number", "string-width": "npm:string-width@4.2.3", "zod": "3.23.8", }, },
+  },
+  "packages": {
+    "@acme/util": ["@acme/util@workspace:packages/util"],
+
+    "@types/ms": ["@types/ms@2.1.0", "", {}, "sha512-GsCC"],
+
+    "is-number": ["is-number@github:jonschlinkert/is-number#98e8ff1", {}, "jonschlinkert-is-number-98e8ff1", "sha512-VRiI"],
+
+    "string-width": ["string-width@4.2.3", "", { "dependencies": { "emoji-regex": "^8.0.0" } }, "sha512-wKyQ"],
+
+    "private": ["private@1.0.0", "https://npm.acme.internal/", {}, "sha512-x"],
+
+    "zod": ["zod@3.23.8", "", {}, "sha512-XBx9"],
+  }
+}
+"#;
+
+#[test]
+fn bun_text_lockfile() {
+    assert_eq!(
+        pins("bun.lock", BUN),
+        [
+            "npm:@types/ms@2.1.0",
+            "npm:string-width@4.2.3",
+            "npm:zod@3.23.8"
+        ]
+    );
+    let zod = Pinned::new(Ecosystem::Npm, "zod", "3.23.8");
+    assert_eq!(line_of("bun.lock", BUN, &zod), 18);
 }

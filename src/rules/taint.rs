@@ -22,6 +22,9 @@ pub struct TaintRule {
     message: String,
     note: Option<String>,
     sink_arg: Option<String>,
+    /// Sources as written, without whitespace (`req.query`), for destructuring.
+    source_texts: Vec<String>,
+    param_types: std::collections::BTreeMap<String, String>,
     /// Per language: (sources, sinks, sanitizers), compiled for that grammar.
     langs: Vec<(SupportLang, [Vec<Pattern>; 3])>,
 }
@@ -72,6 +75,12 @@ impl TaintRule {
             message: cfg.message.clone(),
             note: cfg.note.clone(),
             sink_arg: cfg.sink_arg.clone(),
+            source_texts: cfg
+                .sources
+                .iter()
+                .map(|s| s.split_whitespace().collect())
+                .collect(),
+            param_types: cfg.param_types.clone(),
             langs,
         })
     }
@@ -106,7 +115,9 @@ impl TaintRule {
             sources: ranges(sources),
             sanitizers: ranges(sanitizers),
         };
-        if ctx.sources.is_empty() {
+        // Without a source in sight, only destructuring (`{ query }`) can bring one in.
+        let property = |s: &String| s.rsplit('.').next().map(|p| file.content.contains(p));
+        if ctx.sources.is_empty() && !self.source_texts.iter().any(|s| property(s) == Some(true)) {
             return Vec::new();
         }
         // (position, sink argument): judged when the walk reaches it.
@@ -137,7 +148,8 @@ impl TaintRule {
                 }
             }
             events.sort_by_key(|(at, _)| *at);
-            let mut names: HashSet<String> = HashSet::new();
+            let mut names: HashSet<String> =
+                destructure::from_params(&scope, &self.param_types, &self.source_texts);
             for (_, e) in events {
                 match e {
                     Event::Assign(left, right) => {
@@ -151,6 +163,14 @@ impl TaintRule {
                             } else if left.kind() == "identifier" {
                                 names.remove(v.text().as_ref());
                             }
+                        }
+                        if !tainted && right.kind() == "identifier" {
+                            let object = right.text();
+                            names.extend(destructure::from_object(
+                                &left,
+                                &object,
+                                &self.source_texts,
+                            ));
                         }
                     }
                     Event::Sink(arg) if ctx.tainted(&arg, &names) => {
@@ -230,5 +250,6 @@ fn enclosing<'a, D: Doc>(node: &Node<'a, D>, root: &Node<'a, D>) -> Node<'a, D> 
         .unwrap_or_else(|| root.clone())
 }
 
+mod destructure;
 #[cfg(test)]
 mod tests;

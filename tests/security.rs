@@ -96,6 +96,15 @@ fn installs_of_known_bad_packages_are_blocked_before_they_run() {
         "{}",
         run.stderr()
     );
+    // Unreachable OSV: the install is not vetted, so it does not run.
+    let down = [("AGENTKIT_OSV_API", "http://127.0.0.1:9/v1")];
+    let run = repo.run_stdin_env(&["hook", "claude-code"], &input("npm i zod"), &down);
+    assert_eq!(run.code(), 2, "{}", run.stderr());
+    assert!(
+        run.stderr().contains("could not check this install"),
+        "{}",
+        run.stderr()
+    );
 }
 
 #[test]

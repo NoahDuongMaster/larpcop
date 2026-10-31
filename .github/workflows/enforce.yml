@@ -29,9 +29,27 @@ on:
         description: Upload SARIF to GitHub code scanning. Needs code scanning and `security-events write`.
         type: boolean
         default: false
+      review:
+        description: Run `agentkit review` (the repo's `llm` rules) and add its warnings to the PR comment. Never fails the job.
+        type: boolean
+        default: false
+      review-setup:
+        description: Shell command installing the model CLI on the runner.
+        type: string
+        default: npm install -g @anthropic-ai/claude-code
+      review-command:
+        description: Model CLI (prompt on stdin, answer on stdout). Empty = `llm.command` of the config, else `claude -p`.
+        type: string
+        default: ""
     secrets:
       agentkit-token:
         description: Token able to read agentkit releases and private standards (needed while they are private).
+        required: false
+      anthropic-api-key:
+        description: For `review` with Claude Code.
+        required: false
+      openai-api-key:
+        description: For `review` with Codex.
         required: false
 
 jobs:
@@ -66,6 +84,25 @@ jobs:
         run: >-
           agentkit check --since "origin/${BASE_REF}" --format github
           --output markdown=agentkit-report.md --output sarif=agentkit.sarif
+
+      # Advisory only: a model is not deterministic, so its findings never gate.
+      - name: AI review
+        if: always() && inputs.review && github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.anthropic-api-key }}
+          OPENAI_API_KEY: ${{ secrets.openai-api-key }}
+          AGENTKIT_LLM: ${{ inputs.review-command }}
+          SETUP: ${{ inputs.review-setup }}
+        run: |
+          if [ -n "$SETUP" ]; then sh -c "$SETUP"; fi
+          agentkit review --since "origin/${BASE_REF}" --format markdown > agentkit-review.md
+          if [ -f agentkit-report.md ]; then
+            sed -i '1{/^<!-- agentkit-report -->$/d}' agentkit-review.md
+            printf '\n' >> agentkit-report.md
+          fi
+          sed -i 's/^### agentkit$/### agentkit · AI review (advisory)/' agentkit-review.md
+          cat agentkit-review.md >> agentkit-report.md
 
       # One comment per PR, edited on every push (never a pile of bot comments).
       - name: Pull request comment

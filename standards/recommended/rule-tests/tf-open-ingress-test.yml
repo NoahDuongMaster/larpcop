@@ -1,0 +1,8 @@
+id: tf-open-ingress
+valid:
+  - "resource \"aws_security_group\" \"a\" {\n  ingress {\n    cidr_blocks = [\"10.0.0.0/8\"]\n  }\n}"
+  - "resource \"aws_security_group\" \"a\" {\n  egress {\n    cidr_blocks = [\"0.0.0.0/0\"]\n  }\n}"
+invalid:
+  - "resource \"aws_security_group\" \"a\" {\n  ingress {\n    from_port = 22\n    cidr_blocks = [\"0.0.0.0/0\"]\n  }\n}"
+  - "resource \"aws_vpc_security_group_ingress_rule\" \"r\" {\n  cidr_ipv4 = \"0.0.0.0/0\"\n}"
+  - "resource \"google_compute_firewall\" \"f\" {\n  source_ranges = [\"0.0.0.0/0\"]\n}"

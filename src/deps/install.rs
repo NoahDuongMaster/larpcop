@@ -89,7 +89,7 @@ pub fn requests(command: &str) -> Vec<Request> {
 pub fn weakens_age_gate(command: &str) -> bool {
     static OVERRIDE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(
-            r"(?i)(--|\.)min(imum)?-release-age|\b(npm|pnpm)_config_min(imum)?_release_age\s*=|YARN_NPM_MINIMAL_AGE_GATE\s*=|\b(npm|pnpm|yarn|bun)\b[^;&|\n]*\bconfig\s+(set|delete|rm|unset)\b[^;&|\n]*(min(imum)?-?release-?age|npmMinimalAgeGate)",
+            r"(?i)(--|\.)min(imum)?-release-age|\b(npm|pnpm)_config_min(imum)?_release_age\s*=|YARN_NPM_MINIMAL_AGE_GATE\s*=|\b(npm|pnpm|yarn|bun)\b[^;&|\n]*\bconfig\s+(set|delete|rm|unset)\b[^;&|\n]*(min(imum)?-?release-?age|npmMinimalAgeGate)|\buv\b[^;&|\n]*--exclude-newer|UV_EXCLUDE_NEWER\s*=",
         )
         .expect("static regex")
     });
@@ -237,6 +237,8 @@ mod tests {
             "npm_config_min_release_age=0 npm i x",
             "npm config set min-release-age 0",
             "yarn config set npmMinimalAgeGate 0",
+            "uv add requests --exclude-newer 2099-01-01",
+            "UV_EXCLUDE_NEWER=2099-01-01 uv lock",
         ] {
             assert!(weakens_age_gate(cmd), "{cmd}");
         }

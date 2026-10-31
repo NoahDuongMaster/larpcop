@@ -1,0 +1,27 @@
+{
+  "repo": "https://github.com/OWASP/NodeGoat.git",
+  "commit": "c5cb68a",
+  "how": "Each NodeGoat 'Fix for …' comment (and the tutorial's A10/SSRF sections) names a vulnerability; the line is the active statement that comment's fix replaces. Written before running any tool on NodeGoat; never edited after.",
+  "lines": [
+    {"file": "app/routes/contributions.js", "line": 32, "label": "A1-1 server-side JS injection (eval of req.body)"},
+    {"file": "app/routes/contributions.js", "line": 33, "label": "A1-1 server-side JS injection (eval of req.body)"},
+    {"file": "app/routes/contributions.js", "line": 34, "label": "A1-1 server-side JS injection (eval of req.body)"},
+    {"file": "app/data/allocations-dao.js", "line": 78, "label": "A1-2 NoSQL injection ($where with threshold)"},
+    {"file": "app/routes/session.js", "line": 64, "label": "A1-3 log injection (user name logged raw)"},
+    {"file": "app/routes/profile.js", "line": 59, "label": "ReDoS (/([0-9]+)+\\#/)"},
+    {"file": "app/routes/allocations.js", "line": 18, "label": "A4 insecure direct object reference (userId from URL)"},
+    {"file": "app/data/user-dao.js", "line": 25, "label": "A2-1 password stored in plain text"},
+    {"file": "app/data/user-dao.js", "line": 61, "label": "A2 password compared in plain text"},
+    {"file": "app/routes/session.js", "line": 144, "label": "A2-2 weak password policy"},
+    {"file": "server.js", "line": 137, "label": "A3 XSS (template autoescape off)"},
+    {"file": "app/routes/index.js", "line": 72, "label": "A10 open redirect (req.query.url)"},
+    {"file": "app/routes/research.js", "line": 16, "label": "SSRF (needle.get of req.query.url)"},
+    {"file": "package-lock.json", "line": 6742, "label": "A9 vulnerable dependency (marked 0.3.5)"}
+  ],
+  "absent": [
+    "A5 security misconfiguration: helmet headers not set (server.js)",
+    "A6 sensitive data exposure: no HTTPS, SSN/DOB stored unencrypted",
+    "A7 missing function level access control (/benefits)",
+    "A8 CSRF: no csurf middleware"
+  ]
+}

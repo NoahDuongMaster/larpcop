@@ -89,6 +89,10 @@ pub struct TaintConfig {
     /// ast-grep patterns that make data safe, e.g. `Number($X)`.
     #[serde(default)]
     pub sanitizers: Vec<String>,
+    /// Destructured parameters by type: with `Request: req`, the parameter
+    /// `{ query }: Request` reads `req.query`.
+    #[serde(default)]
+    pub param_types: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

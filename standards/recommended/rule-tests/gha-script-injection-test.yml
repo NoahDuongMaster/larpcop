@@ -1,0 +1,9 @@
+id: gha-script-injection
+valid:
+  - "run: echo \"$TITLE\""
+  - "run: echo \"${{ github.sha }}\""
+  - "env:\n  TITLE: ${{ github.event.issue.title }}"
+invalid:
+  - "run: echo \"${{ github.event.issue.title }}\""
+  - "run: |\n  git checkout ${{ github.head_ref }}\n  make"
+  - "script: core.info('${{ github.event.pull_request.body }}')"

@@ -29,6 +29,7 @@ taint:
     sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "request.nextUrl.searchParams", "await request.json()", "await request.formData()"]
     sinks: ["$DB.query($SQL, $$$REST)", "$DB.query($SQL)", "$DB.execute($SQL, $$$REST)", "$DB.execute($SQL)", "$DB.raw($SQL, $$$REST)", "$DB.raw($SQL)", "$DB.$queryRawUnsafe($SQL, $$$REST)", "$DB.$queryRawUnsafe($SQL)"]
     sink_arg: SQL
+    param_types: { Request: req, NextRequest: request }
     sanitizers: ["Number($X)", "parseInt($$$X)", "parseFloat($X)", "$S.parse($X)"]
   - id: taint-shell
     languages: [TypeScript, Tsx, JavaScript]
@@ -37,6 +38,7 @@ taint:
     sources: ["req.query", "req.body", "req.params", "req.headers", "await request.json()"]
     sinks: ["exec($CMD, $$$REST)", "exec($CMD)", "execSync($CMD, $$$REST)", "execSync($CMD)", "$CP.exec($CMD, $$$REST)", "$CP.exec($CMD)", "$CP.execSync($CMD, $$$REST)", "$CP.execSync($CMD)"]
     sink_arg: CMD
+    param_types: { Request: req }
   - id: taint-redirect
     languages: [TypeScript, Tsx, JavaScript]
     message: Request data decides where a redirect goes (open redirect).
@@ -44,6 +46,7 @@ taint:
     sources: ["req.query", "req.body", "req.params", "request.nextUrl.searchParams"]
     sinks: ["$RES.redirect($URL)", "$RES.redirect($CODE, $URL)", "redirect($URL)", "NextResponse.redirect($URL)"]
     sink_arg: URL
+    param_types: { Request: req, NextRequest: request }
   - id: py-taint-sql
     languages: [Python]
     message: Request data reaches a SQL query.

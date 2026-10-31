@@ -3,7 +3,9 @@ file: app/controllers/users_controller.rb
 valid:
 - "class UsersController < ApplicationController\n  def show\n    render html: ERB::Util.html_escape(params[:q])\n  end\nend\n"
 - "class UsersController < ApplicationController\n  def show\n    render html: \"<b>ok</b>\".html_safe\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    @list = params[:items].map { |i| content_tag(:li, i) }.join.html_safe\n  end\nend\n"
 invalid:
 - "class UsersController < ApplicationController\n  def show\n    render html: \"<p>#{params[:q]}</p>\".html_safe\n  end\nend\n"
 - "class UsersController < ApplicationController\n  def show\n    @msg = raw(params[:msg])\n  end\nend\n"
 - "class UsersController < ApplicationController\n  def show\n    render html: params[:q]\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    @list = params[:items].map { |i| \"<li>#{i}</li>\" }.join.html_safe\n  end\nend\n"

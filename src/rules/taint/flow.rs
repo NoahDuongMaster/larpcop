@@ -143,6 +143,10 @@ impl Ctx {
         {
             return s.returns_source;
         }
+        // A mapped collection carries what its callback returns.
+        if let Some(t) = super::iteration::mapped(self, node, names) {
+            return t;
+        }
         // A function we have a summary for: only what it really passes through.
         if CALLS.contains(&kind.as_ref())
             && let Some(s) = self.summary(node)

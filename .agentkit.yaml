@@ -3,3 +3,12 @@
 extends:
   - examples/standards
 exclude: ["examples/**", "target/**"]
+dependencies:
+  # Approved for the dependency rules (deps.dev client, lockfile parsing).
+  approved:
+    - cargo:jiff
+    - cargo:percent-encoding
+    - cargo:shlex
+    - cargo:toml
+    - cargo:ureq
+    - cargo:yarn-lock-parser

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::{env, fs, process};
 
-fn cache_root() -> Result<PathBuf> {
+pub fn cache_root() -> Result<PathBuf> {
     if let Some(dir) = env::var_os("AGENTKIT_CACHE_DIR") {
         return Ok(PathBuf::from(dir));
     }

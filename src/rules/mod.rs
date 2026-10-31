@@ -63,6 +63,7 @@ pub struct Engine {
     max_lines: Option<max_lines::MaxLines>,
     ast: ast::AstRules,
     linters: Vec<linters::Linter>,
+    deps: Option<crate::deps::Deps>,
 }
 
 impl Engine {
@@ -82,11 +83,19 @@ impl Engine {
             max_lines,
             ast,
             linters,
+            deps: crate::deps::Deps::new(cfg)?,
         })
     }
 
     pub fn is_empty(&self) -> bool {
-        self.max_lines.is_none() && self.ast.is_empty() && self.linters.is_empty()
+        self.max_lines.is_none()
+            && self.ast.is_empty()
+            && self.linters.is_empty()
+            && self.deps.is_none()
+    }
+
+    pub fn deps(&self) -> Option<&crate::deps::Deps> {
+        self.deps.as_ref()
     }
 
     pub fn check(&self, root: &Path, files: &[SourceFile]) -> Result<Vec<Violation>> {
@@ -101,9 +110,6 @@ impl Engine {
         for linter in &self.linters {
             found.extend(linter.run(root, files)?);
         }
-        found.sort_by(|a, b| {
-            (&a.file, a.line, a.column, &a.rule).cmp(&(&b.file, b.line, b.column, &b.rule))
-        });
         Ok(found)
     }
 
@@ -111,7 +117,15 @@ impl Engine {
         let mut out: Vec<RuleInfo> = self.max_lines.iter().map(|m| m.info()).collect();
         out.extend(self.ast.infos().iter().cloned());
         out.extend(self.linters.iter().map(|l| l.info()));
+        out.extend(self.deps.iter().flat_map(|d| d.rules()));
         out.sort_by(|a, b| a.id.cmp(&b.id));
         out
     }
+}
+
+/// Report order: by file, then position, then rule.
+pub fn sort(violations: &mut [Violation]) {
+    violations.sort_by(|a, b| {
+        (&a.file, a.line, a.column, &a.rule).cmp(&(&b.file, b.line, b.column, &b.rule))
+    });
 }

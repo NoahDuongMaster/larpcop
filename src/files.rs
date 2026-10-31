@@ -35,6 +35,17 @@ pub fn globset(patterns: &[String]) -> Result<GlobSet> {
 }
 
 pub fn collect(root: &Path, scope: &Scope, exclude: &GlobSet) -> Result<Vec<SourceFile>> {
+    let mut rels = list(root, scope)?;
+    rels.retain(|r| !exclude.is_match(r));
+    let staged = matches!(scope, Scope::Staged);
+    Ok(rels
+        .into_iter()
+        .filter_map(|rel| read(root, &rel, staged).map(|content| SourceFile { rel, content }))
+        .collect())
+}
+
+/// Root-relative paths a scope covers, sorted, before any `exclude`.
+pub fn list(root: &Path, scope: &Scope) -> Result<Vec<String>> {
     const DIFF: [&str; 5] = [
         "diff",
         "--name-only",
@@ -49,14 +60,35 @@ pub fn collect(root: &Path, scope: &Scope, exclude: &GlobSet) -> Result<Vec<Sour
         Scope::Changed => changed(root)?,
         Scope::Since(base) => git_list(root, &[&DIFF[..], &[&format!("{base}...HEAD")]].concat())?,
     };
-    rels.retain(|r| !exclude.is_match(r));
     rels.sort();
     rels.dedup();
-    let staged = matches!(scope, Scope::Staged);
-    Ok(rels
-        .into_iter()
-        .filter_map(|rel| read(root, &rel, staged).map(|content| SourceFile { rel, content }))
-        .collect())
+    Ok(rels)
+}
+
+/// Commit a scope's changes are measured against: the merge-base for `Since`,
+/// otherwise HEAD. `None` in a repository without commits.
+pub fn base(root: &Path, scope: &Scope) -> Option<String> {
+    let rev = match scope {
+        Scope::Since(b) => git_list(root, &["merge-base", b, "HEAD"])
+            .ok()?
+            .pop()?
+            .trim()
+            .to_string(),
+        _ => "HEAD".to_string(),
+    };
+    let check = format!("{rev}^{{commit}}");
+    git_list(root, &["rev-parse", "--verify", "-q", &check]).ok()?;
+    Some(rev)
+}
+
+/// Content of `rel` at commit `rev`; `None` if it did not exist there.
+pub fn show(root: &Path, rev: &str, rel: &str) -> Option<String> {
+    git_bytes(root, &format!("{rev}:./{rel}")).and_then(|b| String::from_utf8(b).ok())
+}
+
+/// Every file path at commit `rev`, relative to the root.
+pub fn tree(root: &Path, rev: &str) -> Vec<String> {
+    git_list(root, &["ls-tree", "-r", "--name-only", "-z", rev]).unwrap_or_default()
 }
 
 fn walk(root: &Path, start: &Path) -> Vec<String> {
@@ -134,16 +166,20 @@ fn git_list(root: &Path, args: &[&str]) -> Result<Vec<String>> {
 }
 
 /// Binary or unreadable files are skipped: rules only apply to text.
-fn read(root: &Path, rel: &str, staged: bool) -> Option<String> {
+pub fn read(root: &Path, rel: &str, staged: bool) -> Option<String> {
     let bytes = if staged {
-        let out = Command::new("git")
-            .args(["show", &format!(":./{rel}")])
-            .current_dir(root)
-            .output()
-            .ok()?;
-        out.status.success().then_some(out.stdout)?
+        git_bytes(root, &format!(":./{rel}"))?
     } else {
         fs::read(root.join(rel)).ok()?
     };
     String::from_utf8(bytes).ok()
+}
+
+fn git_bytes(root: &Path, object: &str) -> Option<Vec<u8>> {
+    let out = Command::new("git")
+        .args(["show", object])
+        .current_dir(root)
+        .output()
+        .ok()?;
+    out.status.success().then_some(out.stdout)
 }

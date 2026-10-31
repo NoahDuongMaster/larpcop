@@ -1,5 +1,6 @@
 mod config;
 mod context;
+mod deps;
 mod files;
 mod hook;
 mod install;

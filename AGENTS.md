@@ -22,6 +22,8 @@ Workflow:
 
 | Rule | Level | Applies to | Requirement |
 |---|---|---|---|
+| `dependency-approval` | error | manifests | Adding a direct dependency needs a human's approval. Do not add or install a package the repo does not already use or list in `dependencies.approved`: solve the task without it, or ask the user. |
+| `dependency-release-age` | error | lockfiles | Every dependency version, direct or transitive, must have been published at least 14 days ago. Keep the package manager's own minimum-release-age setting on; never override it. |
 | `go-no-panic` | error | Go | `panic` in application code crashes the whole process. Return an `error` and let the caller decide; wrap it with `fmt.Errorf("...: %w", err)`. |
 | `max-lines` | error | source files | Files must not exceed 300 lines. Split the file along responsibility boundaries into smaller modules. Do not compress code, join lines or delete comments just to get under the limit. |
 | `no-console` | error | TypeScript | `console` is not allowed in committed code. Use the project logger (`import { logger } from '@/lib/logger'`). Reaching `console` indirectly (globalThis, window, aliases, computed keys) is the same violation. |

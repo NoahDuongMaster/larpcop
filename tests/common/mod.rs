@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+pub mod deps;
+
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -76,12 +78,41 @@ impl Repo {
                 "AGENTKIT_CACHE_DIR",
                 self.tmp.path().join(".cache-agentkit"),
             )
+            // Tests never reach deps.dev: publish dates come from `seed_published`.
+            .env("AGENTKIT_DEPS_API", "offline://deps.dev")
             .env_remove("AGENTKIT_EXTENDS");
         cmd
     }
 
+    /// Caches `version`'s publish date as `days_ago` days back, the way a
+    /// deps.dev lookup would.
+    pub fn seed_published(&self, system: &str, name: &str, version: &str, days_ago: i64) {
+        let encoded: String = format!("{name}@{version}")
+            .bytes()
+            .map(|b| {
+                if b.is_ascii_alphanumeric() {
+                    (b as char).to_string()
+                } else {
+                    format!("%{b:02X}")
+                }
+            })
+            .collect();
+        let at = jiff::Timestamp::now() - jiff::SignedDuration::from_hours(days_ago * 24);
+        let rel = format!(".cache-agentkit/published/{system}/{encoded}");
+        self.write(&rel, &at.to_string());
+    }
+
     pub fn run(&self, args: &[&str]) -> Run {
         Run(self.command(BIN).args(args).output().unwrap())
+    }
+
+    pub fn run_env(&self, args: &[&str], env: &[(&str, &str)]) -> Run {
+        let mut cmd = self.command(BIN);
+        cmd.args(args);
+        for (k, v) in env {
+            cmd.env(k, v);
+        }
+        Run(cmd.output().unwrap())
     }
 
     pub fn run_stdin(&self, args: &[&str], stdin: &str) -> Run {

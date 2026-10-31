@@ -46,7 +46,22 @@ fn decide(event: &Event, cwd: &Path, extends: &[String], refresh: bool) -> Resul
     let ctx = |start: &Path| Ctx::new(start, extends.to_vec(), refresh);
     match event {
         Event::Ignore => Ok(Verdict::Allow),
-        Event::Shell(command) => Ok(blocked(guard::bash_bypass(command))),
+        Event::Shell(command) => {
+            if let Some(reason) = guard::bash_bypass(command) {
+                return Ok(blocked(Some(reason)));
+            }
+            if !crate::deps::concerns(command) {
+                return Ok(Verdict::Allow);
+            }
+            // A broken config must not wedge the agent: commit and CI still enforce.
+            let Ok((cfg, engine)) = ctx(cwd).and_then(|c| c.load()) else {
+                return Ok(Verdict::Allow);
+            };
+            let reason = engine
+                .deps()
+                .and_then(|d| d.gate_command(&cfg.root, cwd, command));
+            Ok(blocked(reason))
+        }
         Event::BeforeEdit(paths) => {
             for path in paths {
                 let rule_dirs = ctx(start_dir(path, cwd))?

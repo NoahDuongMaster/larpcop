@@ -27,6 +27,23 @@ pub struct RawConfig {
     pub locked: Vec<String>,
     /// Markdown file inlined into AGENTS.md, relative to this config file.
     pub guidelines: Option<String>,
+    pub dependencies: Option<DependenciesConfig>,
+}
+
+/// Supply-chain rules. Patterns are `[ecosystem:]glob`, e.g. `npm:@acme/*`, `serde`.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DependenciesConfig {
+    /// Days a version must have been public before it may enter a lockfile.
+    pub min_release_age: Option<u32>,
+    /// A new direct dependency needs a human's approval (an `approved` entry).
+    pub require_approval: Option<bool>,
+    /// Direct dependencies a human approved.
+    #[serde(default)]
+    pub approved: Vec<String>,
+    /// Packages with no public publish date (private registries): age is not checked.
+    #[serde(default)]
+    pub exempt: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

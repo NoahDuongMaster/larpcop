@@ -1,9 +1,22 @@
 # Company-wide baseline. Every repo extends this (and CI forces it via --extends).
-# Locked rules cannot be disabled or overridden by teams or repos.
+# Locked rules cannot be disabled or overridden by teams or repos; locked
+# dependency rules can still be tightened (a longer age, more approvals).
 max_lines:
   max: 300
   exclude: ["**/*.test.*", "**/*_test.*", "**/generated/**"]
 rule_dirs: [rules]
 guidelines: guidelines.md
 exclude: ["**/node_modules/**", "**/dist/**", "**/vendor/**", "**/*.min.js"]
-locked: [max-lines, no-explicit-any, no-hardcoded-secret, py-no-bare-except, go-no-panic]
+dependencies:
+  # Compromised releases are usually caught and pulled within days.
+  min_release_age: 14
+  # New direct dependencies are approved by a human, in the repo's .agentkit.yaml.
+  require_approval: true
+locked:
+  - max-lines
+  - no-explicit-any
+  - no-hardcoded-secret
+  - py-no-bare-except
+  - go-no-panic
+  - dependency-release-age
+  - dependency-approval

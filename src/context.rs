@@ -56,7 +56,11 @@ impl Ctx {
         }
         let exclude = files::globset(&cfg.exclude)?;
         let files = files::collect(&cfg.root, scope, &exclude)?;
-        let violations = engine.check(&cfg.root, &files)?;
+        let mut violations = engine.check(&cfg.root, &files)?;
+        if let Some(deps) = engine.deps() {
+            violations.extend(deps.check(&cfg.root, scope)?);
+        }
+        crate::rules::sort(&mut violations);
         Ok(Outcome {
             files: files.len(),
             violations,

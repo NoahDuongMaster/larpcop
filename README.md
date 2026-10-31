@@ -73,6 +73,39 @@ Có hai điểm cố ý khác với ast-grep CLI:
 
 Agent sẽ tìm khe hở. Khi chạy Codex thật, nó né rule `console.$METHOD(...)` bằng cách viết `globalThis["console"]["log"](x)`, và rule đó vẫn báo sạch. Rule phải bắt được *cấu trúc* đó dưới mọi cách viết: identifier, truy cập qua property, truy cập bằng key tính toán. Xem `no-console` trong [rules/typescript.yml](examples/standards/rules/typescript.yml) và test hồi quy `no_console_cannot_be_dodged`. Thông điệp gửi cho agent cũng nói rõ rằng viết lại để né rule vẫn bị tính là vi phạm.
 
+## Dependency
+
+Dependency là code không ai trong team viết, và agent cài package rất dễ dãi. Có hai rule:
+
+```yaml
+dependencies:
+  min_release_age: 14        # dependency-release-age
+  require_approval: true     # dependency-approval
+  approved: [left-pad, "npm:@acme/*", "cargo:serde"]   # [hệ sinh thái:]glob
+  exempt: ["npm:@acme/*"]    # package ở registry riêng: không có ngày phát hành công khai
+```
+
+**`dependency-approval`**: dependency trực tiếp mới phải nằm trong `approved`. "Mới" nghĩa là chưa có trong bất kỳ manifest nào ở commit gốc, nên thêm `react` vào một package mới trong monorepo đã dùng `react` thì không tính. Agent không sửa được `.agentkit.yaml`, nên một dòng `approved` là một lần người duyệt và hiện rõ khi review. Đọc được `package.json`, `Cargo.toml`, `pyproject.toml` (PEP 621, dependency-groups, Poetry), `requirements*.txt` và `go.mod`.
+
+**`dependency-release-age`** chạy ở ba chỗ:
+
+1. **Lockfile** (pre-commit, CI, hook kết thúc lượt): mọi phiên bản, kể cả dependency bắc cầu, mà thay đổi này thêm vào hoặc đổi sang phải đủ `N` ngày tuổi. Ngày phát hành lấy từ [deps.dev](https://deps.dev), một API chung cho npm, PyPI, crates.io và Go, và được cache trên đĩa vì ngày phát hành không bao giờ đổi. Chỉ phiên bản *mới trong thay đổi* mới được tra, nên PR thường chỉ mất vài request. Lockfile đọc được: `package-lock.json` (v2/v3), `pnpm-lock.yaml` (v5–v9), `yarn.lock` (v1 và Berry), `Cargo.lock`, `uv.lock`, `poetry.lock` và `go.mod`. Khi chặn, thông báo đưa luôn một phiên bản cụ thể để pin, ví dụ: *"Use typescript@7.0.2 (published 2026-07-08)"*.
+2. **Package manager**: npm, pnpm, yarn Berry và bun tự chặn được bản quá mới ngay lúc cài, trên máy dev, *trước khi* install script chạy. Lockfile chỉ thấy được sau khi đã cài, nên repo bắt buộc phải bật tính năng này:
+
+   | Package manager | File | Thiết lập cho 14 ngày |
+   |---|---|---|
+   | npm | `.npmrc` | `min-release-age=14` |
+   | pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge: 20160` |
+   | yarn ≥ Berry | `.yarnrc.yml` | `npmMinimalAgeGate: "14d"` |
+   | bun | `bunfig.toml` | `[install] minimumReleaseAge = 1209600` |
+
+   Đã chạy thật: npm 11.19 với `min-release-age=14`, khi được yêu cầu `typescript@next` thì tự chọn `7.0.2`. pnpm 11.2 chọn bản dev `20261017`, đúng 14 ngày tuổi.
+3. **Hook của agent**: chặn mọi lệnh ghi đè gate (`--min-release-age=0`, `npm config set min-release-age …`, `npm_config_min_release_age=…`).
+
+Phiên bản không có trên deps.dev hoặc không tra được vì lỗi mạng đều bị chặn (fail closed). **Ngoại lệ là bản vá bảo mật**: một bản quá mới vẫn được cho qua, ở mức warning, nếu bản đủ tuổi mới nhất cùng dòng có advisory còn bản mới thì không, theo trường `advisoryKeys` của deps.dev. Không có ngoại lệ này thì rule sẽ ép hạ về bản có lỗ hổng: chính repo agentkit gặp trường hợp này với `rustls-webpki` 0.103.16 và `webpki-roots` 1.0.11, vì bản đủ tuổi trước đó dính RUSTSEC-2026-0382 và RUSTSEC-2026-0381.
+
+Cả hai rule được lock trong standards mẫu. Một rule đã lock chỉ được *siết thêm*: tăng số ngày hoặc thêm `approved` thì được; giảm số ngày, tắt `require_approval` hoặc thêm `exempt` thì bị từ chối.
+
 ## Lệnh
 
 ```sh
@@ -98,7 +131,7 @@ Exit code: `0` sạch, `1` có vi phạm mức error, `3` lỗi nội bộ/confi
 
 Các hook làm những việc sau:
 
-- **Trước tool** chặn: `--no-verify`, `git commit -n`, `core.hooksPath`, `HUSKY=0`, `LEFTHOOK=0`, `SKIP=`; ghi vào `.git/hooks`, `.agentkit.yaml`, file rule, hoặc file hook của bất kỳ agent nào.
+- **Trước tool** chặn: `--no-verify`, `git commit -n`, `core.hooksPath`, `HUSKY=0`, `LEFTHOOK=0`, `SKIP=`; ghi vào `.git/hooks`, `.agentkit.yaml`, file rule, hoặc file hook của bất kỳ agent nào. Lệnh cài package chưa được duyệt (`npm i`, `pnpm add`, `yarn add`, `bun add`, `pip install`, `uv add`, `poetry add`, `cargo add`, `go get`) bị chặn trước khi chạy, tức là trước khi install script của package kịp chạy. Xem [Dependency](#dependency).
 - **Sau khi sửa** kiểm đúng các file vừa sửa và trả lỗi về cho model.
 - **Kết thúc lượt** kiểm mọi thay đổi chưa commit và chặn **một lần**. Nếu agent vẫn dừng (ví dụ để hỏi người khi lệnh của user mâu thuẫn với rule) thì cho dừng; code vi phạm vẫn không commit hay merge được. Chặn lần hai trở đi chỉ gây loop: khi chạy Claude Code thật đã thấy 8 lần chặn y hệt nhau cho tới khi hết max-turns. Nếu user bấm dừng (Cursor `status: aborted`) thì không bao giờ chặn.
 
@@ -160,10 +193,10 @@ Binary nặng 47 MB trên đĩa, nhưng chỉ khoảng **4 MB khi tải về** (
 
 ## Đã kiểm chứng
 
-`cargo test` có 29 test:
+`cargo test` có 47 test:
 
-- Unit: guard, tìm shell, path trong patch Codex.
-- Integration: check, locked, git extends theo tag, staged, `--changed`/`--since`, linter delegation, format github, chống né rule, hook của 4 agent, sync idempotent, phát hiện drift, CRLF, pre-commit thật.
+- Unit: guard, tìm shell, path trong patch Codex; đọc lockfile thật của npm 11, pnpm 11, uv 0.11, cargo 1.98 (kèm yarn v1/Berry, Poetry, go.mod, và các entry registry riêng/git/workspace phải bị bỏ qua); manifest; nhận diện lệnh cài; thiết lập gate của 4 package manager.
+- Integration: check, locked, git extends theo tag, staged, `--changed`/`--since`, linter delegation, format github, chống né rule, hook của 4 agent, sync idempotent, phát hiện drift, CRLF, pre-commit thật; dependency: tuổi phiên bản (qua cache và qua một server deps.dev giả), merge-base của PR, ngoại lệ bản vá bảo mật, gate package manager, duyệt dependency mới (cả monorepo), hook chặn lệnh cài, lock chỉ được siết thêm.
 
 Trên GitHub thật (repo private `NoahDuongMaster/agentkit`):
 
@@ -184,6 +217,12 @@ Ngoài ra đã chạy agent thật trong repo demo:
   - `--no-verify` bị chặn.
   - Hook sau khi sửa file bắt được `any`, Codex đổi sang `unknown`.
   - Lần đầu Codex né rule console bằng `globalThis["console"]`. Sau khi sửa rule, chạy lại thì Codex xoá hẳn `console.log`.
+- **Claude Code với dependency rules**: hai phiên được yêu cầu "dùng package `slugify`, cài bằng npm", một phiên có AGENTS.md, một phiên chỉ có hook:
+  - Cả hai đều bị hook chặn `npm install slugify` *trước khi* lệnh chạy. Không có gì được cài, không file nào bị tạo, và agent dừng lại hỏi người duyệt (tổng cộng $0.43).
+  - Lần chạy này lộ ra bug: `2>&1` trong `npm install slugify 2>&1 | tail -5` bị đọc thành tên package. Đã sửa, kèm test hồi quy.
+- **Dependency với dữ liệu thật**:
+  - `typescript@next` (phát hành cách đó 2 giờ) bị chặn cùng 7 binary nền tảng của nó. Mỗi lỗi kèm gợi ý `7.0.2`; 8 lần tra deps.dev hết 0,58 giây.
+  - Chính `Cargo.lock` của agentkit bị chặn 3 crate mới 9–13 ngày tuổi; đã hạ theo đúng phiên bản được gợi ý. 2 crate khác được cho qua vì là bản vá RUSTSEC.
 
 ## Giới hạn
 
@@ -191,3 +230,9 @@ Ngoài ra đã chạy agent thật trong repo demo:
 - **File agent ghi bằng shell** (ví dụ `cat > f <<EOF`) không đi qua hook "sau khi sửa". Chúng vẫn bị bắt ở hook kết thúc lượt, ở pre-commit và ở CI.
 - **Repo private** khiến installer `curl | sh`, Homebrew và npm chưa dùng được cho người ngoài (xem [Phân phối khi repo private](#phân-phối-khi-repo-private)). Repo khác muốn gọi `enforce.yml` thì cần quyền truy cập Actions; mục này đã được bật sẵn cho các repo cùng owner `NoahDuongMaster` (`access_level: user`). Repo gọi vẫn phải truyền secret `agentkit-token` để tải binary.
 - **Chi phí CI**: GitHub Actions của repo private tính phút chạy, với runner macOS nhân 10 và Windows nhân 2. Repo public thì miễn phí.
+- **Dependency**:
+  - Rule tuổi phiên bản cần mạng tới deps.dev và fail closed khi không tra được. Package ở registry riêng phải được khai trong `exempt`.
+  - uv, Poetry, Cargo và Go không có thiết lập tuổi tối thiểu dạng tương đối (uv `exclude-newer` chỉ nhận một ngày cố định). Với các hệ sinh thái này, bản quá mới của một package *đã duyệt* vẫn cài được lên máy dev, rồi mới bị chặn ở lượt kết thúc, pre-commit và CI. Yarn 1 cũng không có gate.
+  - `bun.lock` chưa được đọc phiên bản; chỉ kiểm thiết lập `bunfig.toml`. Maven, Gradle, NuGet, RubyGems và Composer chưa hỗ trợ.
+  - Hook chỉ nhận ra lệnh cài gõ trực tiếp. Cài qua script hay Makefile thì không thấy trước, nhưng vẫn bị bắt ở lockfile và manifest.
+  - Bộ standards mẫu bật dependency rules từ bản sau `v0.1.0`. Workflow `self-enforce` tải binary bản release mới nhất, nên PR chỉ dùng được các khóa `dependencies` sau khi có release mới.

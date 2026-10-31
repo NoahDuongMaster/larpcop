@@ -3,7 +3,8 @@
 mod fetch;
 mod model;
 
-pub use model::{ExtendSpec, LinterConfig, MaxLinesConfig, RawConfig};
+pub use fetch::cache_root;
+pub use model::{DependenciesConfig, ExtendSpec, LinterConfig, MaxLinesConfig, RawConfig};
 
 use anyhow::{Context, Result, bail};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -25,8 +26,18 @@ pub struct Config {
     /// rule id → layer that locked it
     pub locked: BTreeMap<String, String>,
     pub guidelines: Vec<String>,
+    pub deps: DepsPolicy,
     /// Layers in application order, for traceability.
     pub sources: Vec<String>,
+}
+
+/// Merged `dependencies` settings; lists accumulate across layers.
+#[derive(Debug, Default)]
+pub struct DepsPolicy {
+    pub min_release_age: Option<u32>,
+    pub require_approval: bool,
+    pub approved: Vec<String>,
+    pub exempt: Vec<String>,
 }
 
 /// `forced` standards (from `--extends` / `AGENTKIT_EXTENDS`) apply first, so a repo
@@ -142,10 +153,41 @@ impl Config {
             // git autocrlf on Windows must not change the generated AGENTS.md.
             self.guidelines.push(text.replace("\r\n", "\n"));
         }
+        if let Some(deps) = raw.dependencies {
+            self.apply_deps(deps, source)?;
+        }
         for id in raw.locked {
             self.locked.entry(id).or_insert_with(|| source.to_string());
         }
         self.sources.push(source.to_string());
+        Ok(())
+    }
+
+    /// A locked dependency rule may still be tightened, never loosened. Approvals
+    /// always accumulate: adding one is how a human approves a dependency.
+    fn apply_deps(&mut self, d: DependenciesConfig, source: &str) -> Result<()> {
+        use crate::deps::{AGE_ID, APPROVAL_ID};
+        let p = &self.deps;
+        if let Some(days) = d.min_release_age
+            && p.min_release_age.is_some_and(|cur| days < cur)
+        {
+            self.ensure_unlocked(AGE_ID, source, "lower the minimum age of")?;
+        }
+        if !d.exempt.is_empty() {
+            self.ensure_unlocked(AGE_ID, source, "add exemptions to")?;
+        }
+        if d.require_approval == Some(false) && p.require_approval {
+            self.ensure_unlocked(APPROVAL_ID, source, "turn off")?;
+        }
+        let p = &mut self.deps;
+        if d.min_release_age.is_some() {
+            p.min_release_age = d.min_release_age;
+        }
+        if let Some(on) = d.require_approval {
+            p.require_approval = on;
+        }
+        p.approved.extend(d.approved);
+        p.exempt.extend(d.exempt);
         Ok(())
     }
 

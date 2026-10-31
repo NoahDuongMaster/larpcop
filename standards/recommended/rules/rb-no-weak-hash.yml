@@ -4,21 +4,55 @@
   "language": "Ruby",
   "severity": "error",
   "message": "MD5 / SHA-1 are broken hash functions.",
-  "note": "Use SHA-256 for checksums and BCrypt / Argon2 (has_secure_password) for passwords.",
+  "note": "Use BCrypt / Argon2 (has_secure_password) for passwords and SHA-256 for anything that must not be forged. A protocol checksum (ETag, Content-MD5) is fine when the value it is stored in says so (etag, checksum, md5).",
   "rule": {
-    "any": [
+    "all": [
       {
-        "kind": "scope_resolution",
-        "regex": "^(OpenSSL::)?Digest::(MD5|SHA1)$",
-        "not": {
-          "inside": {
-            "kind": "scope_resolution"
+        "any": [
+          {
+            "kind": "scope_resolution",
+            "regex": "^(OpenSSL::)?Digest::(MD5|SHA1)$",
+            "not": {
+              "inside": {
+                "kind": "scope_resolution"
+              }
+            }
+          },
+          {
+            "kind": "call",
+            "regex": "^(OpenSSL::)?Digest(::Digest)?\\.new\\(\\s*['\"](?i:md5|sha1)['\"]"
           }
-        }
+        ]
       },
       {
-        "kind": "call",
-        "regex": "^(OpenSSL::)?Digest(::Digest)?\\.new\\(\\s*['\"](?i:md5|sha1)['\"]"
+        "not": {
+          "inside": {
+            "stopBy": "end",
+            "any": [
+              {
+                "kind": "assignment",
+                "has": {
+                  "field": "left",
+                  "regex": "(?i)etag|checksum|md5|fingerprint|cache_key"
+                }
+              },
+              {
+                "kind": "pair",
+                "has": {
+                  "field": "key",
+                  "regex": "(?i)etag|checksum|md5|fingerprint|cache_key"
+                }
+              },
+              {
+                "kind": "method",
+                "has": {
+                  "field": "name",
+                  "regex": "(?i)etag|checksum|md5|fingerprint|cache_key"
+                }
+              }
+            ]
+          }
+        }
       }
     ]
   },

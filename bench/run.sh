@@ -28,6 +28,7 @@ clone dvws-node https://github.com/snoopysecurity/dvws-node.git e83689c
 clone govwa https://github.com/0c34/govwa.git 4058f79
 clone BenchmarkJava https://github.com/OWASP-Benchmark/BenchmarkJava.git f40c618
 clone DVWA https://github.com/digininja/DVWA.git a1978a2
+clone railsgoat https://github.com/OWASP/railsgoat.git f5951f1
 # NIST Juliet C# 1.3: only the test cases whose data comes from an HTTP request.
 if [ ! -d "$WORK/juliet-web" ]; then
   curl -sfL -o "$WORK/juliet-cs.zip" \
@@ -54,7 +55,7 @@ time_it() {
 
 echo "larpcop $("$LARPCOP" --version | cut -d' ' -f2) | semgrep $(semgrep --version) | gitleaks $(gitleaks version) | $(uname -sm) $(sysctl -n hw.ncpu 2>/dev/null || nproc) cpus" > "$OUT/timing.txt"
 
-for target in juice-shop NodeGoat dvna dvpwa dvws-node govwa; do
+for target in juice-shop NodeGoat dvna dvpwa dvws-node govwa railsgoat; do
   cd "$WORK/$target"
   printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
   "$LARPCOP" check --format json > "$OUT/$target-larpcop.json" || true
@@ -79,6 +80,8 @@ python3 "$HERE/score.py" "$WORK/dvws-node" "$OUT/dvws-node-larpcop.json" "$OUT/d
   "$OUT/dvws-node-gitleaks.json" --truth "$HERE/dvws-truth.json" > "$OUT/dvws-node.md"
 python3 "$HERE/score.py" "$WORK/govwa" "$OUT/govwa-larpcop.json" "$OUT/govwa-semgrep.json" \
   "$OUT/govwa-gitleaks.json" --truth "$HERE/govwa-truth.json" > "$OUT/govwa.md"
+python3 "$HERE/score.py" "$WORK/railsgoat" "$OUT/railsgoat-larpcop.json" "$OUT/railsgoat-semgrep.json" \
+  "$OUT/railsgoat-gitleaks.json" --truth "$HERE/railsgoat-truth.json" > "$OUT/railsgoat.md"
 
 # OWASP Benchmark (Java): 2,740 test cases, scored like the project's scorecard.
 cd "$WORK/BenchmarkJava"
@@ -116,4 +119,4 @@ printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
 semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/seeds-semgrep.json" --quiet sast/seeds || true
 python3 "$HERE/seeds.py" "$WORK/vulnerable-node" "$OUT/seeds-larpcop.json" "$OUT/seeds-semgrep.json" > "$OUT/seeds.md"
 
-cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/dvpwa.md" "$OUT/dvws-node.md" "$OUT/govwa.md" "$OUT/owasp-benchmark.md" "$OUT/dvwa.md" "$OUT/juliet-cs.md" "$OUT/seeds.md"
+cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/dvpwa.md" "$OUT/dvws-node.md" "$OUT/govwa.md" "$OUT/railsgoat.md" "$OUT/owasp-benchmark.md" "$OUT/dvwa.md" "$OUT/juliet-cs.md" "$OUT/seeds.md"

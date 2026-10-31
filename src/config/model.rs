@@ -101,6 +101,10 @@ pub struct TaintConfig {
     /// Regex over the literal start of a built sink argument (`"/p/" + id`)
     /// that makes it safe, e.g. `^/[^/\\]` for redirects.
     pub safe_prefix: Option<String>,
+    /// Regex on the called name: a matching call's result is clean (Rails
+    /// route helpers `^\w+_(path|url)$` build URLs of the app itself).
+    #[serde(default)]
+    pub sanitizer_names: Option<String>,
     /// ast-grep patterns that make data safe, e.g. `Number($X)`.
     #[serde(default)]
     pub sanitizers: Vec<String>,
@@ -147,9 +151,23 @@ pub struct TextRuleConfig {
     pub regex: String,
     /// Matches whose text also matches this are not reported.
     pub not: Option<String>,
+    /// The rule holds only while none of these match: a regex over the file
+    /// itself, or over another file of the repository (`file:`), e.g. no
+    /// `protect_from_forgery` here and no `load_defaults 5.2+` in
+    /// `config/application.rb`.
+    #[serde(default)]
+    pub unless: Vec<TextCondition>,
     pub severity: Option<Level>,
     pub message: String,
     pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TextCondition {
+    /// Repository-relative path; the checked file itself when absent.
+    pub file: Option<String>,
+    pub regex: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

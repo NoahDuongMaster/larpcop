@@ -12,7 +12,7 @@ use std::path::Path;
 
 pub enum FlowRule {
     Taint(Box<TaintRule>),
-    Text(TextRule),
+    Text(Box<TextRule>),
 }
 
 impl FlowRule {
@@ -24,8 +24,8 @@ impl FlowRule {
         )?)))
     }
 
-    pub fn text(cfg: &TextRuleConfig) -> Result<Self> {
-        Ok(Self::Text(TextRule::new(cfg)?))
+    pub fn text(cfg: &TextRuleConfig, root: &Path) -> Result<Self> {
+        Ok(Self::Text(Box::new(TextRule::new(cfg, root)?)))
     }
 
     /// File names to check a snippet as: one per language, or the fixture's own.

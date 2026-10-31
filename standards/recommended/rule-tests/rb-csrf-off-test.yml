@@ -1,0 +1,11 @@
+id: rb-csrf-off
+file: app/controllers/application_controller.rb
+valid:
+- "class ApplicationController < ActionController::Base\n  protect_from_forgery with: :exception\nend\n"
+- 'class ApplicationController < ActionController::API
+
+  end
+
+  '
+invalid:
+- "class ApplicationController < ActionController::Base\n  #protect_from_forgery with: :exception\n  before_action :authenticated\nend\n"

@@ -79,6 +79,8 @@ pub(super) struct Ctx {
     pub source_texts: Vec<String>,
     /// Does any known function return source data? (computed on first use)
     pub sourcing: std::cell::OnceCell<bool>,
+    /// Ruby: a bare name may call a method (`custom_fields`).
+    pub bare_calls: bool,
 }
 
 fn within(r: &Range<usize>, outer: &Range<usize>) -> bool {
@@ -125,13 +127,21 @@ impl Ctx {
             .iter()
             .any(|s| s.start < r.end && r.start < s.end)
             && !names.iter().any(|n| text.contains(n.as_str()))
-            && !(text.contains('(') && self.any_sourcing())
+            && !((text.contains('(') || self.bare_calls) && self.any_sourcing())
         {
             return false;
         }
         let kind = node.kind();
         if (NAMES.contains(&kind.as_ref()) || is_field(node)) && names.contains(text.as_ref()) {
             return true;
+        }
+        // Ruby: `custom_fields` alone may be a call of a method returning
+        // request data.
+        if self.bare_calls
+            && kind == "identifier"
+            && let Some(s) = self.summaries.get(text.as_ref())
+        {
+            return s.returns_source;
         }
         // A function we have a summary for: only what it really passes through.
         if CALLS.contains(&kind.as_ref())

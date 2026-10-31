@@ -32,6 +32,19 @@ impl TaintRule {
             ms.into_iter().map(|(m, _)| m).collect()
         };
         let (sources, sinks, sanitizers) = (plain(sources), plain(sinks), plain(sanitizers));
+        // A bare-name source (`params`) is not one where the function has a
+        // parameter of that name (`def error_messages_for(*params)`).
+        let sources: Vec<NodeMatch<'a, D>> = sources
+            .into_iter()
+            .filter(|m| {
+                let n = m.get_node();
+                n.kind() != "identifier"
+                    || !n
+                        .ancestors()
+                        .find(|a| crate::rules::complexity::is_function(a))
+                        .is_some_and(|f| summary::param_names(&f).contains(n.text().as_ref()))
+            })
+            .collect();
         let ranges = |ms: Vec<NodeMatch<'a, D>>| -> Vec<Range<usize>> {
             ms.iter().map(|m| m.range()).collect()
         };
@@ -82,7 +95,15 @@ impl TaintRule {
                 .into_iter()
                 .chain(index.named(&self.source_names))
                 .collect(),
-            sanitizers: ranges(sanitizers),
+            sanitizers: ranges(sanitizers)
+                .into_iter()
+                .chain(
+                    self.sanitizer_names
+                        .as_ref()
+                        .map(|re| index.calls_named(re))
+                        .unwrap_or_default(),
+                )
+                .collect(),
             guards: guards
                 .iter()
                 .filter(|(m, _)| prefix::guard_holds(m.get_node(), self.safe_prefix.as_ref()))
@@ -92,6 +113,7 @@ impl TaintRule {
             summaries: Summaries::new(),
             source_texts: self.source_texts.clone(),
             sourcing: Default::default(),
+            bare_calls: lang == SupportLang::Ruby,
         };
         let known = summary::with_unique_methods(self.imported_summaries(lang, index, file, depth));
         // The file being checked (not an import, whose callers need its

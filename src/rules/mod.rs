@@ -124,7 +124,7 @@ impl Engine {
             .text
             .iter()
             .filter(|t| !cfg.disabled.contains(&t.id))
-            .map(text::TextRule::new)
+            .map(|t| text::TextRule::new(t, &cfg.root))
             .collect::<Result<_>>()?;
         Ok(Self {
             max_lines,

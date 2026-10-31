@@ -1,0 +1,7 @@
+id: rb-no-json-html-escape-off
+file: config/initializers/html_entities.rb
+valid:
+- ActiveSupport::JSON::Encoding.escape_html_entities_in_json = true
+invalid:
+- ActiveSupport::JSON::Encoding::escape_html_entities_in_json = false
+- config.active_support.escape_html_entities_in_json = false

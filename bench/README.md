@@ -39,7 +39,9 @@ Một bộ chỉ đo được độ tổng quát khi rule chưa được viết 
 
 10. **NIST Juliet C# 1.3** đo 9 rule taint C# (thêm `cs-taint-ldap`, `cs-taint-xpath` và các tên `HttpRequest`/`HttpResponse` cổ điển trước khi chạy). Chỉ lấy 1.443 ca có dữ liệu đến từ request HTTP (`QueryString`, `Params`, `Cookies`) ở 10 CWE: SQLi, lệnh OS, path traversal tương đối/tuyệt đối, open redirect, ba loại XSS, LDAP, XPath. Đáp án là nhãn của chính Juliet: mã trong method `Bad*` (hay file `*_bad.cs`) có lỗ hổng, mã trong `Good*` thì không. Lần đầu: larpcop **+43,9%**, Semgrep `p/default` và `p/csharp` cùng **+0,8%** (Semgrep bắt 67% ca SQL nhưng báo cả 61% bản đã sửa). Các ca bị sót lộ ra những chỗ engine chưa theo được: luồng qua nhiều file (Java/C# không có `import` cho class cùng namespace), `(new Helper()).Run(x)`, `cmd.CommandText += …`, `List.Add`/`AddLast`/`Dictionary`, field của class viết không có `this.`. Sau khi sửa engine, cộng sanitizer `SecurityElement.Escape` và sink `StatusDescription`: **+86,5%**, không còn báo nhầm. Còn sót: chuỗi gọi qua hơn 2 file (biến thể 53, 54), field static của class khác (68), dữ liệu qua serialize (75), gọi qua lớp cơ sở ảo (81).
 
-Kết quả dưới đây là sau bước 10: chỉ có ý nghĩa *không thụt lùi* trên cả mười bộ. Rule mới cần một bộ chưa ai nhìn.
+11. **RailsGoat (Ruby)** đo 8 rule taint Ruby và 6 rule cú pháp Ruby, commit trước khi chạy (9229a73). Đáp án (`railsgoat-truth.json`, 14 dòng) lấy từ wiki của RailsGoat, viết sau khi commit rule và trước khi chạy công cụ. Lần đầu: larpcop **10/14**, Semgrep **9/14**. (Lần chấm đầu cho larpcop 1/14 vì `score.py` chưa biết tên rule Ruby; kết quả quét không đổi, chỉ sửa bộ chấm. Bộ chấm giờ cũng tính một finding ở chỗ gọi cho dòng sink mà ghi chú của nó nêu ở file khác, "Reaches the sink through `Benefits.save` → … at app/models/benefits.rb:15"; điểm của các bộ cũ không đổi.) Ca sót: SQL qua `scope :hits_by_ip, ->(ip, col) { select("#{col}") }` lấy dữ liệu từ `custom_fields` (method không ngoặc, trả về ngầm); cookie session `httponly: false`; `escape_html_entities_in_json = false`; CSRF tắt. Sau khi sửa engine (scope là method, lời gọi không ngoặc, trả về ngầm), thêm sink `select` không receiver và 3 rule cấu hình: **13/14**. CSRF được bắt ở dòng khai báo class (dòng 2), còn đáp án ghi dòng `#protect_from_forgery` bị comment (dòng 9), nên vẫn tính là sót. Chạy trên `rubygems/rubygems.org` (1.432 file Ruby) lộ thêm báo nhầm và đã sửa: `render View.new(…)` không phải path, `content_tag` tự escape, MD5 dùng làm ETag/Content-MD5, `params` là tham số của hàm, record tìm theo `current_user`. Còn 3 finding Ruby: một redirect theo `omniauth.origin` và hai câu SQL nội suy tên cột từ cấu hình.
+
+Kết quả dưới đây là sau bước 11: chỉ có ý nghĩa *không thụt lùi* trên cả mười một bộ. Rule mới cần một bộ chưa ai nhìn.
 
 ## Kết quả (01/11/2026)
 
@@ -60,6 +62,7 @@ Kết quả dưới đây là sau bước 10: chỉ có ý nghĩa *không thụt
 | OWASP Benchmark Java: thời gian | **7,11 s** | 48,6 s (`p/default`), 54,9 s (`p/java`) | 49,8 s |
 | DVWA (PHP): điểm trung bình (TPR − FPR) | **+60,0%** (lần đầu +40,0%) | +3,3% | – |
 | Juliet C# (1.443 ca web): thời gian | **4,96 s** | 16,1 s (`p/default`) | – |
+| RailsGoat (Ruby): dòng tìm thấy (/14) | **13** (lần đầu 10) | 9 | – |
 | Juliet C# (1.443 ca web): điểm trung bình (TPR − FPR) | **+86,5%** (lần đầu +43,9%) | +0,8% (`p/default`, `p/csharp`) | – |
 | OWASP Benchmark Java: điểm trung bình (TPR − FPR) | **+46,2%** (lần đầu +37,5%) | +34,9% (`p/default`), +17,7% (`p/java`) | – |
 | vulnerable-node seeds (/12 file, báo nhầm trên 2 file sạch) | **11**, 1 báo nhầm (11 và 0 báo nhầm nếu bỏ rule chung chung) | 10, 1 báo nhầm (8 và 1 báo nhầm nếu bỏ rule chung chung) | – |

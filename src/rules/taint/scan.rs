@@ -47,6 +47,18 @@ impl<'a, D: Doc> FileIndex<'a, D> {
         }
     }
 
+    /// Ranges of the calls whose called name (its last segment) matches.
+    pub(super) fn calls_named(&self, re: &regex::Regex) -> Vec<std::ops::Range<usize>> {
+        self.nodes
+            .iter()
+            .filter(|n| super::flow::CALLS.contains(&n.kind().as_ref()))
+            .filter(|n| {
+                summary::callee(n).is_some_and(|c| re.is_match(c.rsplit('.').next().unwrap_or(&c)))
+            })
+            .map(|n| n.range())
+            .collect()
+    }
+
     /// Ranges of the names in `wanted` wherever they are read (`$_GET`).
     pub(super) fn named(
         &self,

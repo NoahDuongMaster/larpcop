@@ -63,7 +63,7 @@ pub fn run(defined: &Defined) -> Result<Report> {
         flow.insert(t.id.clone(), FlowRule::taint(t, root.path())?);
     }
     for t in &defined.text {
-        flow.insert(t.id.clone(), FlowRule::text(t)?);
+        flow.insert(t.id.clone(), FlowRule::text(t, root.path())?);
     }
     let mut text = String::new();
     let mut failures = 0;

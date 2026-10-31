@@ -1,4 +1,5 @@
 use super::*;
+use crate::config::TaintConfig;
 
 fn rule(
     langs: &[&str],
@@ -20,6 +21,7 @@ fn rule(
             sink_arg: arg.map(String::from),
             sanitizers: s(sanitizers),
             safe_prefix: None,
+            sanitizer_names: None,
             guards: Vec::new(),
             param_types: [("Request".to_string(), "req".to_string())].into(),
             source_names: Vec::new(),

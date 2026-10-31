@@ -6,10 +6,11 @@ use super::TaintRule;
 use super::events::Hits;
 use super::flow::{Ctx, Reached};
 use crate::files::SourceFile;
-use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
 use ast_grep_language::SupportLang;
 use std::collections::{BTreeSet, HashMap, HashSet};
+
+pub use super::defs::{functions, param_names};
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Summary {
@@ -96,18 +97,6 @@ pub fn args<'a, D: Doc>(call: &Node<'a, D>) -> Vec<Node<'a, D>> {
         .collect()
 }
 
-/// Named functions defined in `root`: (name, function node, parameter names).
-pub fn functions<'a, D: Doc>(root: &Node<'a, D>) -> Vec<(String, Node<'a, D>, Vec<String>)> {
-    let mut out: Vec<(String, Node<'a, D>, Vec<String>)> = named(root).collect();
-    // Methods are also known as `Class.method`, the way callers outside name them.
-    let qualified: Vec<_> = out
-        .iter()
-        .filter_map(|(name, f, p)| Some((format!("{}.{name}", class_of(f)?), f.clone(), p.clone())))
-        .collect();
-    out.extend(qualified);
-    out
-}
-
 /// Adds `*.method` for every method name exactly one known class defines.
 pub fn with_unique_methods(mut s: Summaries) -> Summaries {
     let mut seen: HashMap<String, Vec<String>> = HashMap::new();
@@ -128,76 +117,6 @@ pub fn with_unique_methods(mut s: Summaries) -> Summaries {
         }
     }
     s
-}
-
-/// The class a method is defined in: the enclosing class, the receiver type
-/// of a Go method (`func (p *Profile) Load()`), the type of a Rust `impl`.
-fn class_of<D: Doc>(f: &Node<D>) -> Option<String> {
-    if f.kind() == "method_declaration"
-        && let Some(receiver) = f.field("receiver")
-    {
-        let ty = receiver.dfs().find(|n| n.kind() == "type_identifier")?;
-        return Some(ty.text().to_string());
-    }
-    let class = f.ancestors().take_while(|a| !is_function(a)).find(|a| {
-        matches!(
-            a.kind().as_ref(),
-            "class_definition" | "class_declaration" | "class" | "impl_item"
-        )
-    })?;
-    let name = class.field("name").or_else(|| class.field("type"))?;
-    Some(name.text().split('<').next()?.trim().to_string())
-}
-
-fn named<'a, D: Doc>(
-    root: &Node<'a, D>,
-) -> impl Iterator<Item = (String, Node<'a, D>, Vec<String>)> {
-    root.dfs().filter(|n| is_function(n)).filter_map(|f| {
-        let name = f.field("name").map(|n| n.text().to_string()).or_else(|| {
-            // `const f = (…) => …`, `f := func(…)`
-            let parent = f.parent()?;
-            (parent.kind() == "variable_declarator")
-                .then(|| parent.field("name"))
-                .flatten()
-                .map(|n| n.text().to_string())
-        })?;
-        let default = f.parent().is_some_and(|p| {
-            p.kind() == "export_statement" && p.text().starts_with("export default")
-        });
-        let name = if default { "default".to_string() } else { name };
-        Some((name, f.clone(), params(&f)))
-    })
-}
-
-/// Parameter names of a function, as a set.
-pub fn param_names<D: Doc>(f: &Node<D>) -> HashSet<String> {
-    params(f).into_iter().filter(|p| !p.is_empty()).collect()
-}
-
-fn params<D: Doc>(f: &Node<D>) -> Vec<String> {
-    if let Some(one) = f.field("parameter") {
-        return vec![one.text().to_string()]; // `x => …`
-    }
-    let Some(list) = f.field("parameters") else {
-        return Vec::new();
-    };
-    // Python's `self` / `cls` are not among the call's arguments.
-    let receiver = |p: &Node<D>| matches!(p.text().as_ref(), "self" | "cls");
-    list.children()
-        .filter(|c| !(f.kind() == "function_definition" && receiver(c)))
-        .filter(|c| c.is_named() && c.kind() != "comment")
-        .map(|p| {
-            if p.kind() == "identifier" {
-                return p.text().to_string();
-            }
-            ["pattern", "name", "left"]
-                .iter()
-                .find_map(|k| p.field(k))
-                .or_else(|| p.dfs().find(|n| n.kind() == "identifier"))
-                .map(|n| n.text().to_string())
-                .unwrap_or_default()
-        })
-        .collect()
 }
 
 impl TaintRule {
@@ -224,6 +143,7 @@ impl TaintRule {
                 summaries: out.clone(),
                 source_texts: ctx.source_texts.clone(),
                 sourcing: Default::default(),
+                bare_calls: ctx.bare_calls,
             };
             let params_only = round.clone_without_sources();
             for (name, f, params) in defs {
@@ -288,6 +208,7 @@ impl Ctx {
             summaries: self.summaries.clone(),
             source_texts: Vec::new(),
             sourcing: Default::default(),
+            bare_calls: self.bare_calls,
         }
     }
 }

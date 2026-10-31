@@ -17,6 +17,7 @@ import sys
 
 WINDOW = 3
 MARK = re.compile(r"vuln-code-snippet vuln-line ([\w ]+)")
+SINK_AT = re.compile(r"Reaches the sink through .*? at ([^\s:]+):(\d+)\.")
 SKIP = ("test/", "data/static/codefixes/", "lib/codingChallenges", "node_modules/")
 # larpcop rules that are about security (the rest of `recommended` is code quality).
 SECURITY = {
@@ -44,6 +45,12 @@ SECURITY = {
     "java-no-weak-cipher", "java-no-insecure-random", "java-no-insecure-cookie",
     "php-taint-sql", "php-taint-shell", "php-taint-code", "php-taint-path", "php-taint-xss", "php-taint-ssrf",
     "php-taint-redirect", "php-taint-deserialization", "php-no-sql-interpolation", "php-no-eval", "php-no-unserialize",
+    "cs-taint-sql", "cs-taint-shell", "cs-taint-path", "cs-taint-xss", "cs-taint-ssrf", "cs-taint-redirect",
+    "cs-taint-deserialization", "cs-taint-ldap", "cs-taint-xpath",
+    "rb-taint-sql", "rb-taint-shell", "rb-taint-code", "rb-taint-path", "rb-taint-xss", "rb-taint-redirect",
+    "rb-taint-ssrf", "rb-taint-deserialization", "rb-no-sql-interpolation", "rb-no-permit-all", "rb-no-csrf-skip",
+    "rb-no-weak-hash", "rb-no-ssl-verify-none", "rb-no-html-safe-interpolation", "rb-no-cookie-httponly-off", "rb-csrf-off",
+    "rb-no-json-html-escape-off",
 }
 
 
@@ -64,17 +71,27 @@ def markers(root):
     return found
 
 
+def sinks(v):
+    """A finding at a call site also covers the sink its note names in another
+    file: "Reaches the sink through `f` → … at app/models/x.rb:15"."""
+    spans = [(v["file"], v["line"], v["line"], v["rule"], True)]
+    if m := SINK_AT.search(v.get("note") or ""):
+        spans.append((m.group(1), int(m.group(2)), int(m.group(2)), v["rule"], False))
+    return spans
+
+
 def load(ak, sg):
     a = json.load(open(ak))["violations"]
     s = json.load(open(sg))["results"]
     return {
-        "larpcop": [(v["file"], v["line"], v["line"], v["rule"]) for v in a if v["rule"] in SECURITY],
-        "Semgrep OSS": [(r["path"], r["start"]["line"], r["end"]["line"], r["check_id"].split(".")[-1]) for r in s],
+        "larpcop": [span for v in a if v["rule"] in SECURITY for span in sinks(v)],
+        "Semgrep OSS": [(r["path"], r["start"]["line"], r["end"]["line"], r["check_id"].split(".")[-1], True)
+                        for r in s],
     }
 
 
 def hit(spans, rel, line):
-    return sorted({rule for f, s, e, rule in spans if f == rel and s - WINDOW <= line <= e + WINDOW})
+    return sorted({rule for f, s, e, rule, _ in spans if f == rel and s - WINDOW <= line <= e + WINDOW})
 
 
 def secrets_parity(ak, gl):
@@ -116,8 +133,9 @@ def main():
         out(f"| `{rel}:{line}` | {', '.join(challenges)} | " + " | ".join(cells) + " |")
     out()
     for name, spans in tools.items():
-        per_rule = collections.Counter(s[3] for s in spans).most_common()
-        out(f"- {name}: {found[name]}/{len(rows)} lines; {len(spans)} security findings: "
+        # Each finding once, not once per location it covers.
+        per_rule = collections.Counter(s[3] for s in spans if s[4]).most_common()
+        out(f"- {name}: {found[name]}/{len(rows)} lines; {sum(s[4] for s in spans)} security findings: "
             + ", ".join(f"{r} {n}" for r, n in per_rule))
     if gl:
         secrets_parity(ak, gl)

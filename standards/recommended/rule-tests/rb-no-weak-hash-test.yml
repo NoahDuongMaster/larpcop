@@ -2,7 +2,13 @@ id: rb-no-weak-hash
 file: app/controllers/x_controller.rb
 valid:
 - Digest::SHA256.hexdigest(data)
+- headers["ETag"] = Digest::MD5.hexdigest(body)
+- content_md5 = Digest::MD5.base64digest(body)
+- 'record.update(checksum: Digest::MD5.hexdigest(data))'
+- "def info_checksum\n  Digest::MD5.hexdigest(info)\nend\n"
 invalid:
 - Digest::MD5.hexdigest(password)
 - OpenSSL::Digest::SHA1.new
 - d = OpenSSL::Digest.new("md5")
+- self.password = Digest::MD5.hexdigest(password)
+- "if user.password == Digest::MD5.hexdigest(password)\n  login(user)\nend\n"

@@ -17,10 +17,12 @@ pub struct TextRule {
     globs: String,
     regex: Regex,
     not: Option<Regex>,
+    /// (other file, regex): the rule is off while one matches.
+    unless: Vec<(Option<std::path::PathBuf>, Regex)>,
 }
 
 impl TextRule {
-    pub fn new(cfg: &TextRuleConfig) -> Result<Self> {
+    pub fn new(cfg: &TextRuleConfig, root: &std::path::Path) -> Result<Self> {
         let compile =
             |r: &str| Regex::new(r).with_context(|| format!("text rule `{}`: regex `{r}`", cfg.id));
         Ok(Self {
@@ -32,6 +34,11 @@ impl TextRule {
             globs: cfg.files.join(", "),
             regex: compile(&cfg.regex)?,
             not: cfg.not.as_deref().map(compile).transpose()?,
+            unless: cfg
+                .unless
+                .iter()
+                .map(|c| Ok((c.file.as_ref().map(|f| root.join(f)), compile(&c.regex)?)))
+                .collect::<Result<_>>()?,
         })
     }
 
@@ -40,6 +47,13 @@ impl TextRule {
             return Vec::new();
         }
         let text = &file.content;
+        let holds = |(other, re): &(Option<std::path::PathBuf>, Regex)| match other {
+            None => re.is_match(text),
+            Some(path) => std::fs::read_to_string(path).is_ok_and(|t| re.is_match(&t)),
+        };
+        if self.unless.iter().any(holds) {
+            return Vec::new();
+        }
         self.regex
             .find_iter(text)
             .filter(|m| !self.not.as_ref().is_some_and(|n| n.is_match(m.as_str())))
@@ -88,7 +102,7 @@ mod tests {
             "id: t\nfiles: ['**/*.ejs']\nregex: '<%-[^%]*%>'\nnot: '^<%-\\s*include\\b'\nmessage: raw output\n",
         )
         .unwrap();
-        let rule = super::TextRule::new(&cfg).unwrap();
+        let rule = super::TextRule::new(&cfg, std::path::Path::new(".")).unwrap();
         let file = |rel: &str| crate::files::SourceFile {
             rel: rel.into(),
             content: "<%- include('head') %>\n<p><%= safe %></p>\n  <b><%- user.name %></b>\n"

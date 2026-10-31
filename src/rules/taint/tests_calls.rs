@@ -1,6 +1,7 @@
 //! Taint through function calls: summaries in the same file and across imports.
 
 use super::*;
+use crate::config::TaintConfig;
 use std::path::Path;
 
 pub(super) fn rule(
@@ -13,7 +14,7 @@ pub(super) fn rule(
     guarded(lang, root, sources, sinks, sanitizers, &[])
 }
 
-fn guarded(
+pub(super) fn guarded(
     lang: &str,
     root: &Path,
     sources: &[&str],
@@ -34,6 +35,7 @@ fn guarded(
             sink_arg: Some("X".into()),
             sanitizers: s(sanitizers),
             safe_prefix: None,
+            sanitizer_names: None,
             guards: s(guards),
             param_types: Default::default(),
             source_names: Vec::new(),

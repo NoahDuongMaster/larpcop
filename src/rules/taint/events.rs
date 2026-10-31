@@ -175,16 +175,16 @@ fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
             out.push((at, Shape::Assign(left, right, conditional, field)));
         } else if CALLS.contains(&kind.as_ref()) {
             out.push((n.range().start, Shape::Call(n.clone())));
-        } else if matches!(kind.as_ref(), "return_statement" | "return_expression") {
+        } else if matches!(
+            kind.as_ref(),
+            "return_statement" | "return_expression" | "return"
+        ) {
             out.push((n.range().end, Shape::Return(n.clone())));
         }
     });
-    // `(x) => expr`: the body is the return value.
-    if let Some(body) = scope
-        .field("body")
-        .filter(|b| scope.kind() == "arrow_function" && b.kind() != "statement_block")
-    {
-        out.push((body.range().end, Shape::Return(body)));
+    // `(x) => expr`, a Ruby method's last statement, a Rust tail expression.
+    if let Some(value) = super::returns::implicit(scope) {
+        out.push((value.range().end, Shape::Return(value)));
     }
     out
 }

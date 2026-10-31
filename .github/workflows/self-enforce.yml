@@ -7,6 +7,9 @@ on:
 
 jobs:
   larpcop:
+    permissions:
+      contents: read
+      pull-requests: write   # the sticky PR comment
     uses: ./.github/workflows/enforce.yml
     with:
       standards: examples/standards

@@ -3,6 +3,9 @@
 #
 #   jobs:
 #     larpcop:
+#       permissions:
+#         contents: read
+#         pull-requests: write      # PR comment; add security-events: write for `sarif`
 #       uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.2.0
 #       with:
 #         standards: https://github.com/<org>/standards.git#v1.0.0
@@ -118,7 +121,10 @@ jobs:
             gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@larpcop-report.md >/dev/null
           else
             gh pr comment "$PR" --body-file larpcop-report.md
-          fi
+          fi || {
+            echo "::warning::PR comment not posted: the calling job needs \`permissions: pull-requests: write\`."
+            exit 1
+          }
 
       - name: Code scanning
         if: always() && inputs.sarif && hashFiles('larpcop.sarif') != ''

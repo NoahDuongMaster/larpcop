@@ -91,6 +91,9 @@ fn workflow(plan: &Plan) -> String {
         "  pull_request:",
         "jobs:",
         "  larpcop:",
+        "    permissions:",
+        "      contents: read",
+        "      pull-requests: write",
         &format!(
             "    uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@{}",
             plan.workflow_ref
@@ -192,5 +195,6 @@ mod tests {
             "NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.2.0"
         );
         assert_eq!(job["with"]["standards"], plan.standards);
+        assert_eq!(job["permissions"]["pull-requests"], "write");
     }
 }

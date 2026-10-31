@@ -369,12 +369,17 @@ larpcop org setup  <owner> --standards URL#tag [--repos a,b] [--workflow-ref vX]
 ```yaml
 jobs:
   larpcop:
+    permissions:
+      contents: read
+      pull-requests: write   # comment trên PR; thêm security-events: write nếu bật sarif
     uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.2.0
     with:
       standards: https://github.com/<org>/standards.git#v1.0.0
     secrets:
       larpcop-token: ${{ secrets.LARPCOP_TOKEN }}   # chỉ cần khi larpcop/standards private
 ```
+
+`permissions` phải khai ở job gọi: reusable workflow không được có quyền vượt quá job gọi nó, mà token mặc định của repo thường chỉ có quyền đọc. Thiếu quyền thì gate vẫn chạy và vẫn chặn, chỉ có comment trên PR là không đăng được; workflow sẽ hiện một warning nói rõ quyền còn thiếu. Lỗi này được phát hiện khi thử bản v0.2.0 trên PR thật.
 
 Workflow này chỉ kiểm các file mà PR thay đổi, nên nợ kỹ thuật cũ không chặn PR, còn nợ mới không lọt vào được. Nó cũng chạy `sync --check` để đảm bảo các file agent sinh ra luôn khớp với rule. Repo này tự dùng chính workflow đó qua [`self-enforce.yml`](.github/workflows/self-enforce.yml).
 

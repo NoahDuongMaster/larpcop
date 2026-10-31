@@ -1,0 +1,19 @@
+id: no-session-fixation
+valid:
+  - |
+    app.post('/login', (req, res, next) => {
+      req.session.regenerate((err) => {
+        if (err) return next(err);
+        req.session.userId = user.id;
+        res.redirect('/');
+      });
+    });
+  - "req.session.cart = [];"
+invalid:
+  - |
+    app.post('/login', async (req, res) => {
+      const user = await check(req.body);
+      req.session.userId = user.id;
+      res.redirect('/');
+    });
+  - "function login(req, user) { req.session.user = user; }"

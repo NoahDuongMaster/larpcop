@@ -34,6 +34,7 @@ SECURITY = {
     "no-unescaped-template-output", "pug-no-unescaped-output", "no-inner-html-in-templates",
     "taint-xss", "taint-path", "taint-ssrf", "taint-nosql", "taint-regex", "no-unsafe-recursive-merge",
     "py-taint-path", "py-taint-ssrf", "py-taint-ssti", "py-taint-code",
+    "no-session-fixation", "py-no-session-fixation",
 }
 
 

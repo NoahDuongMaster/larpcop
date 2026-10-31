@@ -1,0 +1,15 @@
+id: py-no-session-fixation
+valid:
+  - |
+    async def login(request):
+        session = await new_session(request)
+        session['user_id'] = user.id
+  - |
+    def login():
+        session['user_id'] = user.id
+invalid:
+  - |
+    async def index(request):
+        session = await get_session(request)
+        if user and user.check_password(password):
+            session['user_id'] = user.id

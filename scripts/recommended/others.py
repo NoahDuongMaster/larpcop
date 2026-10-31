@@ -26,6 +26,16 @@ RULES = [
              {"kind": "call", "regex": SQL_TEXT, "not": {"inside": {"kind": "argument_list"}},
               "has": {"field": "function", "kind": "attribute", "has": {"field": "attribute", "regex": "^format$"}}},
          ]}),
+    dict(id="py-no-session-fixation", langs=["Python"], severity="error",
+         message="Login or privilege change writes the user into a server-side session without a new session id (session fixation).",
+         note="Start a fresh session first (aiohttp_session.new_session(request), session.cycle_key() in Django, session.regenerate() in Beaker).",
+         rule={"kind": "assignment", "all": [
+             {"has": {"field": "left", "kind": "subscript", "regex": "^session\\[['\"](user|user_id|userid|uid|account|account_id|auth|authenticated|logged_in|username|email|role|is_admin)['\"]\\]$"}},
+             {"inside": {"stopBy": "end", "kind": "function_definition", "all": [
+                 {"has": {"stopBy": "end", "regex": "^get_session\\("}},
+                 {"not": {"has": {"stopBy": "end", "regex": "^(new_session|[\\w.]*cycle_key|[\\w.]*regenerate|[\\w.]*invalidate)\\("}}},
+             ]}},
+         ]}),
     dict(id="py-no-shell-true", langs=["Python"], severity="error",
          message="`shell=True` runs the command through a shell (command injection).",
          note="Pass an argument list without shell=True: subprocess.run(['git', 'log', ref], check=True).",

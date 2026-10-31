@@ -205,6 +205,19 @@ RULES = [
              {"not": {"inside": {"stopBy": "end", "any": [{"kind": "function_declaration"}, {"kind": "variable_declarator"}],
                                  "has": {"stopBy": "end", "kind": "string", "regex": "__proto__|constructor|prototype"}}}},
          ]}),
+    dict(id="no-session-fixation", langs=JS, severity="error",
+         message="Login or privilege change writes the user into the session without a new session id (session fixation).",
+         note="Call req.session.regenerate() first and set the user in its callback; a session id an attacker planted before login must not become logged in.",
+         rule={"kind": "assignment_expression", "all": [
+             {"has": {"field": "left", "regex": "^(req|request|ctx)\\.session\\.(user|userId|user_id|uid|account|accountId|auth|authenticated|loggedIn|isLoggedIn|login|username|email|role|isAdmin)$"}},
+             {"not": {"inside": {"stopBy": "end", "any": [
+                 {"kind": "call_expression", "has": {"field": "function", "regex": "\\.session\\.regenerate$"}},
+                 {"kind": "function_declaration", "has": {"stopBy": "end", "regex": "\\.session\\.regenerate\\("}},
+                 {"kind": "arrow_function", "has": {"stopBy": "end", "regex": "\\.session\\.regenerate\\("}},
+                 {"kind": "function_expression", "has": {"stopBy": "end", "regex": "\\.session\\.regenerate\\("}},
+                 {"kind": "method_definition", "has": {"stopBy": "end", "regex": "\\.session\\.regenerate\\("}},
+             ]}}},
+         ]}),
     # ---- JavaScript / TypeScript: no silencing the checks ---------------------
     dict(id="no-suppression-comment", langs=JS, severity="error",
          message="Suppression comment: it hides a check instead of fixing what it found.",

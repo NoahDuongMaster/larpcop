@@ -1,0 +1,33 @@
+id: php-taint-sql
+file: app/page.php
+valid:
+- '<?php
+
+  $id = intval($_GET["id"]);
+
+  $r = mysqli_query($db, "SELECT * FROM users WHERE id = $id");
+
+  '
+- '<?php
+
+  $st = $pdo->prepare("SELECT * FROM users WHERE name = ?");
+
+  $st->execute([$_POST["name"]]);
+
+  '
+invalid:
+- '<?php
+
+  $id = $_GET["id"];
+
+  $r = mysqli_query($db, "SELECT * FROM users WHERE id = ''$id''");
+
+  '
+- '<?php
+
+  $name = $request->input("name");
+
+  $rows = DB::select("SELECT * FROM users WHERE name = ''" . $name . "''");
+
+  '
+- "<?php\nfunction find($pdo) {\n  $q = \"SELECT * FROM t WHERE c = \" . $_REQUEST[\"c\"];\n  return $pdo->query($q);\n}\n"

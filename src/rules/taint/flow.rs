@@ -5,7 +5,7 @@
 use super::containers::filled;
 use super::events::{Event, Hits};
 use super::summary::{Summaries, args, callee};
-use super::{VARIABLES, destructure};
+use super::{NAMES, VARIABLES, destructure};
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
@@ -128,9 +128,7 @@ impl Ctx {
             return false;
         }
         let kind = node.kind();
-        if (VARIABLES[..2].contains(&kind.as_ref()) || is_field(node))
-            && names.contains(text.as_ref())
-        {
+        if (NAMES.contains(&kind.as_ref()) || is_field(node)) && names.contains(text.as_ref()) {
             return true;
         }
         // A function we have a summary for: only what it really passes through.
@@ -189,7 +187,16 @@ impl Ctx {
     ) {
         let events = hits.events(scope, &self.guards);
         let mut cleaned: Vec<Vec<String>> = Vec::new();
-        for (_, e) in events.iter() {
+        // Names a branch cleaned, tainted again where the branch ends.
+        let mut until: Vec<(usize, String)> = Vec::new();
+        for (at, e) in events.iter() {
+            until.retain(|(end, name)| {
+                let over = *end <= *at;
+                if over {
+                    names.insert(name.clone());
+                }
+                !over
+            });
             match e {
                 Event::Clean(guarded) => names.retain(|n| !guarded.contains(n)),
                 Event::Enter(guarded) => {
@@ -201,15 +208,17 @@ impl Ctx {
                     cleaned.push(was);
                 }
                 Event::Restore => names.extend(cleaned.pop().unwrap_or_default()),
-                Event::Assign(left, right, conditional) if is_field(left) => {
+                Event::Assign(left, right, branch) if is_field(left) => {
                     if self.tainted(right, &names) {
                         names.insert(left.text().to_string());
                         on(Seen::Reached(Reached::Field(left.clone())));
-                    } else if !conditional {
-                        names.remove(left.text().as_ref());
+                    } else if names.remove(left.text().as_ref())
+                        && let Some(end) = branch
+                    {
+                        until.push((*end, left.text().to_string()));
                     }
                 }
-                Event::Assign(left, right, conditional) => {
+                Event::Assign(left, right, branch) => {
                     let tainted = self.tainted(right, &names);
                     for v in left
                         .dfs()
@@ -217,8 +226,11 @@ impl Ctx {
                     {
                         if tainted {
                             names.insert(v.text().to_string());
-                        } else if left.kind() == "identifier" && !conditional {
-                            names.remove(v.text().as_ref());
+                        } else if NAMES.contains(&left.kind().as_ref())
+                            && names.remove(v.text().as_ref())
+                            && let Some(end) = branch
+                        {
+                            until.push((*end, v.text().to_string()));
                         }
                     }
                     if !tainted && right.kind() == "identifier" {

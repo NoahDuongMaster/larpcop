@@ -1,0 +1,22 @@
+id: php-taint-path
+file: app/page.php
+valid:
+- '<?php
+
+  include "pages/" . basename($_GET["page"]) . ".php";
+
+  '
+- "<?php\n$p = $_GET[\"page\"];\nif (in_array($p, [\"home\", \"about\"])) {\n  include $p . \".php\";\n}\n"
+invalid:
+- '<?php
+
+  $file = $_GET["page"];
+
+  include($file);
+
+  '
+- '<?php
+
+  echo file_get_contents("/var/data/" . $_GET["f"]);
+
+  '

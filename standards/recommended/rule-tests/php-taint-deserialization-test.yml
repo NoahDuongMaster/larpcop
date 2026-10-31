@@ -1,0 +1,19 @@
+id: php-taint-deserialization
+file: app/page.php
+valid:
+- '<?php
+
+  $data = json_decode($_COOKIE["prefs"], true);
+
+  '
+invalid:
+- '<?php
+
+  $prefs = unserialize($_COOKIE["prefs"]);
+
+  '
+- '<?php
+
+  $o = unserialize(base64_decode($_POST["state"]));
+
+  '

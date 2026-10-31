@@ -59,7 +59,10 @@ impl TaintRule {
         hits.dedup_by_key(|(at, node, _)| (*at, node.range().start, node.range().end));
         let hits = Hits::new(hits, &index.root, index.skeletons.clone());
         let base = Ctx {
-            sources: ranges(sources),
+            sources: ranges(sources)
+                .into_iter()
+                .chain(index.named(&self.source_names))
+                .collect(),
             sanitizers: ranges(sanitizers),
             guards: ranges(
                 guards

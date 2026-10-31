@@ -36,6 +36,7 @@ fn guarded(
             safe_prefix: None,
             guards: s(guards),
             param_types: Default::default(),
+            source_names: Vec::new(),
             param_decorators: Vec::new(),
             handler_decorators: None,
             resolver_args: false,

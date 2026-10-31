@@ -1,7 +1,7 @@
 //! Which files a file's functions come from, so taint follows calls across
 //! files: relative and `tsconfig` path-alias imports in JS/TS, `import`/`from`
 //! in Python (relative, from the root or `src/`), and in Go the other files of
-//! the same package plus packages of the same module.
+//! the same package plus packages of the same module, PHP `require`/`include`.
 
 use ast_grep_core::{Doc, Node};
 use ast_grep_language::SupportLang;
@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 mod go;
 mod js;
+mod php;
 mod python;
 
 pub struct Import {
@@ -29,6 +30,7 @@ pub fn imports<D: Doc>(lang: SupportLang, root: &Node<D>, file: &Path, repo: &Pa
         }
         SupportLang::Python => python::imports(root, dir, repo),
         SupportLang::Go => go::imports(root, file, repo),
+        SupportLang::Php => php::imports(root, dir),
         _ => Vec::new(),
     };
     for imp in &mut found {

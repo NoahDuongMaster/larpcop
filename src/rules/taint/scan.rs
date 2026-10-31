@@ -47,6 +47,30 @@ impl<'a, D: Doc> FileIndex<'a, D> {
         }
     }
 
+    /// Ranges of the names in `wanted` wherever they are read (`$_GET`).
+    pub(super) fn named(
+        &self,
+        wanted: &std::collections::HashSet<String>,
+    ) -> Vec<std::ops::Range<usize>> {
+        if wanted.is_empty() {
+            return Vec::new();
+        }
+        // An entry with `[` names a subscript by prefix: `$_SERVER['HTTP_`.
+        let prefixes: Vec<&String> = wanted.iter().filter(|w| w.contains('[')).collect();
+        self.nodes
+            .iter()
+            .filter(|n| {
+                let kind = n.kind();
+                if kind == "subscript_expression" && !prefixes.is_empty() {
+                    let text: String = n.text().split_whitespace().collect();
+                    return prefixes.iter().any(|p| text.starts_with(p.as_str()));
+                }
+                super::NAMES.contains(&kind.as_ref()) && wanted.contains(n.text().as_ref())
+            })
+            .map(|n| n.range())
+            .collect()
+    }
+
     /// Named functions: (name, node, parameter names).
     pub(super) fn functions(&self) -> &Defs<'a, D> {
         self.functions

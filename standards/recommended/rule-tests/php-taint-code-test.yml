@@ -1,0 +1,21 @@
+id: php-taint-code
+file: app/page.php
+valid:
+- '<?php
+
+  eval("return 1 + 1;");
+
+  '
+invalid:
+- '<?php
+
+  eval($_POST["code"]);
+
+  '
+- '<?php
+
+  $f = $_GET["fn"];
+
+  call_user_func($f, 1);
+
+  '

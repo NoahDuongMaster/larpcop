@@ -1,0 +1,24 @@
+id: php-taint-redirect
+file: app/page.php
+valid:
+- '<?php
+
+  header("Location: /account/" . intval($_GET["id"]));
+
+  '
+- '<?php
+
+  header("Location: /home");
+
+  '
+invalid:
+- '<?php
+
+  header("Location: " . $_GET["next"]);
+
+  '
+- '<?php
+
+  return redirect($request->input("return_to"));
+
+  '

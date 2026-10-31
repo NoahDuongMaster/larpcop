@@ -1,0 +1,19 @@
+id: php-no-eval
+file: page.php
+valid:
+- '<?php
+
+  $x = evaluate($y);
+
+  '
+invalid:
+- '<?php
+
+  eval($code);
+
+  '
+- '<?php
+
+  $f = create_function(''$a'', $body);
+
+  '

@@ -1,0 +1,23 @@
+id: php-taint-shell
+file: app/page.php
+valid:
+- '<?php
+
+  $ip = escapeshellarg($_POST["ip"]);
+
+  shell_exec("ping -c 1 " . $ip);
+
+  '
+invalid:
+- '<?php
+
+  $target = $_REQUEST["ip"];
+
+  $out = shell_exec("ping -c 4 " . $target);
+
+  '
+- '<?php
+
+  system("nslookup " . $_GET["host"]);
+
+  '

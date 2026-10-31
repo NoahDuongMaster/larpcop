@@ -17,9 +17,10 @@ use std::rc::Rc;
 pub(super) type Hit<'a, D> = (usize, Node<'a, D>, Vec<(usize, Node<'a, D>)>);
 
 pub(super) enum Event<'a, D: Doc> {
-    /// Target, value, and whether it runs only on some paths (in a branch,
-    /// loop or `try`): such an assignment can taint a name, never clean it.
-    Assign(Node<'a, D>, Node<'a, D>, bool),
+    /// Target, value, and for an assignment that runs on some paths only (in
+    /// a branch, loop or `try`), where that construct ends: a clean value
+    /// cleans the name up to there, after which it is tainted again.
+    Assign(Node<'a, D>, Node<'a, D>, Option<usize>),
     Sink(Node<'a, D>, Vec<(usize, Node<'a, D>)>),
     Call(Node<'a, D>),
     Return(Node<'a, D>),
@@ -39,7 +40,7 @@ type Key = (usize, usize);
 /// What a scope holds whatever the rule, in walk order: `If` stands where the
 /// guard events of an `if` go once a rule's guards are known.
 pub(super) enum Shape<'a, D: Doc> {
-    Assign(Node<'a, D>, Node<'a, D>, bool),
+    Assign(Node<'a, D>, Node<'a, D>, Option<usize>),
     Call(Node<'a, D>),
     Return(Node<'a, D>),
     Nested(Node<'a, D>),
@@ -135,7 +136,7 @@ impl<'a, D: Doc> Hits<'a, D> {
 
 fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
     let mut out: Skeleton<D> = Vec::new();
-    walk(scope, false, &mut |n, conditional| {
+    walk(scope, None, &mut |n, conditional| {
         if is_function(n) {
             out.push((n.range().start, Shape::Nested(n.clone())));
             return;
@@ -199,17 +200,21 @@ const CONDITIONAL: [&str; 26] = [
     "rescue",
 ];
 
-/// Nodes of a scope in order, each with whether it is inside a conditional
-/// construct; nested functions are visited, not descended into.
+/// Nodes of a scope in order, each with the end of the innermost conditional
+/// construct it is in; nested functions are visited, not descended into.
 fn walk<'a, D: Doc>(
     scope: &Node<'a, D>,
-    conditional: bool,
-    f: &mut impl FnMut(&Node<'a, D>, bool),
+    conditional: Option<usize>,
+    f: &mut impl FnMut(&Node<'a, D>, Option<usize>),
 ) {
     for c in scope.children() {
         f(&c, conditional);
         if !is_function(&c) {
-            let inside = conditional || CONDITIONAL.contains(&c.kind().as_ref());
+            let inside = if CONDITIONAL.contains(&c.kind().as_ref()) {
+                Some(c.range().end)
+            } else {
+                conditional
+            };
             walk(&c, inside, f);
         }
     }

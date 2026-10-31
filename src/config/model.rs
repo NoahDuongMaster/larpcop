@@ -88,7 +88,12 @@ pub struct TaintConfig {
     pub message: String,
     pub note: Option<String>,
     /// ast-grep patterns of untrusted data, e.g. `req.query`.
+    #[serde(default)]
     pub sources: Vec<String>,
+    /// Names that are untrusted wherever they are read, matched as written:
+    /// PHP's `$_GET` cannot be an ast-grep pattern (`$_…` is a metavariable).
+    #[serde(default)]
+    pub source_names: Vec<String>,
     /// ast-grep patterns of dangerous calls, e.g. `$DB.query($SQL, $$$REST)`.
     pub sinks: Vec<String>,
     /// Metavariable of the sink argument that must stay clean (default: the whole call).

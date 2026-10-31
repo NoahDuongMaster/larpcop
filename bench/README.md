@@ -35,7 +35,9 @@ Một bộ chỉ đo được độ tổng quát khi rule chưa được viết 
 
 8. **OWASP Benchmark (Java)** đo 8 rule taint Java và 5 rule cú pháp Java vừa viết, chấm như scorecard của chính dự án (mỗi hạng mục: tỉ lệ bắt đúng − tỉ lệ báo nhầm, rồi lấy trung bình). Lần đầu: larpcop **+37,5%**, Semgrep `p/default` +34,9%, `p/java` +17,7%. Lần chạy lộ ra một điểm yếu chung của taint: phép gán sạch nằm trong nhánh `if` (`if (param == null) param = "";`) xoá taint như thể nó luôn chạy. Giờ phép gán chỉ chạy trên một số đường (trong `if`, vòng lặp, `try`, `switch`) có thể làm bẩn nhưng không làm sạch một biến: **+44,0%**. Báo nhầm còn lại phần lớn là các ca cố ý của Benchmark mà taint không có hằng số và chỉ số collection không phân biệt được (`(7*18)+num > 200 ? "safe" : param`, `list.remove(0); list.get(1)`), và rule quy ước `java-no-sql-concat` báo mọi câu SQL ghép chuỗi, kể cả khi giá trị ghép vào là an toàn.
 
-Kết quả dưới đây là sau bước 8: chỉ có ý nghĩa *không thụt lùi* trên cả tám bộ. Rule mới cần một bộ chưa ai nhìn.
+9. **DVWA (PHP)** đo 8 rule taint PHP và 3 rule cú pháp PHP vừa viết. Đáp án lấy từ cấu trúc của chính DVWA: trong mỗi module, `source/low.php`, `medium.php`, `high.php` có lỗ hổng theo thiết kế, `impossible.php` là bản đã sửa (8 module: SQLi, SQLi blind, command injection, file inclusion, upload, XSS phản chiếu, XSS lưu trữ, open redirect). Lần đầu: larpcop **+40,0%**, Semgrep **+3,3%**. Báo nhầm trên các bản `impossible.php` lộ ra: `is_numeric`/`ctype_digit` là phép kiểm (guard) chứ không phải hàm làm sạch, giá trị qua `md5()` là an toàn, `$_SERVER['SERVER_PROTOCOL']` không do client đặt (chỉ các khoá `HTTP_*`, `REQUEST_URI`, `QUERY_STRING`, `PHP_SELF`… là nguồn), hàm trong file được `require` không có summary, và một phép gán sạch trong nhánh `if` không làm sạch được biến cho phần còn lại của chính nhánh đó. Sau khi sửa: **+60,0%**. XSS ở DVWA nằm ở `index.php` dùng chung cho mọi mức (file nguồn chỉ dựng chuỗi `$html`), nên không công cụ nào bắt được theo file.
+
+Kết quả dưới đây là sau bước 9: chỉ có ý nghĩa *không thụt lùi* trên cả chín bộ. Rule mới cần một bộ chưa ai nhìn.
 
 ## Kết quả (01/11/2026)
 
@@ -54,6 +56,7 @@ Kết quả dưới đây là sau bước 8: chỉ có ý nghĩa *không thụt 
 | GoVWA: thời gian | 1,57 s | – | – |
 | GoVWA: dòng tìm thấy (/4) | **4** (lần đầu 0) | 4 | – |
 | OWASP Benchmark Java: thời gian | **7,11 s** | 48,6 s (`p/default`), 54,9 s (`p/java`) | 49,8 s |
+| DVWA (PHP): điểm trung bình (TPR − FPR) | **+60,0%** (lần đầu +40,0%) | +3,3% | – |
 | OWASP Benchmark Java: điểm trung bình (TPR − FPR) | **+44,0%** (lần đầu +37,5%) | +34,9% (`p/default`), +17,7% (`p/java`) | – |
 | vulnerable-node seeds (/12 file, báo nhầm trên 2 file sạch) | **11**, 1 báo nhầm (11 và 0 báo nhầm nếu bỏ rule chung chung) | 10, 1 báo nhầm (8 và 1 báo nhầm nếu bỏ rule chung chung) | – |
 | Secrets (so với gitleaks) | 69/69 và 3/3 trùng khớp | – | 69 và 3 |

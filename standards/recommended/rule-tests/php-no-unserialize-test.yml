@@ -1,0 +1,14 @@
+id: php-no-unserialize
+file: page.php
+valid:
+- '<?php
+
+  $o = unserialize($s, ["allowed_classes" => false]);
+
+  '
+invalid:
+- '<?php
+
+  $o = unserialize($_COOKIE["c"]);
+
+  '

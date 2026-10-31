@@ -4,7 +4,7 @@
 //! block only. Polarity is not judged: `if (!name.includes("/")) { … }` is a
 //! check as much as `if (allowed.has(name)) { … }`.
 
-use super::VARIABLES;
+use super::NAMES;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
 use std::ops::Range;
@@ -32,11 +32,12 @@ pub(super) fn of<D: Doc>(n: &Node<D>, guards: &[Range<usize>]) -> Option<Guard> 
         return None;
     }
     let condition = n.field("condition")?;
-    let consequence = n.field("consequence")?;
+    // PHP names the branch `body`.
+    let consequence = n.field("consequence").or_else(|| n.field("body"))?;
     let inside = |r: &Range<usize>| guards.iter().any(|g| g.start <= r.start && r.end <= g.end);
     let names: HashSet<String> = condition
         .dfs()
-        .filter(|c| VARIABLES[..2].contains(&c.kind().as_ref()) && inside(&c.range()))
+        .filter(|c| NAMES.contains(&c.kind().as_ref()) && inside(&c.range()))
         .map(|c| c.text().to_string())
         .collect();
     if names.is_empty() {

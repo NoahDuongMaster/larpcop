@@ -1,0 +1,24 @@
+id: php-no-sql-interpolation
+file: page.php
+valid:
+- '<?php
+
+  $st = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+
+  '
+- '<?php
+
+  $msg = "Selected $n rows from cache";
+
+  '
+invalid:
+- '<?php
+
+  $q = "SELECT * FROM users WHERE id = ''$id''";
+
+  '
+- '<?php
+
+  $q = "SELECT first_name FROM users WHERE user_id = " . $_GET["id"];
+
+  '

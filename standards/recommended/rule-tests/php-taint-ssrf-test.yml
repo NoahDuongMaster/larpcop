@@ -1,0 +1,21 @@
+id: php-taint-ssrf
+file: app/page.php
+valid:
+- '<?php
+
+  $ch = curl_init("https://api.example.com/status");
+
+  '
+invalid:
+- '<?php
+
+  $ch = curl_init();
+
+  curl_setopt($ch, CURLOPT_URL, $_GET["url"]);
+
+  '
+- '<?php
+
+  $r = Http::get($request->input("callback"));
+
+  '

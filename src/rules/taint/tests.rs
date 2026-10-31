@@ -22,6 +22,7 @@ fn rule(
             safe_prefix: None,
             guards: Vec::new(),
             param_types: [("Request".to_string(), "req".to_string())].into(),
+            source_names: Vec::new(),
             param_decorators: Vec::new(),
             handler_decorators: None,
             resolver_args: false,

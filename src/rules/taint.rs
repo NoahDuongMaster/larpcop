@@ -30,6 +30,8 @@ pub struct TaintRule {
     safe_prefix: Option<regex::Regex>,
     /// Sources as written, without whitespace (`req.query`), for destructuring.
     source_texts: Vec<String>,
+    /// `source_names`: names that are request data wherever they are read.
+    source_names: std::collections::HashSet<String>,
     param_types: std::collections::BTreeMap<String, String>,
     param_decorators: Vec<String>,
     handler_decorators: Option<regex::Regex>,
@@ -45,11 +47,7 @@ pub struct TaintRule {
     imported: Mutex<HashMap<(PathBuf, usize), prepare::Slot>>,
 }
 
-const VARIABLES: [&str; 3] = [
-    "identifier",
-    "shorthand_property_identifier",
-    "shorthand_property_identifier_pattern",
-];
+use names::{NAMES, VARIABLES};
 
 impl TaintRule {
     pub fn new(cfg: &TaintConfig, typed: typed::Typed, root: PathBuf) -> Result<Self> {
@@ -94,6 +92,7 @@ impl TaintRule {
                 .iter()
                 .map(|s| s.split_whitespace().collect())
                 .collect(),
+            source_names: cfg.source_names.iter().cloned().collect(),
             param_types: cfg.param_types.clone(),
             param_decorators: cfg.param_decorators.clone(),
             resolver_args: cfg.resolver_args,
@@ -270,6 +269,7 @@ mod flow;
 mod guards;
 mod handlers;
 mod imports;
+mod names;
 mod prefix;
 mod prepare;
 mod scan;

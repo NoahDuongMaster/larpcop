@@ -21,9 +21,9 @@ Chạy lại được bằng một lệnh: `bench/run.sh` (cần git, python3, s
 
 | | larpcop | Semgrep OSS | gitleaks |
 |---|---|---|---|
-| Juice Shop: thời gian | **3,58 s** | 34,91 s | 5,37 s |
+| Juice Shop: thời gian | **3,58 s** | 33,00 s | 4,84 s |
 | Juice Shop: dòng tìm thấy (/27) | **11** (8 nếu không tính `validate-request-input`) | 6 | – |
-| NodeGoat: thời gian | **3,26 s** | 10,06 s | 0,23 s |
+| NodeGoat: thời gian | **3,16 s** | 10,67 s | 0,21 s |
 | NodeGoat: dòng tìm thấy (/14) | **8** (6 nếu không tính `validate-request-input`) | 4 | – |
 | Secrets (so với gitleaks) | 69/69 và 3/3 trùng khớp | – | 69 và 3 |
 

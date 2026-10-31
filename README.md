@@ -206,7 +206,7 @@ llm:
 
 | | larpcop | Semgrep OSS (`p/default`) | gitleaks |
 |---|---|---|---|
-| Juice Shop: thời gian | **3,58 s** | 34,91 s | 5,37 s |
+| Juice Shop: thời gian | **3,58 s** | 33,00 s | 4,84 s |
 | Juice Shop: dòng lỗ hổng tìm thấy | **11/27** (8 nếu không tính quy ước validate) | 6/27 | – |
 | NodeGoat (bộ kiểm chứng, đáp án viết trước khi chạy): dòng tìm thấy | **8/14** (6 nếu không tính quy ước validate) | 4/14 | – |
 | Secrets | trùng khớp hoàn toàn với gitleaks | – | 69 + 3 |

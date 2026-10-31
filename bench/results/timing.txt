@@ -1,7 +1,7 @@
-larpcop 0.1.0 | semgrep 1.183.0 | gitleaks 8.30.1 | Darwin arm64 8 cpus
+larpcop 0.2.0 | semgrep 1.183.0 | gitleaks 8.30.1 | Darwin arm64 8 cpus
 juice-shop larpcop_seconds 3.58
-juice-shop semgrep_seconds 34.91
-juice-shop gitleaks_seconds 5.37
-NodeGoat larpcop_seconds 3.26
-NodeGoat semgrep_seconds 10.06
-NodeGoat gitleaks_seconds 0.23
+juice-shop semgrep_seconds 33.0
+juice-shop gitleaks_seconds 4.84
+NodeGoat larpcop_seconds 3.16
+NodeGoat semgrep_seconds 10.67
+NodeGoat gitleaks_seconds 0.21

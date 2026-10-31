@@ -1,0 +1,12 @@
+id: java-taint-code
+file: src/T.java
+valid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    ScriptEngine e = new ScriptEngineManager().getEngineByName(\"\
+  js\");\n    e.eval(\"1 + 1\");\n  }\n}\n"
+invalid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    ScriptEngine e = new ScriptEngineManager().getEngineByName(\"\
+  js\");\n    e.eval(request.getParameter(\"expr\"));\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    ExpressionParser p = new SpelExpressionParser();\n    p.parseExpression(request.getParameter(\"\
+  q\")).getValue();\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    Class<?> c = Class.forName(request.getParameter(\"type\"\
+  ));\n  }\n}\n"

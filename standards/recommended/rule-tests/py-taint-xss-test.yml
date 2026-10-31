@@ -1,0 +1,12 @@
+id: py-taint-xss
+file: app/views.py
+valid:
+- "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
+  \ view():\n    name = request.args.get(\"name\", \"\")\n    return make_response(f\"<p>Hello {escape(name)}</p>\")\n"
+- "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
+  \ view():\n    return make_response(Markup(\"<b>ok</b>\"))\n"
+invalid:
+- "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
+  \ view():\n    name = request.args.get(\"name\", \"\")\n    return make_response(f\"<p>Hello {name}</p>\")\n"
+- "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
+  \ view():\n    return Markup(\"<p>\" + request.form[\"comment\"] + \"</p>\")\n"

@@ -50,6 +50,8 @@ SECURITY = {
     "rb-taint-sql", "rb-taint-shell", "rb-taint-code", "rb-taint-path", "rb-taint-xss", "rb-taint-redirect",
     "rb-taint-ssrf", "rb-taint-deserialization", "rb-no-sql-interpolation", "rb-no-permit-all", "rb-no-csrf-skip",
     "rb-no-weak-hash", "rb-no-ssl-verify-none", "rb-no-html-safe-interpolation", "rb-no-cookie-httponly-off", "rb-csrf-off",
+    "py-taint-xss", "py-taint-shell", "py-taint-redirect", "py-taint-deserialization", "java-taint-ssrf",
+    "java-taint-code", "java-taint-deserialization", "php-taint-ldap", "php-taint-xpath",
     "rb-no-json-html-escape-off",
 }
 

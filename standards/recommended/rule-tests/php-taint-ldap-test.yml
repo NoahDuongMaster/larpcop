@@ -1,0 +1,18 @@
+id: php-taint-ldap
+file: app/ldap.php
+valid:
+- '<?php
+
+  $u = ldap_escape($_GET["user"], "", LDAP_ESCAPE_FILTER);
+
+  $r = ldap_search($conn, "ou=people,dc=x", "(uid=$u)");
+
+  '
+invalid:
+- '<?php
+
+  $u = $_GET["user"];
+
+  $r = ldap_search($conn, "ou=people,dc=x", "(uid=" . $u . ")");
+
+  '

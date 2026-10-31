@@ -1,0 +1,10 @@
+id: java-taint-ssrf
+file: src/T.java
+valid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    URL u = new URL(\"https://api.example.com/status\");\n\
+  \    u.openStream();\n  }\n}\n"
+invalid:
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String target = request.getParameter(\"url\");\n    URL\
+  \ u = new URL(target);\n    u.openStream();\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    Document d = Jsoup.connect(request.getParameter(\"u\")).get();\n\
+  \  }\n}\n"

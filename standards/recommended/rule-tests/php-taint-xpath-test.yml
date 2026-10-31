@@ -1,0 +1,18 @@
+id: php-taint-xpath
+file: app/xpath.php
+valid:
+- '<?php
+
+  $xp = new DOMXPath($doc);
+
+  $n = $xp->query("//user[@id=" . intval($_GET["id"]) . "]");
+
+  '
+invalid:
+- '<?php
+
+  $xp = new DOMXPath($doc);
+
+  $n = $xp->query("//user[name=''" . $_GET["name"] . "'']");
+
+  '

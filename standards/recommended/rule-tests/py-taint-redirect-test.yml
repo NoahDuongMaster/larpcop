@@ -1,0 +1,12 @@
+id: py-taint-redirect
+file: app/views.py
+valid:
+- "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
+  \ view():\n    return redirect(url_for(\"profile\", user=request.args[\"u\"]))\n"
+- "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
+  \ view():\n    return redirect(\"/items/\" + request.args[\"id\"])\n"
+invalid:
+- "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
+  \ view():\n    return redirect(request.args.get(\"next\"))\n"
+- "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
+  \ view():\n    target = request.form[\"return_to\"]\n    return redirect(target, code=302)\n"

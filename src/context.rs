@@ -65,6 +65,46 @@ impl Ctx {
         })
     }
 
+    /// Checks content that is not on disk yet (a write an agent is about to make).
+    pub fn check_content(&self, path: &Path, content: &str) -> Result<Outcome> {
+        let (cfg, engine) = self.load()?;
+        let rel = files::rel_of_new(&cfg.root, path).unwrap_or_default();
+        let exclude = files::globset(&cfg.exclude)?;
+        if engine.is_empty() || rel.is_empty() || exclude.is_match(&rel) {
+            return Ok(Outcome::default());
+        }
+        let file = files::SourceFile {
+            rel,
+            content: content.to_string(),
+        };
+        let mut outcome = Outcome {
+            files: 1,
+            violations: engine.check_source(&file),
+            ..Outcome::default()
+        };
+        // Only what this write adds is blocked: a partial fix of a file that is
+        // already broken must go through (seen live: Kiro could not swap `any`
+        // for `unknown` on a line that still had `console`).
+        if let Ok(before) = std::fs::read_to_string(path) {
+            let before = engine.check_source(&files::SourceFile {
+                rel: file.rel.clone(),
+                content: before,
+            });
+            let count = |v: &[Violation], rule: &str| v.iter().filter(|x| x.rule == rule).count();
+            let grown: Vec<String> = outcome
+                .violations
+                .iter()
+                .map(|v| v.rule.clone())
+                .filter(|r| count(&outcome.violations, r) > count(&before, r))
+                .collect();
+            outcome.violations.retain(|v| grown.contains(&v.rule));
+        }
+        if let Some(known) = Baseline::load(&cfg.root, false)? {
+            outcome.baselined = known.apply(&mut outcome.violations);
+        }
+        Ok(outcome)
+    }
+
     pub fn check(&self, scope: &Scope) -> Result<Outcome> {
         let (cfg, engine) = self.load()?;
         if engine.is_empty() {

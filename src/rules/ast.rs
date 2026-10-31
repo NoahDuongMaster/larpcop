@@ -69,6 +69,17 @@ impl AstRules {
         &self.infos
     }
 
+    pub fn infos_for(&self, rel: &str) -> Vec<RuleInfo> {
+        if SupportLang::from_path(rel).is_none() {
+            return Vec::new();
+        }
+        self.collection
+            .for_path(rel)
+            .into_iter()
+            .map(info)
+            .collect()
+    }
+
     pub fn check(&self, file: &SourceFile) -> Vec<Violation> {
         let rules = self.collection.for_path(&file.rel);
         let Some(lang) = SupportLang::from_path(&file.rel) else {

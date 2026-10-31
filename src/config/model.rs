@@ -28,6 +28,8 @@ pub struct RawConfig {
     /// Markdown file inlined into AGENTS.md, relative to this config file.
     pub guidelines: Option<String>,
     pub dependencies: Option<DependenciesConfig>,
+    /// Agents `sync` generates files for (default: all). Ids as in `agentkit hook`.
+    pub agents: Option<Vec<String>>,
 }
 
 /// Supply-chain rules. Patterns are `[ecosystem:]glob`, e.g. `npm:@acme/*`, `serde`.

@@ -68,15 +68,78 @@ pub fn run(cli: Cli) -> Result<u8> {
             Ok(u8::from(failed))
         }
         Cmd::Rules => rules(&ctx()?),
-        Cmd::Sync { check } => sync(&ctx()?, check),
+        Cmd::Sync {
+            check,
+            managed,
+            out,
+            platform,
+            bin,
+        } => match (managed, out) {
+            (true, Some(out)) => {
+                let opts = crate::sync::managed::Options {
+                    out: &out,
+                    platform: platform.unwrap_or_else(crate::sync::managed::Platform::current),
+                    bin: &bin,
+                    extends: &g.extends,
+                };
+                for path in crate::sync::managed::write(&opts)? {
+                    println!("wrote {}", path.display());
+                }
+                Ok(0)
+            }
+            _ => sync(&ctx()?, check),
+        },
         Cmd::Install { force } => {
             let path = crate::install::install(&ctx()?.root, force)?;
             println!("agentkit: installed {}", path.display());
             Ok(0)
         }
+        Cmd::Mcp => {
+            crate::mcp::serve(g.dir, g.extends)?;
+            Ok(0)
+        }
+        Cmd::Org { cmd } => org(cmd),
         Cmd::Hook { agent } => {
             let code = crate::hook::run(agent, g.extends, g.refresh)?;
             Ok(u8::try_from(code).unwrap_or(1))
+        }
+    }
+}
+
+fn org(cmd: crate::cli::OrgCmd) -> Result<u8> {
+    use crate::cli::OrgCmd;
+    match cmd {
+        OrgCmd::Status {
+            owner,
+            standards,
+            json,
+        } => {
+            let rows = crate::org::status(&owner)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&rows)?);
+            } else {
+                print!("{}", crate::org::render(&rows, standards.as_deref()));
+            }
+            Ok(u8::from(rows.iter().any(|r| !r.enforced())))
+        }
+        OrgCmd::Setup {
+            owner,
+            standards,
+            repos,
+            workflow_ref,
+            dry_run,
+        } => {
+            let plan = crate::org::Plan {
+                owner: &owner,
+                standards: &standards,
+                only: &repos,
+                workflow_ref: &workflow_ref,
+                dry_run,
+            };
+            for line in crate::org::setup(&plan)? {
+                println!("{line}");
+            }
+            Ok(0)
         }
     }
 }

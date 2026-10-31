@@ -3,10 +3,11 @@
 mod agents;
 mod agents_md;
 mod hooks;
+pub mod managed;
 
 use crate::config::Config;
 use crate::rules::RuleInfo;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -20,29 +21,60 @@ fn read_opt(path: &Path) -> Result<Option<String>> {
     }
 }
 
-type Render = fn(Option<&str>) -> Result<String>;
+type Render = fn(Option<&str>, &str) -> Result<String>;
 
-/// Agent files: path relative to the root → how to update its current content.
-const AGENT_FILES: [(&str, Render); 5] = [
-    ("CLAUDE.md", |c| Ok(agents::claude_md(c))),
-    (".claude/settings.json", agents::claude_settings),
-    (".codex/hooks.json", agents::codex_hooks),
-    (".gemini/settings.json", agents::gemini_settings),
-    (".cursor/hooks.json", agents::cursor_hooks),
+/// Agent id (as in `agentkit hook <id>` and the `agents:` config) → repo file → renderer.
+pub const AGENT_FILES: [(&str, &str, Render); 11] = [
+    ("claude-code", "CLAUDE.md", |c, _| Ok(agents::claude_md(c))),
+    (
+        "claude-code",
+        ".claude/settings.json",
+        agents::claude_settings,
+    ),
+    ("claude-code", ".mcp.json", agents::mcp_json),
+    ("codex", ".codex/hooks.json", agents::codex_hooks),
+    ("gemini", ".gemini/settings.json", agents::gemini_settings),
+    ("cursor", ".cursor/hooks.json", agents::cursor_hooks),
+    ("cursor", ".cursor/mcp.json", agents::mcp_json),
+    (
+        "copilot",
+        ".github/hooks/agentkit.json",
+        agents::copilot_hooks,
+    ),
+    ("droid", ".factory/hooks.json", agents::droid_hooks),
+    ("kiro", ".kiro/hooks/agentkit.json", agents::kiro_hooks),
+    ("kiro", ".kiro/settings/mcp.json", agents::mcp_json),
 ];
+
+pub fn known_agent(id: &str) -> bool {
+    AGENT_FILES.iter().any(|(a, ..)| *a == id)
+}
 
 /// Desired content of every managed file. Existing content outside the managed
 /// parts (other AGENTS.md sections, other settings and hooks) is preserved.
 fn plan(cfg: &Config, rules: &[RuleInfo]) -> Result<Vec<(PathBuf, String)>> {
+    if let Some(unknown) = cfg.agents.iter().flatten().find(|a| !known_agent(a)) {
+        let ids: Vec<_> = AGENT_FILES.iter().map(|(a, ..)| *a).collect();
+        bail!(
+            "unknown agent `{unknown}` in `agents`; known: {}",
+            ids.join(", ")
+        );
+    }
     let agents_path = cfg.root.join("AGENTS.md");
     let block = agents_md::render(cfg, rules);
     let mut out = vec![(
         agents_path.clone(),
         agents_md::upsert(read_opt(&agents_path)?.as_deref(), &block),
     )];
-    for (rel, render) in AGENT_FILES {
+    let wanted = |id: &str| {
+        cfg.agents
+            .as_ref()
+            .is_none_or(|list| list.iter().any(|a| a == id))
+    };
+    for (agent, rel, render) in AGENT_FILES.iter().filter(|(a, ..)| wanted(a)) {
         let path = cfg.root.join(rel);
-        let content = render(read_opt(&path)?.as_deref())
+        let cmd = format!("agentkit hook {agent}");
+        let content = render(read_opt(&path)?.as_deref(), &cmd)
             .with_context(|| format!("updating {}", path.display()))?;
         out.push((path, content));
     }

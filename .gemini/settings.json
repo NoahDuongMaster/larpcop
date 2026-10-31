@@ -44,5 +44,13 @@
       "AGENTS.md",
       "GEMINI.md"
     ]
+  },
+  "mcpServers": {
+    "agentkit": {
+      "command": "agentkit",
+      "args": [
+        "mcp"
+      ]
+    }
   }
 }

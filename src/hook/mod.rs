@@ -23,6 +23,12 @@ pub enum Agent {
     Codex,
     Gemini,
     Cursor,
+    /// GitHub Copilot CLI (Claude-compatible payloads, JSON verdicts).
+    Copilot,
+    /// Factory Droid.
+    Droid,
+    /// Kiro CLI / IDE.
+    Kiro,
 }
 
 pub fn run(agent: Agent, extends: Vec<String>, refresh: bool) -> Result<i32> {
@@ -33,13 +39,42 @@ pub fn run(agent: Agent, extends: Vec<String>, refresh: bool) -> Result<i32> {
         Some(dir) => dir,
         None => std::env::current_dir()?,
     };
-    let event = event::parse(agent, &input, &cwd);
+    let mut event = event::parse(agent, &input, &cwd);
+    // Kiro reports no "already continued" flag: remember our own blocks per session.
+    let marker = (agent == Agent::Kiro)
+        .then(|| stop_marker(&input))
+        .flatten();
+    if let (Event::Stop { continued }, Some(m)) = (&mut event, &marker) {
+        *continued = std::fs::remove_file(m).is_ok();
+    }
     let verdict = decide(&event, &cwd, &extends, refresh)?;
+    if let (Event::Stop { .. }, Verdict::Block(_), Some(m)) = (&event, &verdict, &marker) {
+        let _ = m.parent().map(std::fs::create_dir_all);
+        let _ = std::fs::write(m, b"");
+    }
     let hook_event = input
         .get("hook_event_name")
         .and_then(|v| v.as_str())
         .unwrap_or("");
     Ok(respond::emit(agent, &event, hook_event, &verdict))
+}
+
+fn stop_marker(input: &serde_json::Value) -> Option<std::path::PathBuf> {
+    let session = input
+        .get("session_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    let safe: String = session
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    Some(crate::config::cache_root().ok()?.join("stop").join(safe))
 }
 
 fn decide(event: &Event, cwd: &Path, extends: &[String], refresh: bool) -> Result<Verdict> {
@@ -75,6 +110,23 @@ fn decide(event: &Event, cwd: &Path, extends: &[String], refresh: bool) -> Resul
             Ok(Verdict::Allow)
         }
         Event::AfterEdit(paths) if paths.is_empty() => Ok(Verdict::Allow),
+        Event::Proposed(path, content) => {
+            let ctx = ctx(start_dir(path, cwd))?;
+            let rule_dirs = ctx.load().map(|(cfg, _)| cfg.rule_dirs).unwrap_or_default();
+            if let Some(reason) = guard::protected_path(path, &rule_dirs) {
+                return Ok(blocked(Some(reason)));
+            }
+            let outcome = ctx.check_content(path, content)?;
+            if outcome.errors() == 0 {
+                return Ok(Verdict::Allow);
+            }
+            let header = "agentkit: this write was not applied: the content breaks enforced rules. \
+Write it again without these violations.";
+            Ok(Verdict::Block(format!(
+                "{header}\n\n{}",
+                report::text(&outcome)
+            )))
+        }
         Event::AfterEdit(paths) => {
             let header = "agentkit: the file you just edited breaks enforced rules. Fix them now.";
             check(

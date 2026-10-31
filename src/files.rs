@@ -100,6 +100,13 @@ fn walk(root: &Path, start: &Path) -> Vec<String> {
         .collect()
 }
 
+/// Root-relative form of `path`, which may not exist yet (nor its parents).
+pub fn rel_of_new(root: &Path, path: &Path) -> Option<String> {
+    let existing = path.ancestors().find(|a| a.exists())?;
+    let rest = path.strip_prefix(existing).ok()?;
+    rel_of(root, &dunce::canonicalize(existing).ok()?.join(rest))
+}
+
 fn rel_of(root: &Path, path: &Path) -> Option<String> {
     let rel = path.strip_prefix(root).ok()?;
     let parts: Vec<_> = rel

@@ -114,12 +114,29 @@ impl Engine {
         Ok(found)
     }
 
+    /// Built-in and ast-grep rules on one file's content (no external linters,
+    /// which only see the disk).
+    pub fn check_source(&self, file: &SourceFile) -> Vec<Violation> {
+        let mut v = self.ast.check(file);
+        v.extend(self.max_lines.as_ref().and_then(|m| m.check(file)));
+        sort(&mut v);
+        v
+    }
+
     /// Auto-fixes from ast-grep rules: `(file, new content, fixes applied)`.
     pub fn fix(&self, files: &[SourceFile]) -> Vec<(String, String, usize)> {
         files
             .par_iter()
             .filter_map(|f| self.ast.fix(f).map(|(text, n)| (f.rel.clone(), text, n)))
             .collect()
+    }
+
+    /// Rules that apply to one root-relative path (language and `files` globs).
+    pub fn rules_for(&self, rel: &str) -> Vec<RuleInfo> {
+        let mut out: Vec<RuleInfo> = self.max_lines.iter().map(|m| m.info()).collect();
+        out.extend(self.ast.infos_for(rel));
+        out.extend(self.linters.iter().map(|l| l.info()));
+        out
     }
 
     pub fn rules(&self) -> Vec<RuleInfo> {

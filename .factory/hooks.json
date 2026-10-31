@@ -1,0 +1,48 @@
+{
+  "PreToolUse": [
+    {
+      "matcher": "Execute|Create|Edit|ApplyPatch",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "agentkit hook droid",
+          "timeout": 120
+        }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "Create|Edit|ApplyPatch",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "agentkit hook droid",
+          "timeout": 120
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "agentkit hook droid",
+          "timeout": 120
+        }
+      ]
+    }
+  ],
+  "SubagentStop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "agentkit hook droid",
+          "timeout": 120
+        }
+      ]
+    }
+  ]
+}

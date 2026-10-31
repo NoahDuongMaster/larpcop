@@ -143,12 +143,17 @@ Hook phân tích lệnh bằng tree-sitter-bash: quote, pipe, `&&`/`;`/`&`, redi
 
 `agentkit sync` sinh ra tất cả các file dưới đây. Mọi adapter dùng chung một lõi quyết định; mỗi agent chỉ khác ở cách parse payload và cách trả lời.
 
+Mặc định sinh cho mọi agent; `agents: [claude-code, kiro]` trong `.agentkit.yaml` giới hạn lại. `sync` cũng đăng ký MCP server `agentkit mcp` cho Claude Code (`.mcp.json`), Cursor (`.cursor/mcp.json`), Kiro (`.kiro/settings/mcp.json`) và Gemini (`mcpServers`).
+
 | Agent | File sinh ra | Đọc rule từ | Trước khi chạy tool | Sau khi sửa file | Khi kết thúc lượt |
 |---|---|---|---|---|---|
 | Claude Code | `.claude/settings.json`, `CLAUDE.md` (`@AGENTS.md`) | AGENTS.md (import) | `PreToolUse` Bash/Edit/Write | `PostToolUse` | `Stop` |
 | Codex | `.codex/hooks.json` | AGENTS.md (native) | `PreToolUse` Bash/`apply_patch` | `PostToolUse` `apply_patch` (path lấy từ header của patch) | `Stop` |
 | Gemini CLI | `.gemini/settings.json` (thêm `context.fileName: AGENTS.md`) | AGENTS.md | `BeforeTool` `run_shell_command`/`write_file`/`replace` | `AfterTool` | `AfterAgent` |
 | Cursor | `.cursor/hooks.json` (JSON native, `loop_limit: 1`) | AGENTS.md (native) | `preToolUse` Shell/Write/Delete | `postToolUse` → `additional_context` | `stop` → `followup_message` |
+| Copilot CLI | `.github/hooks/agentkit.json` (event PascalCase → payload kiểu Claude) | AGENTS.md (native) | `PreToolUse` → `permissionDecision: deny` | `PostToolUse` → `additionalContext` | `Stop` → `decision: block` |
+| Factory Droid | `.factory/hooks.json` | AGENTS.md (native) | `PreToolUse` Execute/Create/Edit/ApplyPatch | `PostToolUse` | `Stop` |
+| Kiro (CLI V3, IDE 1.0) | `.kiro/hooks/agentkit.json` | AGENTS.md | `PreToolUse` `shell` + **nội dung sắp ghi** của `write` | (Kiro không đưa output PostToolUse cho model) | `Stop` → `decision: block` |
 
 Các hook làm những việc sau:
 
@@ -162,6 +167,8 @@ Một số lưu ý riêng cho từng agent:
 - **Codex** chỉ chạy hook của project sau khi từng dev trust một lần qua `/hooks`. Muốn ép ở cấp tổ chức thì phát hành dưới dạng managed hooks qua `requirements.toml` (`allow_managed_hooks_only = true`).
 - **Claude Code** cũng có thể ép ở cấp tổ chức qua [managed settings](https://docs.anthropic.com/en/docs/claude-code/settings) (MDM).
 - **Cursor Enterprise** có hook cấp team và enterprise.
+- **Kiro** không trả output của `PostToolUse` cho model, nên adapter kiểm **nội dung sắp ghi** ngay ở `PreToolUse` (`fs_write` lấy `text`, `str_replace` dựng lại file sau khi thay). Chỉ chặn khi lần ghi *làm tăng* số vi phạm của một rule; sửa dở một file vốn đã lỗi vẫn được ghi. Kiro không báo cờ "đã bị chặn một lần", nên adapter tự nhớ theo `session_id`.
+- **Copilot CLI** đọc cả `.claude/settings.json`, nên hook có thể chạy hai lần; cả hai đều chặn cùng một thứ. Chỉ adapter Copilot làm được việc chặn kết thúc lượt, vì Copilot coi exit 2 ở Stop là cảnh báo.
 
 Nguồn của schema payload:
 
@@ -169,6 +176,49 @@ Nguồn của schema payload:
 - Claude Code: chạy thật.
 - Cursor: đọc từ mã nguồn `cursor-agent` 2026.10.22. Write gửi `{file_path, content}`, Shell gửi `{command, cwd}`.
 - Gemini: theo hooks reference chính thức.
+- Kiro: ghi lại từ `kiro-cli` 2.37 `--v3` thật (`fs_write {path,text}`, `str_replace {path,oldStr,newStr}`, `execute_bash {command}`, Stop không có cờ lặp).
+- Copilot CLI, Factory Droid: theo hooks reference chính thức (chưa chạy agent thật).
+
+### MCP server
+
+`agentkit mcp` (stdio, SDK chính thức `rmcp`) cho agent 5 tool:
+
+| Tool | Làm gì |
+|---|---|
+| `rules_for(path)` | Chỉ các rule áp cho file đó (theo ngôn ngữ và glob), kèm cách tuân thủ. Agent không phải nạp rule của mọi stack vào context. |
+| `check_content(path, content)` | Kiểm nội dung **trước khi ghi**: trả về các vi phạm nó sẽ thêm vào. |
+| `check(paths?)` | Kiểm file trên đĩa (mặc định: mọi thay đổi chưa commit). |
+| `fix(paths?)` | Áp `fix:` của rule rồi báo phần còn lại. |
+| `explain_rule(id)` | Rule cấm gì, cách tuân thủ, ví dụ đúng/sai lấy từ fixture. |
+
+Chạy thật với Claude Code (`claude -p`, $0.25): agent tự gọi `rules_for` cho `src/report.ts` và `tools/sum.py`, gọi `check_content` cho cả hai bản nháp, rồi mới ghi; kết quả sạch ngay lần đầu. Lần chạy đó lộ một bug (file trong thư mục chưa tồn tại bị bỏ qua), đã sửa kèm test.
+
+## Triển khai toàn công ty
+
+**Managed policy trên máy dev.** `agentkit sync --managed --extends <URL#tag> --out <DIR>` sinh file policy cấp máy cho 5 agent, gọi `agentkit` bằng đường dẫn tuyệt đối và ép standards của công ty lên *mọi* repo, kể cả repo chưa có `.agentkit.yaml`. User không tắt được.
+
+| Agent | macOS | Linux | Windows |
+|---|---|---|---|
+| Claude Code | `/Library/Application Support/ClaudeCode/managed-settings.json` | `/etc/claude-code/managed-settings.json` | `C:\Program Files\ClaudeCode\managed-settings.json` |
+| Codex | `/etc/codex/requirements.toml` (`[features] hooks = true`, `managed_dir`) | như macOS | `C:\ProgramData\OpenAI\Codex\requirements.toml` |
+| Gemini CLI | `/Library/Application Support/GeminiCli/settings.json` | `/etc/gemini-cli/settings.json` | `C:\ProgramData\gemini-cli\settings.json` |
+| Cursor | `/Library/Application Support/Cursor/hooks.json` | `/etc/cursor/hooks.json` | `C:\ProgramData\Cursor\hooks.json` |
+| Copilot CLI | `/etc/github-copilot/policy.d/agentkit.json` | như macOS | `C:\ProgramData\GitHub\Copilot\policy.d\agentkit.json` |
+
+`--out /` cài thẳng (cần root); `--out pkgroot` tạo cây thư mục để đóng gói cho MDM. Kiro và Factory Droid không có file cấp máy (dashboard / theo user). Đường dẫn lấy từ docs managed settings của từng hãng; chưa cài thử lên máy thật vì cần quyền root.
+
+**Repo trên GitHub.**
+
+```sh
+agentkit org status <owner> [--standards URL#tag] [--json]
+agentkit org setup  <owner> --standards URL#tag [--repos a,b] [--workflow-ref vX] [--dry-run]
+```
+
+- `status` liệt kê từng repo (không archived, không fork): có `.agentkit.yaml` không, extends standards nào và pin tag nào, có workflow gọi gate không, lần chạy gần nhất ra sao, có PR setup đang mở không. Exit 1 nếu còn repo chưa có gate. Đo trên tài khoản thật: 57 repo trong khoảng 22 giây.
+- `setup` mở **một PR mỗi repo** gồm `.agentkit.yaml`, workflow `.github/workflows/agentkit.yml` và mọi file agent mà `sync` sinh ra từ nội dung hiện có của repo, nên PR qua được `sync --check` ngay. Chạy lại thì bỏ qua repo đã có gate hoặc đã có PR, và dùng lại nhánh nếu lần trước dừng giữa chừng.
+- Ghi file trong `.github/workflows` cần token có scope `workflow`. Thiếu scope thì PR vẫn được mở, và nội dung workflow nằm trong mô tả PR để thêm tay (`gh auth refresh -s workflow` để lần sau tự thêm).
+- Đã chạy thật trên hai repo sandbox private (standards + app): PR mở được, nhánh PR qua `sync --check` và `check`, chạy lại không tạo PR trùng. Hai repo sandbox đã xoá sau khi thử.
+- Dùng `gh` CLI nên không lưu token, chạy được với SSO và GitHub Enterprise.
 
 ## CI
 

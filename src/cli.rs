@@ -58,6 +58,34 @@ impl ScopeArgs {
 }
 
 #[derive(Subcommand)]
+pub enum OrgCmd {
+    /// Which repositories have the config and the CI gate, and on which standards.
+    Status {
+        owner: String,
+        /// Standards every repository should extend (flags missing and outdated pins).
+        #[arg(long)]
+        standards: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Open one pull request per repository adding the config, the CI gate and the agent files.
+    Setup {
+        owner: String,
+        /// Standards to enforce (git URL#tag).
+        #[arg(long)]
+        standards: String,
+        /// Only these repositories (default: every non-archived, non-fork one).
+        #[arg(long, value_delimiter = ',')]
+        repos: Vec<String>,
+        /// Tag of agentkit's reusable enforce workflow.
+        #[arg(long, default_value = concat!("v", env!("CARGO_PKG_VERSION")))]
+        workflow_ref: String,
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
 pub enum Cmd {
     /// Check files against the rules. Exit 1 on any error-level violation, 3 on failure.
     Check {
@@ -95,14 +123,33 @@ pub enum Cmd {
     /// Generate AGENTS.md, CLAUDE.md and agent hook settings from the rules.
     Sync {
         /// Do not write; exit 1 if any generated file is out of date (for CI).
-        #[arg(long)]
+        #[arg(long, conflicts_with = "managed")]
         check: bool,
+        /// Write machine-wide hook policies (for MDM) that force `--extends` everywhere.
+        #[arg(long, requires = "out")]
+        managed: bool,
+        /// Root to write managed policies under (`/` installs them; a directory packages them).
+        #[arg(long, value_name = "DIR")]
+        out: Option<PathBuf>,
+        /// Target OS of the managed machines.
+        #[arg(long, value_enum)]
+        platform: Option<crate::sync::managed::Platform>,
+        /// Absolute path of agentkit on the managed machines.
+        #[arg(long, default_value = "/usr/local/bin/agentkit")]
+        bin: String,
     },
     /// Install the git pre-commit hook.
     Install {
         /// Overwrite an existing pre-commit hook not managed by agentkit.
         #[arg(long)]
         force: bool,
+    },
+    /// MCP server on stdio: rules for a file, check content before writing, fix.
+    Mcp,
+    /// Roll the standards out across a GitHub user's or organization's repositories.
+    Org {
+        #[command(subcommand)]
+        cmd: OrgCmd,
     },
     /// Entry point for agent hook systems (reads the event from stdin).
     Hook {

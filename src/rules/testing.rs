@@ -113,6 +113,28 @@ fn check(rule: &RuleConfig<SupportLang>, fixture: &Fixture) -> Vec<String> {
     errors
 }
 
+/// Valid / invalid snippets of one rule's fixture, for explaining it to an agent.
+pub fn examples(rule_dirs: &[PathBuf], id: &str) -> String {
+    let mut out = String::new();
+    for path in fixture_files(rule_dirs) {
+        let Ok(raw) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(f) = serde_saphyr::from_str::<Fixture>(&raw) else {
+            continue;
+        };
+        if f.id != id {
+            continue;
+        }
+        for (label, cases) in [("Violates", &f.invalid), ("Complies", &f.valid)] {
+            for case in cases {
+                let _ = writeln!(out, "\n{label}:\n{}", case.trim_end());
+            }
+        }
+    }
+    out
+}
+
 /// `rule-tests/` inside each rule dir, or beside it (ast-grep's project layout).
 fn fixture_files(rule_dirs: &[PathBuf]) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = rule_dirs

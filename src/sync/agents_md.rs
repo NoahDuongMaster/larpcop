@@ -16,7 +16,8 @@ pub fn render(cfg: &Config, rules: &[RuleInfo]) -> String {
 rejected by the pre-commit hook and by CI, no matter which agent or human wrote it.\n\n",
     );
     s.push_str("Workflow:\n\n");
-    s.push_str("1. Follow the guidelines and rules below while writing code.\n");
+    s.push_str("1. Follow the guidelines and rules below while writing code. If the `agentkit` MCP \
+server is available, call `rules_for` before editing a file and `check_content` before writing it.\n");
     s.push_str(
         "2. Before finishing a task, run `agentkit check --changed` and fix every violation.\n",
     );

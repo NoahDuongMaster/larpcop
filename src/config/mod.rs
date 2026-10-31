@@ -27,6 +27,8 @@ pub struct Config {
     pub locked: BTreeMap<String, String>,
     pub guidelines: Vec<String>,
     pub deps: DepsPolicy,
+    /// Agents to generate files for; `None` = all.
+    pub agents: Option<Vec<String>>,
     /// Layers in application order, for traceability.
     pub sources: Vec<String>,
 }
@@ -155,6 +157,9 @@ impl Config {
         }
         if let Some(deps) = raw.dependencies {
             self.apply_deps(deps, source)?;
+        }
+        if raw.agents.is_some() {
+            self.agents = raw.agents;
         }
         for id in raw.locked {
             self.locked.entry(id).or_insert_with(|| source.to_string());

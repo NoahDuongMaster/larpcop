@@ -7,7 +7,7 @@ Every rule below is checked mechanically by `agentkit`. Code that breaks an `err
 
 Workflow:
 
-1. Follow the guidelines and rules below while writing code.
+1. Follow the guidelines and rules below while writing code. If the `agentkit` MCP server is available, call `rules_for` before editing a file and `check_content` before writing it.
 2. Before finishing a task, run `agentkit check --changed` and fix every violation.
 3. These rules are enforced by the pre-commit hook and CI: violating code cannot be committed or merged, whoever wrote it. Fix what the rule is about, not its wording: rewriting the same construct in another form to dodge a check (aliases, computed property access, eval, indirection) is a violation too. Do not add suppression comments, use `--no-verify`, or edit `.agentkit.yaml`; if a rule looks wrong, stop and ask a human.
 

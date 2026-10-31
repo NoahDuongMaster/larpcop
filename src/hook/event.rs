@@ -11,6 +11,9 @@ pub enum Event {
     Shell(String),
     /// About to create, modify or delete these files.
     BeforeEdit(Vec<PathBuf>),
+    /// About to write this content to this file (agents without post-edit
+    /// feedback get it checked before it is written).
+    Proposed(PathBuf, String),
     /// These files were just written.
     AfterEdit(Vec<PathBuf>),
     /// The agent wants to end its turn; `continued` = it was already sent back once.
@@ -26,7 +29,8 @@ fn str_field<'a>(v: &'a Value, key: &str) -> &'a str {
 
 fn file_path(input: &Value, cwd: &Path) -> Vec<PathBuf> {
     let tool_input = input.get("tool_input").unwrap_or(&Value::Null);
-    ["file_path", "notebook_path"]
+    // `path`: Copilot CLI maps its tools to Claude names but keeps their own arguments.
+    ["file_path", "notebook_path", "path"]
         .iter()
         .map(|k| str_field(tool_input, k))
         .find(|p| !p.is_empty())
@@ -49,13 +53,33 @@ pub fn parse(agent: Agent, input: &Value, cwd: &Path) -> Event {
         // Cursor also runs `.claude/settings.json` hooks (third-party import); its
         // native adapter handles the session, so the Claude one stands down.
         Agent::ClaudeCode if input.get("cursor_version").is_some() => Event::Ignore,
-        Agent::ClaudeCode => match (event, tool) {
+        Agent::ClaudeCode | Agent::Copilot => match (event, tool) {
             ("PreToolUse", "Bash") => Event::Shell(command(input)),
             ("PreToolUse", t) if is_claude_edit(t) => Event::BeforeEdit(file_path(input, cwd)),
             ("PostToolUse", t) if is_claude_edit(t) => Event::AfterEdit(file_path(input, cwd)),
+            ("Stop" | "SubagentStop" | "agentStop" | "subagentStop", _) => Event::Stop {
+                continued: stop_active,
+            },
+            _ => Event::Ignore,
+        },
+        // Factory Droid speaks Claude Code's protocol with its own tool names.
+        Agent::Droid => match (event, tool) {
+            ("PreToolUse", "Execute") => Event::Shell(command(input)),
+            ("PreToolUse", "Create" | "Edit") => Event::BeforeEdit(file_path(input, cwd)),
+            ("PostToolUse", "Create" | "Edit") => Event::AfterEdit(file_path(input, cwd)),
+            ("PreToolUse", "ApplyPatch") => Event::BeforeEdit(patch_paths(&patch(input), cwd)),
+            ("PostToolUse", "ApplyPatch") => Event::AfterEdit(patch_paths(&patch(input), cwd)),
             ("Stop" | "SubagentStop", _) => Event::Stop {
                 continued: stop_active,
             },
+            _ => Event::Ignore,
+        },
+        // Kiro CLI V3 (payloads recorded from kiro-cli 2.37 `--v3`). Its PostToolUse
+        // output never reaches the model, so writes are checked before they land.
+        Agent::Kiro => match (event, tool) {
+            ("PreToolUse", "execute_bash" | "execute_pwsh") => Event::Shell(command(input)),
+            ("PreToolUse", t) if is_kiro_write(t) => kiro_proposed(input, cwd),
+            ("Stop", _) => Event::Stop { continued: false },
             _ => Event::Ignore,
         },
         Agent::Codex => match (event, tool) {
@@ -94,6 +118,68 @@ pub fn parse(agent: Agent, input: &Value, cwd: &Path) -> Event {
 
 fn is_claude_edit(tool: &str) -> bool {
     matches!(tool, "Edit" | "Write" | "MultiEdit" | "NotebookEdit")
+}
+
+fn patch(input: &Value) -> String {
+    let tool_input = input.get("tool_input").unwrap_or(&Value::Null);
+    match tool_input {
+        Value::String(s) => s.clone(),
+        v => ["patch", "input", "command"]
+            .iter()
+            .map(|k| str_field(v, k))
+            .find(|s| !s.is_empty())
+            .unwrap_or("")
+            .to_string(),
+    }
+}
+
+fn is_kiro_write(tool: &str) -> bool {
+    matches!(
+        tool,
+        "fs_write" | "fs_append" | "str_replace" | "write_file" | "delete_file"
+    )
+}
+
+/// The file content a Kiro write would produce; unknown shapes only get the
+/// protected-path check. Accepts V3 (`text`, `oldStr`) and V2 (`file_text`, `old_str`) fields.
+fn kiro_proposed(input: &Value, cwd: &Path) -> Event {
+    let ti = input.get("tool_input").unwrap_or(&Value::Null);
+    let field = |keys: &[&str]| -> String {
+        keys.iter()
+            .map(|k| str_field(ti, k))
+            .find(|s| !s.is_empty())
+            .unwrap_or("")
+            .to_string()
+    };
+    let rel = field(&["path", "file_path"]);
+    if rel.is_empty() {
+        return Event::Ignore;
+    }
+    let path = cwd.join(rel);
+    let current = || std::fs::read_to_string(&path).unwrap_or_default();
+    let (old, new) = (field(&["oldStr", "old_str"]), field(&["newStr", "new_str"]));
+    let all = ti
+        .get("replace_all")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let content = match (str_field(input, "tool_name"), str_field(ti, "command")) {
+        ("fs_write" | "write_file", "" | "create") => {
+            Some(field(&["text", "file_text", "content"]))
+        }
+        ("fs_append", _) | (_, "append") => Some(current() + &field(&["text", "new_str"])),
+        ("str_replace", _) | (_, "str_replace") if !old.is_empty() => {
+            let cur = current();
+            cur.contains(&old).then(|| match all {
+                true => cur.replace(&old, &new),
+                false => cur.replacen(&old, &new, 1),
+            })
+        }
+        _ => None,
+    };
+    match content {
+        Some(c) => Event::Proposed(path, c),
+        None => Event::BeforeEdit(vec![path]),
+    }
 }
 
 /// Files named in a Codex `apply_patch` body (`*** Add/Update/Delete File:` and

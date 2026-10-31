@@ -6,8 +6,11 @@ exclude: ["examples/**", "target/**"]
 dependencies:
   # Approved for the dependency rules (deps.dev client, lockfile parsing).
   approved:
+    - cargo:base64
     - cargo:jiff
     - cargo:percent-encoding
+    - cargo:rmcp
+    - cargo:tokio
     - cargo:toml
     - cargo:ureq
     - cargo:yarn-lock-parser

@@ -41,9 +41,19 @@ pub fn fake_deps_dev(routes: Vec<(String, String)>) -> String {
             let mut request = String::new();
             let _ = reader.read_line(&mut request);
             let mut header = String::new();
+            let mut length = 0;
             while reader.read_line(&mut header).unwrap_or(0) > 2 {
+                if let Some((k, v)) = header.split_once(':')
+                    && k.eq_ignore_ascii_case("content-length")
+                {
+                    length = v.trim().parse().unwrap_or(0);
+                }
                 header.clear();
             }
+            // Drain the body (OSV queries are POSTs): closing a socket with unread
+            // input makes Windows reset the connection before the client reads.
+            let mut body = vec![0; length];
+            let _ = std::io::Read::read_exact(&mut reader, &mut body);
             let path = percent_decode(request.split_whitespace().nth(1).unwrap_or(""));
             let (status, body) = routes
                 .iter()

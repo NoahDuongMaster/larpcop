@@ -36,6 +36,29 @@ RULES = [
                  {"not": {"has": {"stopBy": "end", "regex": "^(new_session|[\\w.]*cycle_key|[\\w.]*regenerate|[\\w.]*invalidate)\\("}}},
              ]}},
          ]}),
+    dict(id="py-no-jwt-unverified", langs=["Python"], severity="error",
+         message="JWT decoded without verifying it, or with the `none` algorithm: anyone can forge a token.",
+         note="Decode with the key and the one algorithm the tokens use: jwt.decode(token, key, algorithms=['HS256']).",
+         rule={"any": [
+             {"kind": "keyword_argument", "all": [
+                 {"has": {"field": "name", "regex": "^algorithms$"}},
+                 {"has": {"field": "value", "regex": "(?i)['\"]none['\"]"}}]},
+             {"kind": "pair", "all": [
+                 {"has": {"field": "key", "regex": "^['\"]verify_signature['\"]$"}},
+                 {"has": {"field": "value", "regex": "^False$"}}]},
+             {"kind": "keyword_argument", "all": [
+                 {"has": {"field": "name", "regex": "^verify$"}},
+                 {"has": {"field": "value", "regex": "^False$"}},
+                 {"inside": {"stopBy": "end", "kind": "call", "has": {"field": "function", "regex": "(^|\\.)jwt\\.decode$"}}}]},
+         ]}),
+    dict(id="py-no-ldap-interpolation", langs=["Python"], severity="error",
+         message="LDAP filter built by interpolating values (LDAP injection).",
+         note="Escape values with ldap.filter.escape_filter_chars / ldap3.utils.conv.escape_filter_chars, or build the filter with the library.",
+         rule={"any": [
+             {"kind": "string", "regex": '^[rRbBuUfF]*[\'\\"]\\(\\s*[&|!]?\\s*\\(?[\\w.-]+\\s*[~<>]?=', "has": {"kind": "interpolation"}, "not": {"regex": "(?i)escape"}},
+             {"kind": "binary_operator", "regex": '^[rRbBuUfF]*[\'\\"]\\(\\s*[&|!]?\\s*\\(?[\\w.-]+\\s*[~<>]?=', "has": {"field": "operator", "regex": "^[%+]$"},
+              "not": {"any": [{"inside": {"kind": "binary_operator"}}, {"regex": "(?i)escape"}]}},
+         ]}),
     dict(id="py-no-shell-true", langs=["Python"], severity="error",
          message="`shell=True` runs the command through a shell (command injection).",
          note="Pass an argument list without shell=True: subprocess.run(['git', 'log', ref], check=True).",

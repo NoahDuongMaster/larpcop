@@ -1,6 +1,9 @@
 id: taint-shell
 valid:
 - app.post('/p', (req, res) => execFile('ping', ['-c', '2', req.body.host]));
+- app.get('/m', (req, res) => res.json(/^(\w+)@(\w+)$/.exec(req.query.email)));
+- function h(req) { const re = new RegExp('^a'); return re.exec(req.body.s); }
 invalid:
 - app.post('/p', (req, res) => exec('ping -c 2 ' + req.body.address, cb));
 - function h(req) { const cmd = `ls ${req.query.dir}`; child_process.execSync(cmd); }
+- const cp = require('child_process'); app.get('/x', (req, res) => cp.exec(`git log ${req.query.ref}`));

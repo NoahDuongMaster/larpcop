@@ -114,6 +114,10 @@ pub struct TaintConfig {
     /// Regex over a function's decorators (without `@`) that makes it a route
     /// handler: all its parameters are request data (`app\.get\(`).
     pub handler_decorators: Option<String>,
+    /// GraphQL resolvers' arguments are request data: `(parent, args)` in
+    /// JS/TS, the parameters after `(root, info)` in Python.
+    #[serde(default)]
+    pub resolver_args: bool,
     /// Sink metavariable → regex over its type as the project's language server
     /// shows it (`DB: "Pool|PoolClient"`). Without a server the sink counts.
     #[serde(default)]

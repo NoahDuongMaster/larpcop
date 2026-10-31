@@ -1,0 +1,7 @@
+id: no-ldap-interpolation
+valid:
+  - "const filter = new EqualityFilter({ attribute: 'uid', value: user });"
+  - "const label = `(${count} items)`;"
+invalid:
+  - "const filter = `(&(objectClass=account)(|(uid=${user})(cn=directory-service)))`;"
+  - "const filter = '(uid=' + req.query.user + ')';"

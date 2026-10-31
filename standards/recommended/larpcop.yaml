@@ -33,6 +33,12 @@ text:
     regex: '(?m)^\s*[\w.#:-]*(\([^)]*\))?!=\s|!\{'
     message: Template output written without HTML escaping (XSS).
     note: Use `=` and `#{}` (escaped) instead of `!=` and `!{}`.
+  - id: no-env-file-secrets
+    files: [".env", "**/.env", "**/.env.local", "**/.env.development", "**/.env.production", "**/.env.staging", "**/.env.test"]
+    regex: '(?m)^\s*(export\s+)?[A-Za-z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|API_KEY|PRIVATE_KEY|ACCESS_KEY)[A-Za-z0-9_]*\s*=\s*[''"]?[^\s''"#$]{1,}'
+    not: '(?i)=\s*[''"]?(change[-_]?(me|this|it)|your[-_]|<|\{\{|xxx|example|placeholder|dummy|test|none|null|false|true)'
+    message: Secret value committed in an env file.
+    note: Keep real values out of the repo (.gitignore the file, commit a .env.example with placeholders) and rotate this one; it is in the git history.
   - id: no-inner-html-in-templates
     files: ["**/*.ejs", "**/*.hbs", "**/*.handlebars", "**/*.mustache", "**/*.njk", "**/*.jinja", "**/*.jinja2", "**/*.j2", "**/*.html", "**/*.htm", "**/*.blade.php", "**/*.erb", "**/*.twig", "**/*.liquid", "**/*.svelte", "**/*.vue", "**/*.cshtml"]
     regex: '\.(innerHTML|outerHTML)\s*=[^=]|\.insertAdjacentHTML\(|document\.write(ln)?\('
@@ -47,18 +53,22 @@ taint:
     sinks: ["$DB.query($SQL, $$$REST)", "$DB.query($SQL)", "$DB.execute($SQL, $$$REST)", "$DB.execute($SQL)", "$DB.raw($SQL, $$$REST)", "$DB.raw($SQL)", "$DB.$queryRawUnsafe($SQL, $$$REST)", "$DB.$queryRawUnsafe($SQL)"]
     sink_arg: SQL
     param_types: { Request: req, NextRequest: request }
-    sanitizers: ["+$X", "Number($X)", "parseInt($$$X)", "parseFloat($X)", "$S.parse($X)"]
+    sanitizers: ["jwt.verify($$$A)", "+$X", "Number($X)", "parseInt($$$X)", "parseFloat($X)", "$S.parse($X)"]
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+    resolver_args: true
 
   - id: taint-shell
     languages: [TypeScript, Tsx, JavaScript]
     message: Request data reaches a shell command.
     note: Use execFile/spawn with an argument array and an allowlist of values.
     sources: ["req.query", "req.body", "req.params", "req.headers", "await request.json()"]
-    sinks: ["exec($CMD, $$$REST)", "exec($CMD)", "execSync($CMD, $$$REST)", "execSync($CMD)", "$CP.exec($CMD, $$$REST)", "$CP.exec($CMD)", "$CP.execSync($CMD, $$$REST)", "$CP.execSync($CMD)"]
+    # child_process by name: `$X.exec` would also take RegExp.prototype.exec.
+    sinks: ["exec($CMD, $$$REST)", "execSync($CMD, $$$REST)", "execaCommand($CMD, $$$REST)", "execaCommandSync($CMD, $$$REST)", "child_process.exec($CMD, $$$REST)", "child_process.execSync($CMD, $$$REST)", "childProcess.exec($CMD, $$$REST)", "childProcess.execSync($CMD, $$$REST)", "cp.exec($CMD, $$$REST)", "cp.execSync($CMD, $$$REST)", "child.exec($CMD, $$$REST)", "child.execSync($CMD, $$$REST)", "proc.exec($CMD, $$$REST)", "proc.execSync($CMD, $$$REST)", "shell.exec($CMD, $$$REST)", "shell.execSync($CMD, $$$REST)", "shelljs.exec($CMD, $$$REST)", "shelljs.execSync($CMD, $$$REST)", "execa.exec($CMD, $$$REST)", "execa.execSync($CMD, $$$REST)", "execa.command($CMD, $$$REST)", "execa.commandSync($CMD, $$$REST)"]
     sink_arg: CMD
     param_types: { Request: req }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+    resolver_args: true
+    sanitizers: ["jwt.verify($$$A)"]
 
   - id: taint-redirect
     languages: [TypeScript, Tsx, JavaScript]
@@ -71,6 +81,8 @@ taint:
     guards: ["$U.startsWith($P)", "$L.includes($U)", "$L.has($U)", "$R.test($U)", "isSafeRedirect($U)", "isRelativeUrl($U)"]
     param_types: { Request: req, NextRequest: request }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+    resolver_args: true
+    sanitizers: ["jwt.verify($$$A)"]
 
   - id: taint-code
     languages: [TypeScript, Tsx, JavaScript]
@@ -79,31 +91,35 @@ taint:
     sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "await request.json()"]
     sinks: ["eval($X)", "new Function($$$A)", "vm.runInNewContext($X, $$$R)", "vm.runInThisContext($X, $$$R)", "vm.runInContext($X, $$$R)", "$M.eval($X, $$$R)", "$M.evaluate($X, $$$R)"]
     sink_arg: X
-    sanitizers: ["+$X", "Number($X)", "parseInt($X, $$$R)", "parseFloat($X)"]
+    sanitizers: ["jwt.verify($$$A)", "+$X", "Number($X)", "parseInt($X, $$$R)", "parseFloat($X)"]
     param_types: { Request: req }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+    resolver_args: true
 
   - id: taint-xss
     languages: [TypeScript, Tsx, JavaScript]
     message: Request data written into an HTML response without escaping (reflected XSS).
     note: Render through a template with autoescaping, or escape the value (escape-html, he.encode); send data as JSON with res.json.
     sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "req.files", "request.nextUrl.searchParams", "await request.json()", "await request.formData()"]
-    sinks: ["$RES.send($A + $B)", "$RES.send(`$$$T`)", "$RES.write($A + $B)", "$RES.end($A + $B)", "$RES.type(\"html\").send($X)", "$RES.type('html').send($X)", "$RES.type(\"text/html\").send($X)", "$RES.type('text/html').send($X)", "$RES.contentType(\"html\").send($X)", "$RES.contentType('html').send($X)", "$RES.contentType(\"text/html\").send($X)", "$RES.contentType('text/html').send($X)", "$EL.innerHTML = $X", "$EL.outerHTML = $X", "document.write($X)"]
-    sanitizers: ["+$X", "escapeHtml($X)", "escape($X)", "$E.escape($X)", "he.encode($X, $$$R)", "encodeURIComponent($X)", "DOMPurify.sanitize($X, $$$R)", "sanitizeHtml($X, $$$R)", "xss($X)", "Number($X)", "parseInt($X, $$$R)", "JSON.stringify($X)"]
+    # The HTTP response by name: `$X.write(a + b)` would also take files, sockets and hashes.
+    sinks: ["res.send($A + $B)", "res.send(`$$$T`)", "res.write($A + $B)", "res.end($A + $B)", "response.send($A + $B)", "response.send(`$$$T`)", "response.write($A + $B)", "response.end($A + $B)", "resp.send($A + $B)", "resp.send(`$$$T`)", "resp.write($A + $B)", "resp.end($A + $B)", "reply.send($A + $B)", "reply.send(`$$$T`)", "reply.write($A + $B)", "reply.end($A + $B)", "ctx.res.send($A + $B)", "ctx.res.send(`$$$T`)", "ctx.res.write($A + $B)", "ctx.res.end($A + $B)", "$RES.type(\"html\").send($X)", "$RES.type('html').send($X)", "$RES.type(\"text/html\").send($X)", "$RES.type('text/html').send($X)", "$RES.contentType(\"html\").send($X)", "$RES.contentType('html').send($X)", "$RES.contentType(\"text/html\").send($X)", "$RES.contentType('text/html').send($X)", "$EL.innerHTML = $X", "$EL.outerHTML = $X", "document.write($X)", "res.$M($$$P).send($A + $B)", "res.$M($$$P).send(`$$$T`)", "res.$M($$$P).end($A + $B)", "response.$M($$$P).send($A + $B)", "response.$M($$$P).send(`$$$T`)", "response.$M($$$P).end($A + $B)", "resp.$M($$$P).send($A + $B)", "resp.$M($$$P).send(`$$$T`)", "resp.$M($$$P).end($A + $B)", "reply.$M($$$P).send($A + $B)", "reply.$M($$$P).send(`$$$T`)", "reply.$M($$$P).end($A + $B)"]
+    sanitizers: ["jwt.verify($$$A)", "+$X", "escapeHtml($X)", "escape($X)", "$E.escape($X)", "he.encode($X, $$$R)", "encodeURIComponent($X)", "DOMPurify.sanitize($X, $$$R)", "sanitizeHtml($X, $$$R)", "xss($X)", "Number($X)", "parseInt($X, $$$R)", "JSON.stringify($X)"]
     param_types: { Request: req, NextRequest: request }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+    resolver_args: true
 
   - id: taint-path
     languages: [TypeScript, Tsx, JavaScript]
     message: Request data used as a file path (path traversal).
     note: Take path.basename() of the name, or resolve it and check it stays under the base directory (resolved.startsWith(base + path.sep)).
     sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "req.files", "request.nextUrl.searchParams", "await request.json()", "await request.formData()"]
-    sinks: ["fs.$F($P, $$$R)", "fsp.$F($P, $$$R)", "$RES.sendFile($P, $$$R)", "$RES.download($P, $$$R)", "readFileSync($P, $$$R)", "readFile($P, $$$R)", "createReadStream($P, $$$R)", "createWriteStream($P, $$$R)", "writeFileSync($P, $$$R)", "writeFile($P, $$$R)", "unlink($P, $$$R)", "unlinkSync($P)"]
+    sinks: ["fs.$F($P, $$$R)", "fsp.$F($P, $$$R)", "$RES.sendFile($P, $$$R)", "$RES.download($P, $$$R)", "$FS.readFile($P, $$$R)", "$FS.readFileSync($P, $$$R)", "$FS.writeFile($P, $$$R)", "$FS.writeFileSync($P, $$$R)", "$FS.appendFile($P, $$$R)", "$FS.appendFileSync($P, $$$R)", "$FS.createReadStream($P, $$$R)", "$FS.createWriteStream($P, $$$R)", "$FS.unlink($P, $$$R)", "$FS.unlinkSync($P, $$$R)", "$FS.rm($P, $$$R)", "$FS.rmSync($P, $$$R)", "$FS.readdir($P, $$$R)", "$FS.readdirSync($P, $$$R)", "$FS.openSync($P, $$$R)", "$FS.copyFile($P, $$$R)", "$FS.existsSync($P, $$$R)", "readFileSync($P, $$$R)", "readFile($P, $$$R)", "createReadStream($P, $$$R)", "createWriteStream($P, $$$R)", "writeFileSync($P, $$$R)", "writeFile($P, $$$R)", "appendFile($P, $$$R)", "unlink($P, $$$R)", "unlinkSync($P, $$$R)"]
     sink_arg: P
-    sanitizers: ["+$X", "path.basename($X, $$$R)", "basename($X, $$$R)", "Number($X)", "parseInt($X, $$$R)", "sanitizeFilename($X)", "sanitize($X)"]
+    sanitizers: ["jwt.verify($$$A)", "+$X", "path.basename($X, $$$R)", "basename($X, $$$R)", "Number($X)", "parseInt($X, $$$R)", "sanitizeFilename($X)", "sanitize($X)"]
     guards: ["$P.startsWith($B)", "$A.includes($B)", "$A.indexOf($B)", "$L.has($P)", "$R.test($P)", "isInside($$$A)", "isSubPath($$$A)"]
     param_types: { Request: req, NextRequest: request }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+    resolver_args: true
 
   - id: taint-ssrf
     languages: [TypeScript, Tsx, JavaScript]
@@ -113,10 +129,11 @@ taint:
     sinks: ["fetch($U, $$$R)", "axios($U, $$$R)", "axios.$M($U, $$$R)", "got($U, $$$R)", "got.$M($U, $$$R)", "http.get($U, $$$R)", "https.get($U, $$$R)", "http.request($U, $$$R)", "https.request($U, $$$R)", "request($U, $$$R)", "request.$M($U, $$$R)", "needle.$M($U, $$$R)", "superagent.$M($U)", "ky($U, $$$R)", "ky.$M($U, $$$R)", "undici.request($U, $$$R)"]
     sink_arg: U
     safe_prefix: '^https?://[^/?#]+[/?#]'
-    sanitizers: ["+$X", "encodeURIComponent($X)", "Number($X)", "parseInt($X, $$$R)"]
+    sanitizers: ["jwt.verify($$$A)", "+$X", "encodeURIComponent($X)", "Number($X)", "parseInt($X, $$$R)"]
     guards: ["$L.includes($H)", "$L.has($H)", "$U.startsWith($P)", "$R.test($U)", "isAllowedUrl($U)", "isAllowedHost($H)"]
     param_types: { Request: req, NextRequest: request }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+    resolver_args: true
 
   - id: taint-nosql
     languages: [TypeScript, Tsx, JavaScript]
@@ -126,9 +143,10 @@ taint:
     sinks: ["$C.find($Q, $$$R)", "$C.findOne($Q, $$$R)", "$C.findOneAndUpdate($Q, $$$R)", "$C.findOneAndDelete($Q, $$$R)", "$C.updateOne($Q, $$$R)", "$C.updateMany($Q, $$$R)", "$C.deleteOne($Q, $$$R)", "$C.deleteMany($Q, $$$R)", "$C.countDocuments($Q, $$$R)", "$C.aggregate($Q, $$$R)"]
     sink_arg: Q
     # Sequelize filters sit under `where:` / `include:` and take no operators from JSON.
-    sanitizers: ["+$X", "$M.$F({ $$$A, where: $W, $$$R })", "$M.$F({ $$$A, include: $I, $$$R })", "String($X)", "Number($X)", "parseInt($X, $$$R)", "sanitize($X)", "mongoSanitize($X)", "$S.parse($X)", "new ObjectId($X)", "$M.Types.ObjectId($X)", "escapeRegExp($X)"]
+    sanitizers: ["jwt.verify($$$A)", "+$X", "$M.$F({ $$$A, where: $W, $$$R })", "$M.$F({ $$$A, include: $I, $$$R })", "String($X)", "Number($X)", "parseInt($X, $$$R)", "sanitize($X)", "mongoSanitize($X)", "$S.parse($X)", "new ObjectId($X)", "$M.Types.ObjectId($X)", "escapeRegExp($X)"]
     param_types: { Request: req, NextRequest: request }
     param_decorators: [Body, Query, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+    resolver_args: true
 
   - id: taint-regex
     languages: [TypeScript, Tsx, JavaScript]
@@ -137,9 +155,10 @@ taint:
     sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "req.files", "request.nextUrl.searchParams", "await request.json()", "await request.formData()"]
     sinks: ["new RegExp($X, $$$R)", "RegExp($X, $$$R)"]
     sink_arg: X
-    sanitizers: ["escapeRegExp($X)", "escapeStringRegexp($X)", "_.escapeRegExp($X)", "$S.replace($$$R)"]
+    sanitizers: ["jwt.verify($$$A)", "escapeRegExp($X)", "escapeStringRegexp($X)", "_.escapeRegExp($X)", "$S.replace($$$R)"]
     param_types: { Request: req, NextRequest: request }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+    resolver_args: true
 
   - id: py-taint-path
     languages: [Python]
@@ -151,18 +170,21 @@ taint:
     sanitizers: ["secure_filename($X)", "os.path.basename($X)", "int($X)", "uuid.UUID($X)"]
     guards: ["$P.is_relative_to($B)", "$P.startswith($B)", "$X in $L"]
     handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
+    resolver_args: true
 
   - id: py-taint-ssrf
     languages: [Python]
     message: Request data decides which URL the server fetches (SSRF).
     note: Fetch only fixed hosts; check urlparse(url).hostname against an allowlist first.
     sources: ["request.args", "request.form", "request.values", "request.json", "request.files", "request.GET", "request.POST", "request.FILES", "request.query_params", "request.path_params", "request.headers", "request.cookies", "await request.post()", "await request.json()", "await request.form()", "await request.text()", "request.query", "request.match_info", "request.rel_url.query", "self.get_argument($$$A)", "self.get_query_argument($$$A)", "self.get_body_argument($$$A)"]
-    sinks: ["requests.$M($U, $$$R)", "httpx.$M($U, $$$R)", "urllib.request.urlopen($U, $$$R)", "urlopen($U, $$$R)", "aiohttp.ClientSession().$M($U, $$$R)", "$S.get($U, $$$R)", "$S.post($U, $$$R)"]
+    # HTTP clients by name: `$S.get` would also take dict.get and os.environ.get.
+    sinks: ["requests.$M($U, $$$R)", "httpx.$M($U, $$$R)", "urllib.request.urlopen($U, $$$R)", "urlopen($U, $$$R)", "aiohttp.ClientSession().$M($U, $$$R)", "session.get($U, $$$R)", "session.post($U, $$$R)", "session.put($U, $$$R)", "session.patch($U, $$$R)", "session.delete($U, $$$R)", "session.request($U, $$$R)", "session.stream($U, $$$R)", "client.get($U, $$$R)", "client.post($U, $$$R)", "client.put($U, $$$R)", "client.patch($U, $$$R)", "client.delete($U, $$$R)", "client.request($U, $$$R)", "client.stream($U, $$$R)", "http.get($U, $$$R)", "http.post($U, $$$R)", "http.put($U, $$$R)", "http.patch($U, $$$R)", "http.delete($U, $$$R)", "http.request($U, $$$R)", "http.stream($U, $$$R)", "sess.get($U, $$$R)", "sess.post($U, $$$R)", "sess.put($U, $$$R)", "sess.patch($U, $$$R)", "sess.delete($U, $$$R)", "sess.request($U, $$$R)", "sess.stream($U, $$$R)", "s.get($U, $$$R)", "s.post($U, $$$R)", "s.put($U, $$$R)", "s.patch($U, $$$R)", "s.delete($U, $$$R)", "s.request($U, $$$R)", "s.stream($U, $$$R)", "self.session.get($U, $$$R)", "self.session.post($U, $$$R)", "self.session.put($U, $$$R)", "self.session.patch($U, $$$R)", "self.session.delete($U, $$$R)", "self.session.request($U, $$$R)", "self.session.stream($U, $$$R)", "self.client.get($U, $$$R)", "self.client.post($U, $$$R)", "self.client.put($U, $$$R)", "self.client.patch($U, $$$R)", "self.client.delete($U, $$$R)", "self.client.request($U, $$$R)", "self.client.stream($U, $$$R)", "self.http.get($U, $$$R)", "self.http.post($U, $$$R)", "self.http.put($U, $$$R)", "self.http.patch($U, $$$R)", "self.http.delete($U, $$$R)", "self.http.request($U, $$$R)", "self.http.stream($U, $$$R)"]
     sink_arg: U
     safe_prefix: '^https?://[^/?#]+[/?#]'
     sanitizers: ["int($X)", "quote($X)", "urllib.parse.quote($X)"]
     guards: ["$H in $L", "$U.startswith($P)"]
     handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
+    resolver_args: true
 
   - id: py-taint-ssti
     languages: [Python]
@@ -173,6 +195,7 @@ taint:
     sink_arg: T
     sanitizers: ["escape($X)", "markupsafe.escape($X)"]
     handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
+    resolver_args: true
 
   - id: py-taint-code
     languages: [Python]
@@ -183,6 +206,7 @@ taint:
     sink_arg: X
     sanitizers: ["int($X)", "float($X)", "shlex.quote($X)", "ast.literal_eval($X)"]
     handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
+    resolver_args: true
 
   - id: taint-log
     languages: [TypeScript, Tsx, JavaScript]
@@ -191,9 +215,10 @@ taint:
     note: Log a fixed message and pass the value as a structured field, or strip CR/LF first (value.replace(/[\r\n]/g, '')).
     sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies"]
     sinks: ["console.$M($$$A)", "$L.info($$$A)", "$L.warn($$$A)", "$L.error($$$A)", "$L.debug($$$A)", "$L.log($$$A)"]
-    sanitizers: ["+$X", "$S.replace($$$R)", "JSON.stringify($X)", "encodeURIComponent($X)", "Number($X)"]
+    sanitizers: ["jwt.verify($$$A)", "+$X", "$S.replace($$$R)", "JSON.stringify($X)", "encodeURIComponent($X)", "Number($X)"]
     param_types: { Request: req }
     param_decorators: [Body, Query, Param, Headers, Req, Request, Cookies, UploadedFile, UploadedFiles]
+    resolver_args: true
 
   - id: py-taint-log
     languages: [Python]
@@ -204,6 +229,7 @@ taint:
     sinks: ["logging.$M($$$A)", "logger.$M($$$A)", "log.$M($$$A)", "$APP.logger.$M($$$A)"]
     sanitizers: ["$S.replace($$$R)", "json.dumps($X)", "int($X)", "repr($X)"]
     handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
+    resolver_args: true
 
   - id: py-taint-sql
     languages: [Python]
@@ -214,3 +240,4 @@ taint:
     sink_arg: SQL
     sanitizers: ["int($X)", "float($X)", "uuid.UUID($X)"]
     handler_decorators: '^\w+\.(get|post|put|patch|delete|route|api_route|websocket)\('
+    resolver_args: true

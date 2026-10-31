@@ -161,7 +161,7 @@ impl Engine {
                 v.extend(self.max_lines.as_ref().and_then(|m| m.check(file)));
                 v.extend(self.metrics.iter().flat_map(|m| m.check(file)));
                 v.extend(self.secrets(file));
-                v.extend(self.taint.iter().flat_map(|t| t.check(file)));
+                v.extend(self.taint_check(file));
                 v.extend(self.text.iter().flat_map(|t| t.check(file)));
                 v
             })
@@ -179,10 +179,27 @@ impl Engine {
         v.extend(self.max_lines.as_ref().and_then(|m| m.check(file)));
         v.extend(self.metrics.iter().flat_map(|m| m.check(file)));
         v.extend(self.secrets(file));
-        v.extend(self.taint.iter().flat_map(|t| t.check(file)));
+        v.extend(self.taint_check(file));
         v.extend(self.text.iter().flat_map(|t| t.check(file)));
         sort(&mut v);
         v
+    }
+
+    /// Taint rules on one parse and one walk of the file: each rule only
+    /// matches its patterns against the nodes of the kinds they can match.
+    fn taint_check(&self, file: &SourceFile) -> Vec<Violation> {
+        use ast_grep_language::{Language, LanguageExt, SupportLang};
+        let Some(lang) =
+            SupportLang::from_path(&file.rel).filter(|l| self.taint.iter().any(|t| t.handles(*l)))
+        else {
+            return Vec::new();
+        };
+        let grep = lang.ast_grep(&file.content);
+        let index = taint::FileIndex::new(grep.root());
+        self.taint
+            .iter()
+            .flat_map(|t| t.check_indexed(file, lang, &index))
+            .collect()
     }
 
     fn secrets(&self, file: &SourceFile) -> Vec<Violation> {

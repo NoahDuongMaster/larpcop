@@ -1,0 +1,5 @@
+id: py-taint-sql
+valid:
+  - "def resolve_user(root, info, id):\n    return cur.execute('select * from users where id = %s', (id,))\n"
+invalid:
+  - "def resolve_user(root, info, name):\n    return cur.execute(f\"select * from users where name = '{name}'\")\n"

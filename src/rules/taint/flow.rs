@@ -32,6 +32,9 @@ pub(super) enum Reached<'a, D: Doc> {
     Call(Node<'a, D>, String),
     /// A tainted value is returned.
     Return,
+    /// A tainted value is stored in a field of the object (`this.x`, `self.x`),
+    /// which the other methods of its class read.
+    Field(Node<'a, D>),
 }
 
 /// What a walk of one scope found, before its nested functions are walked.
@@ -79,7 +82,9 @@ impl Ctx {
         if self.sources.iter().any(|s| within(&r, s)) {
             return true;
         }
-        if VARIABLES[..2].contains(&node.kind().as_ref()) && names.contains(node.text().as_ref()) {
+        if (VARIABLES[..2].contains(&node.kind().as_ref()) || is_field(node))
+            && names.contains(node.text().as_ref())
+        {
             return true;
         }
         // A function we have a summary for: only what it really passes through.
@@ -101,14 +106,13 @@ impl Ctx {
     pub fn run<'a, D: Doc>(
         &self,
         scope: &Node<'a, D>,
-        root: &Node<'a, D>,
         names: HashSet<String>,
         hits: &Hits<'a, D>,
         own: &impl Fn(&Node<'a, D>) -> HashSet<String>,
         on: &mut dyn FnMut(Reached<'a, D>),
     ) {
         let mut nested = Vec::new();
-        self.run_scope(scope, root, names, hits, &mut |s| match s {
+        self.run_scope(scope, names, hits, &mut |s| match s {
             Seen::Reached(r) => on(r),
             Seen::Nested(f, captured) => nested.push((f, captured)),
         });
@@ -122,7 +126,7 @@ impl Ctx {
                 .collect();
             names.extend(own(&f));
             // A nested function's `return` is not this scope's.
-            self.run(&f, root, names, hits, own, &mut |reached| {
+            self.run(&f, names, hits, own, &mut |reached| {
                 if !matches!(reached, Reached::Return) {
                     on(reached)
                 }
@@ -133,12 +137,11 @@ impl Ctx {
     fn run_scope<'a, D: Doc>(
         &self,
         scope: &Node<'a, D>,
-        root: &Node<'a, D>,
         mut names: HashSet<String>,
         hits: &Hits<'a, D>,
         on: &mut impl FnMut(Seen<'a, D>),
     ) {
-        let events = hits.events(scope, root, &self.guards);
+        let events = hits.events(scope, &self.guards);
         let mut cleaned: Vec<Vec<String>> = Vec::new();
         for (_, e) in events.iter() {
             match e {
@@ -152,6 +155,14 @@ impl Ctx {
                     cleaned.push(was);
                 }
                 Event::Restore => names.extend(cleaned.pop().unwrap_or_default()),
+                Event::Assign(left, right) if is_field(left) => {
+                    if self.tainted(right, &names) {
+                        names.insert(left.text().to_string());
+                        on(Seen::Reached(Reached::Field(left.clone())));
+                    } else {
+                        names.remove(left.text().as_ref());
+                    }
+                }
                 Event::Assign(left, right) => {
                     let tainted = self.tainted(right, &names);
                     for v in left
@@ -195,6 +206,16 @@ impl Ctx {
                 _ => {}
             }
         }
+    }
+}
+
+/// `this.x` (JS/TS) or `self.x` (Python): a field of the object a method runs on.
+pub(super) fn is_field<D: Doc>(node: &Node<D>) -> bool {
+    let object = node.field("object");
+    match node.kind().as_ref() {
+        "member_expression" => object.is_some_and(|o| o.kind() == "this"),
+        "attribute" => object.is_some_and(|o| o.text() == "self"),
+        _ => false,
     }
 }
 

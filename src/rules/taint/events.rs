@@ -1,6 +1,7 @@
 //! The events of one scope (assignments, calls, returns, sinks, nested
-//! functions, guards) in source order. They depend only on the scope, the
-//! sinks and the guards, so each scope is walked once per check however many
+//! functions, guards) in source order. The rule-independent part (the
+//! scope's [`Skeleton`]) is walked once per file and shared by every taint
+//! rule; a rule adds its guards and sinks, once per scope however many
 //! parameters, summary rounds or callers ask about it.
 
 use super::flow::{ASSIGNMENTS, CALLS, enclosing};
@@ -31,81 +32,134 @@ pub(super) enum Event<'a, D: Doc> {
 /// A scope's events, by position.
 pub(super) type Events<'a, D> = Rc<Vec<(usize, Event<'a, D>)>>;
 
+type Key = (usize, usize);
+
+/// What a scope holds whatever the rule, in walk order: `If` stands where the
+/// guard events of an `if` go once a rule's guards are known.
+pub(super) enum Shape<'a, D: Doc> {
+    Assign(Node<'a, D>, Node<'a, D>),
+    Call(Node<'a, D>),
+    Return(Node<'a, D>),
+    Nested(Node<'a, D>),
+    If(Node<'a, D>),
+}
+
+pub(super) type Skeleton<'a, D> = Vec<(usize, Shape<'a, D>)>;
+
+/// Skeletons of a file's scopes, shared by the rules checking it.
+pub(super) type Skeletons<'a, D> = Rc<RefCell<HashMap<Key, Rc<Skeleton<'a, D>>>>>;
+
 /// The sink matches of a file, and the events of each scope walked so far.
 pub(super) struct Hits<'a, D: Doc> {
     pub list: Vec<Hit<'a, D>>,
-    events: RefCell<HashMap<(usize, usize), Events<'a, D>>>,
+    /// Scope → its sinks (indexes into `list`).
+    by_scope: HashMap<Key, Vec<usize>>,
+    skeletons: Skeletons<'a, D>,
+    events: RefCell<HashMap<Key, Events<'a, D>>>,
+}
+
+fn key<D: Doc>(n: &Node<D>) -> Key {
+    let r = n.range();
+    (r.start, r.end)
 }
 
 impl<'a, D: Doc> Hits<'a, D> {
-    pub fn new(list: Vec<Hit<'a, D>>) -> Self {
+    pub fn new(list: Vec<Hit<'a, D>>, root: &Node<'a, D>, skeletons: Skeletons<'a, D>) -> Self {
+        let mut by_scope: HashMap<Key, Vec<usize>> = HashMap::new();
+        for (i, (_, sink, _)) in list.iter().enumerate() {
+            by_scope
+                .entry(key(&enclosing(sink, root)))
+                .or_default()
+                .push(i);
+        }
         Self {
             list,
+            by_scope,
+            skeletons,
             events: RefCell::default(),
         }
     }
 
-    pub fn events(
-        &self,
-        scope: &Node<'a, D>,
-        root: &Node<'a, D>,
-        guards: &[Range<usize>],
-    ) -> Events<'a, D> {
-        let key = (scope.range().start, scope.range().end);
-        if let Some(known) = self.events.borrow().get(&key) {
+    pub fn events(&self, scope: &Node<'a, D>, guards: &[Range<usize>]) -> Events<'a, D> {
+        if let Some(known) = self.events.borrow().get(&key(scope)) {
             return known.clone();
         }
-        let built = Rc::new(self.build(scope, root, guards));
-        self.events.borrow_mut().insert(key, built.clone());
+        let built = Rc::new(self.build(scope, guards));
+        self.events.borrow_mut().insert(key(scope), built.clone());
         built
     }
 
-    fn build(
-        &self,
-        scope: &Node<'a, D>,
-        root: &Node<'a, D>,
-        guards: &[Range<usize>],
-    ) -> Vec<(usize, Event<'a, D>)> {
-        let mut events: Vec<(usize, Event<D>)> = Vec::new();
-        walk(scope, &mut |n| {
-            if is_function(n) {
-                events.push((n.range().start, Event::Nested(n.clone())));
-                return;
-            }
-            match super::guards::of(n, guards) {
-                Some(Guard::After(at, names)) => events.push((at, Event::Clean(names))),
-                Some(Guard::Within(r, names)) => {
-                    events.push((r.start, Event::Enter(names)));
-                    events.push((r.end, Event::Restore));
-                }
-                None => {}
-            }
-            let kind = n.kind();
-            if let Some((_, l, r)) = ASSIGNMENTS.iter().find(|(k, ..)| kind == *k)
-                && let (Some(left), Some(right)) = (n.field(l), n.field(r))
-            {
-                events.push((n.range().end, Event::Assign(left, right)));
-            } else if CALLS.contains(&kind.as_ref()) {
-                events.push((n.range().start, Event::Call(n.clone())));
-            } else if matches!(kind.as_ref(), "return_statement" | "return_expression") {
-                events.push((n.range().end, Event::Return(n.clone())));
-            }
-        });
-        // `(x) => expr`: the body is the return value.
-        if let Some(body) = scope
-            .field("body")
-            .filter(|b| scope.kind() == "arrow_function" && b.kind() != "statement_block")
-        {
-            events.push((body.range().end, Event::Return(body)));
+    fn skeleton(&self, scope: &Node<'a, D>) -> Rc<Skeleton<'a, D>> {
+        if let Some(known) = self.skeletons.borrow().get(&key(scope)) {
+            return known.clone();
         }
-        for (at, sink, typed) in &self.list {
-            if enclosing(sink, root).range() == scope.range() {
-                events.push((*at, Event::Sink(sink.clone(), typed.clone())));
-            }
+        let built = Rc::new(skeleton(scope));
+        self.skeletons
+            .borrow_mut()
+            .insert(key(scope), built.clone());
+        built
+    }
+
+    fn build(&self, scope: &Node<'a, D>, guards: &[Range<usize>]) -> Vec<(usize, Event<'a, D>)> {
+        let mut events: Vec<(usize, Event<D>)> = Vec::new();
+        for (at, shape) in self.skeleton(scope).iter() {
+            let event = match shape {
+                Shape::Assign(l, r) => Event::Assign(l.clone(), r.clone()),
+                Shape::Call(n) => Event::Call(n.clone()),
+                Shape::Return(n) => Event::Return(n.clone()),
+                Shape::Nested(n) => Event::Nested(n.clone()),
+                Shape::If(n) => {
+                    match super::guards::of(n, guards) {
+                        Some(Guard::After(at, names)) => events.push((at, Event::Clean(names))),
+                        Some(Guard::Within(r, names)) => {
+                            events.push((r.start, Event::Enter(names)));
+                            events.push((r.end, Event::Restore));
+                        }
+                        None => {}
+                    }
+                    continue;
+                }
+            };
+            events.push((*at, event));
+        }
+        for &i in self.by_scope.get(&key(scope)).into_iter().flatten() {
+            let (at, sink, typed) = &self.list[i];
+            events.push((*at, Event::Sink(sink.clone(), typed.clone())));
         }
         events.sort_by_key(|(at, _)| *at);
         events
     }
+}
+
+fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
+    let mut out: Skeleton<D> = Vec::new();
+    walk(scope, &mut |n| {
+        if is_function(n) {
+            out.push((n.range().start, Shape::Nested(n.clone())));
+            return;
+        }
+        let kind = n.kind();
+        if super::guards::IFS.contains(&kind.as_ref()) {
+            out.push((n.range().start, Shape::If(n.clone())));
+        }
+        if let Some((_, l, r)) = ASSIGNMENTS.iter().find(|(k, ..)| kind == *k)
+            && let (Some(left), Some(right)) = (n.field(l), n.field(r))
+        {
+            out.push((n.range().end, Shape::Assign(left, right)));
+        } else if CALLS.contains(&kind.as_ref()) {
+            out.push((n.range().start, Shape::Call(n.clone())));
+        } else if matches!(kind.as_ref(), "return_statement" | "return_expression") {
+            out.push((n.range().end, Shape::Return(n.clone())));
+        }
+    });
+    // `(x) => expr`: the body is the return value.
+    if let Some(body) = scope
+        .field("body")
+        .filter(|b| scope.kind() == "arrow_function" && b.kind() != "statement_block")
+    {
+        out.push((body.range().end, Shape::Return(body)));
+    }
+    out
 }
 
 /// Nodes of a scope in order; nested functions are visited, not descended into.

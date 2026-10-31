@@ -24,6 +24,7 @@ fn rule(
             param_types: [("Request".to_string(), "req".to_string())].into(),
             param_decorators: Vec::new(),
             handler_decorators: None,
+            resolver_args: false,
             sink_types: Default::default(),
         },
         typed::Typed::default(),

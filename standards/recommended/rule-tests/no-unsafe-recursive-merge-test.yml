@@ -1,34 +1,12 @@
 id: no-unsafe-recursive-merge
 valid:
-  - |
-    function deepMerge(target, source) {
-      for (const key of Object.keys(source)) {
-        if (key === "__proto__" || key === "constructor") continue;
-        if (typeof source[key] === "object") deepMerge(target[key], source[key]);
-        else target[key] = source[key];
-      }
-    }
-  - |
-    function copy(target, source) {
-      for (const key in source) target[key] = source[key];
-    }
+- "function deepMerge(target, source) {\n  for (const key of Object.keys(source)) {\n    if (key === \"__proto__\" || key === \"constructor\") continue;\n    if (typeof source[key] === \"object\") deepMerge(target[key],\
+  \ source[key]);\n    else target[key] = source[key];\n  }\n}\n"
+- "function copy(target, source) {\n  for (const key in source) target[key] = source[key];\n}\n"
+- "function parse(json, depth) {\n  const params = {};\n  for (const t in json) params[t] = json[t];\n  if (depth > 0) parse(json.child, depth - 1);\n  return params;\n}\n"
 invalid:
-  - |
-    function deepMerge(target, source) {
-      for (const key of Object.keys(source)) {
-        if (typeof source[key] === "object" && source[key] !== null) {
-          if (!target[key]) target[key] = {};
-          deepMerge(target[key], source[key]);
-        } else {
-          target[key] = source[key];
-        }
-      }
-      return target;
-    }
-  - |
-    const merge = (a, b) => {
-      for (const k in b) {
-        a[k] = typeof b[k] === "object" ? merge(a[k] || {}, b[k]) : b[k];
-      }
-      return a;
-    };
+- "function deepMerge(target, source) {\n  for (const key of Object.keys(source)) {\n    if (typeof source[key] === \"object\" && source[key] !== null) {\n      if (!target[key]) target[key] = {};\n   \
+  \   deepMerge(target[key], source[key]);\n    } else {\n      target[key] = source[key];\n    }\n  }\n  return target;\n}\n"
+- "const merge = (a, b) => {\n  for (const k in b) {\n    a[k] = typeof b[k] === \"object\" ? merge(a[k] || {}, b[k]) : b[k];\n  }\n  return a;\n};\n"
+- "function merge(target, source) {\n  for (const key of Object.keys(source)) {\n    if (typeof source[key] === 'object' && !Array.isArray(source[key])) {\n      if (!target[key]) target[key] = {};\n  \
+  \    merge(target[key], source[key]);\n    } else {\n      target[key] = source[key];\n    }\n  }\n  return target;\n}\n"

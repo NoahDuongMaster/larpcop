@@ -1,0 +1,6 @@
+id: py-no-ldap-interpolation
+valid:
+  - "f = '(uid=%s)' % escape_filter_chars(user)"
+invalid:
+  - "f = f'(&(objectClass=person)(uid={user}))'"
+  - "f = '(uid=' + user + ')'"

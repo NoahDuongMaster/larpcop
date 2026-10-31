@@ -1,6 +1,6 @@
 # Benchmark: larpcop vs Semgrep OSS vs gitleaks
 
-Chạy lại được bằng một lệnh: `bench/run.sh` (cần git, python3, node, semgrep, gitleaks và một bản build release của larpcop). Kết quả thô nằm trong [`results/`](results): `juice-shop.md`, `NodeGoat.md`, `dvna.md`, `seeds.md`, `timing.txt`; các file JSON không được commit.
+Chạy lại được bằng một lệnh: `bench/run.sh` (cần git, python3, node, semgrep, gitleaks và một bản build release của larpcop). Kết quả thô nằm trong [`results/`](results): `juice-shop.md`, `NodeGoat.md`, `dvna.md`, `dvpwa.md`, `dvws-node.md`, `seeds.md`, `timing.txt`; các file JSON không được commit.
 
 ## Đối tượng và cách chấm
 
@@ -10,6 +10,7 @@ Chạy lại được bằng một lệnh: `bench/run.sh` (cần git, python3, n
 | NodeGoat | [OWASP NodeGoat](https://github.com/OWASP/NodeGoat) `c5cb68a` (Express + MongoDB) | [`nodegoat-truth.json`](nodegoat-truth.json): 14 dòng theo tutorial của NodeGoat |
 | DVNA | [appsecco/dvna](https://github.com/appsecco/dvna) `9ba473a` (Express + Sequelize + EJS) | [`dvna-truth.json`](dvna-truth.json): 14 dòng theo `docs/solution/*.md` của DVNA |
 | DVPWA | [anxolerd/dvpwa](https://github.com/anxolerd/dvpwa) `a1d8f89` (Python, aiohttp + Jinja2) | [`dvpwa-truth.json`](dvpwa-truth.json): 4 dòng theo mục *Vulnerabilities* trong README của DVPWA |
+| DVWS-Node | [snoopysecurity/dvws-node](https://github.com/snoopysecurity/dvws-node) `e83689c` (Express + MongoDB + MySQL + GraphQL + SOAP/XML-RPC) | [`dvws-truth.json`](dvws-truth.json): 15 dòng theo `CHALLENGES.md`, mỗi challenge mà lỗi nằm ở một dòng code (bỏ IDOR, CORS, rate limit… là lỗi thiết kế) |
 | vulnerable-node | [cr0hn/vulnerable-node](https://github.com/cr0hn/vulnerable-node) `d68f2a3`, thư mục `sast/seeds/` | Do chính dự án viết (`sast/ground-truth.yaml`) và chấm bằng script của dự án (`sast/tests/score.js`): 12 file, mỗi file một lỗ hổng, cộng 2 file sạch để đo báo nhầm |
 
 - **Một dòng tính là tìm thấy** khi có finding của công cụ phủ dòng đó, chấp nhận lệch ±3 dòng, áp dụng như nhau cho mọi công cụ. Với vulnerable-node, một file tính là tìm thấy khi công cụ báo bất kỳ finding nào trong file (cách chấm của dự án); cột thứ hai bỏ các rule báo cho mọi handler Express bất kể lỗi (`validate-request-input` của larpcop, kiểm middleware CSRF của Semgrep).
@@ -27,30 +28,35 @@ Một bộ chỉ đo được độ tổng quát khi rule chưa được viết 
 
 5. **DVPWA** là bộ Python đầu tiên, đo mọi rule Python tới lúc đó, lần đầu: larpcop **1/4**, Semgrep **2/4**. Chỗ trống lộ ra ba điểm yếu chung: SQL được dựng bằng `%` ở một biến rồi mới truyền vào `execute`, `md5` gọi trực tiếp sau `from hashlib import md5`, và nguồn request của aiohttp/Starlette/Tornado chưa được khai. Thêm vào đó, taint chưa theo được qua method của class được import (`Student.create(...)`). Cả bốn đã được sửa.
 
-Kết quả dưới đây là sau bước 5: chỉ có ý nghĩa *không thụt lùi* trên cả năm bộ. Rule mới cần một bộ chưa ai nhìn.
+6. **DVWS-Node** đo mọi rule tới bước 5, kể cả session fixation, taint qua decorator của NestJS và tham số handler của FastAPI/Flask (hai thứ này đã được thử trên mẫu thật `nestjs/nest/sample` và `fastapi/full-stack-fastapi-template` để đếm báo nhầm, không phải trên bộ có đáp án). Lần đầu: larpcop **10/15** (9/15 nếu bỏ `validate-request-input`), Semgrep **7/15**. Chỗ trống lộ ra: JWT chấp nhận `alg: none`, filter LDAP ghép chuỗi, file `.env` có secret được commit dù nằm trong `.gitignore` (larpcop bỏ qua file đã track nhưng bị ignore: một bug), tham số của resolver GraphQL không được coi là dữ liệu request, và `fsPromise.writeFile` không phải sink vì chỉ có `fs.*`/`fsp.*`. Lần chạy đó cũng lộ ra báo nhầm: `RegExp.prototype.exec` bị tính là `child_process.exec`, `stream.write(a + b)` là XSS, `dict.get(x)` là SSRF; sink giờ khai theo tên (`cp.exec`, `res.send`, `session.get`). Tất cả đã được sửa, nên DVWS-Node cũng hết là bộ kiểm chứng.
+
+Kết quả dưới đây là sau bước 6: chỉ có ý nghĩa *không thụt lùi* trên cả sáu bộ. Rule mới cần một bộ chưa ai nhìn.
 
 ## Kết quả (01/11/2026)
 
 | | larpcop | Semgrep OSS | gitleaks |
 |---|---|---|---|
-| Juice Shop: thời gian | **5,00 s** | 33,34 s | 4,83 s |
+| Juice Shop: thời gian | 6,63 s | 33,75 s | **4,76 s** |
 | Juice Shop: dòng tìm thấy (/27) | **11** (8 nếu không tính `validate-request-input`) | 6 | – |
-| NodeGoat: thời gian | **3,12 s** | 9,82 s | 0,21 s |
+| NodeGoat: thời gian | 3,25 s | 10,64 s | **0,21 s** |
 | NodeGoat: dòng tìm thấy (/14) | **12** | 4 | – |
-| DVNA: thời gian | **1,12 s** | 9,51 s | 0,23 s |
+| DVNA: thời gian | 1,21 s | 10,12 s | **0,24 s** |
 | DVNA: dòng tìm thấy (/14) | **12** | 7 | – |
-| DVPWA: dòng tìm thấy (/4) | **3** | 2 | – |
+| DVPWA: thời gian | 2,59 s | 26,01 s | **0,21 s** |
+| DVPWA: dòng tìm thấy (/4) | **4** | 2 | – |
+| DVWS-Node: thời gian | 1,94 s | 11,14 s | **0,27 s** |
+| DVWS-Node: dòng tìm thấy (/15) | **13** (cả 13 khi bỏ `validate-request-input`) | 7 | – |
 | vulnerable-node seeds (/12 file, báo nhầm trên 2 file sạch) | **11**, 1 báo nhầm (11 và 0 báo nhầm nếu bỏ rule chung chung) | 10, 1 báo nhầm (8 và 1 báo nhầm nếu bỏ rule chung chung) | – |
 | Secrets (so với gitleaks) | 69/69 và 3/3 trùng khớp | – | 69 và 3 |
 
-larpcop chạy cả bộ `recommended` (ast-grep, 16 rule taint, rule template, secrets, metric, lỗ hổng dependency). So với 3,58 s ở bản 0.2.1, Juice Shop chậm hơn vì thêm 12 rule taint và taint xuyên hàm; mỗi rule quét cây cú pháp một lần cho mọi pattern và mỗi phạm vi chỉ duyệt một lần cho mọi tham số và mọi vòng summary. Thời gian NodeGoat gần như toàn bộ là chờ mạng: OSV được hỏi về 1.480 package trong `package-lock.json`.
+larpcop chạy cả bộ `recommended` (ast-grep, 16 rule taint, rule template, secrets, metric, lỗ hổng dependency). Mọi rule taint dùng chung một lần parse và một lần duyệt cây cho mỗi file; mỗi rule chỉ thử pattern của nó trên các node đúng loại. Juice Shop chậm hơn bản 0.3.0 (5,00 s) vì giờ đọc cả 9 file thư viện (three.js…, 39.500 dòng) mà Juice Shop commit dù có trong `.gitignore`: file đã track thì vẫn được kiểm. Thời gian NodeGoat gần như toàn bộ là chờ mạng: OSV được hỏi về 1.480 package trong `package-lock.json`.
 
 ### Những gì không công cụ nào bắt được
 
 - Juice Shop: 16 dòng lỗi logic, phân quyền, cấu hình (route admin lộ, allowlist redirect dùng `includes`, rate limit tin `X-Forwarded-For`, prompt injection chatbot…).
 - NodeGoat: chính sách mật khẩu yếu (`session.js:144`), mật khẩu lưu plain text (`user-dao.js:25`, phép gán chứ không phải phép so sánh).
 - DVNA: API trả mọi bản ghi user (`appHandler.js:207`), route admin không kiểm quyền (`routes/app.js:42`).
-- DVPWA: session fixation (`views.py:42`, không đổi session id khi đăng nhập).
+- DVWS-Node: XXE trong bộ mở rộng entity tự viết (`vulnerable-xml.js:81`, không dùng parser XML nào), SSRF qua tham số của method XML-RPC (`xml-rpc/server.js:29`, thư viện `xmlrpc` không phải nguồn đã khai).
 - vulnerable-node: NoSQL injection trong một hàm nhận filter làm tham số, không có nguồn request nào trong file.
 
 SAST cú pháp không với tới lỗi logic và phân quyền; rule `llm` (`larpcop review`) nhắm vào loại này nhưng không được tính vì không tất định.

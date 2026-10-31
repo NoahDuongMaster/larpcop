@@ -148,14 +148,14 @@ impl TaintRule {
     /// functions defined elsewhere (`known`, by callee name).
     pub(super) fn summarize<'a, D: Doc>(
         &self,
-        root: &Node<'a, D>,
+        index: &super::scan::FileIndex<'a, D>,
         lang: SupportLang,
         file: &SourceFile,
         ctx: &Ctx,
         hits: &Hits<'a, D>,
         known: &Summaries,
     ) -> Summaries {
-        let defs = functions(root);
+        let defs = index.functions();
         let own = |n: &Node<'a, D>| self.own_names(n);
         let mut out = known.clone();
         for _ in 0..ROUNDS {
@@ -168,32 +168,24 @@ impl TaintRule {
                 source_texts: ctx.source_texts.clone(),
             };
             let params_only = round.clone_without_sources();
-            for (name, f, params) in &defs {
+            for (name, f, params) in defs {
                 let mut s = Summary::default();
                 for (i, p) in params.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
                     let start: HashSet<String> = [p.clone()].into();
-                    params_only.run(
-                        f,
-                        root,
-                        start,
-                        hits,
-                        &|_| HashSet::new(),
-                        &mut |r| match r {
-                            Reached::Sink(arg, typed) => {
-                                if self.typed.holds(lang, file, &typed) {
-                                    s.sinks.push((i, self.into(name, &arg, &file.rel)));
-                                }
+                    params_only.run(f, start, hits, &|_| HashSet::new(), &mut |r| match r {
+                        Reached::Sink(arg, typed) => {
+                            if self.typed.holds(lang, file, &typed) {
+                                s.sinks.push((i, self.into(name, &arg, &file.rel)));
                             }
-                            Reached::Call(_, into) => {
-                                s.sinks.push((i, format!("`{name}` → {into}")))
-                            }
-                            Reached::Return => {
-                                s.returns.insert(i);
-                            }
-                        },
-                    );
+                        }
+                        Reached::Call(_, into) => s.sinks.push((i, format!("`{name}` → {into}"))),
+                        Reached::Return => {
+                            s.returns.insert(i);
+                        }
+                        Reached::Field(_) => {}
+                    });
                 }
-                round.run(f, root, own(f), hits, &own, &mut |r| {
+                round.run(f, own(f), hits, &own, &mut |r| {
                     if let Reached::Return = r {
                         s.returns_source = true;
                     }

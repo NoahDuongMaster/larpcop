@@ -193,15 +193,18 @@ RULES = [
          note="Skip `__proto__`, `constructor` and `prototype` keys (or merge into Object.create(null)); a maintained merge (lodash ≥4.17.21) already does.",
          rule={"kind": "assignment_expression", "all": [
              {"has": {"field": "left", "kind": "subscript_expression", "has": {"field": "index", "pattern": "$K"}}},
-             {"inside": {"stopBy": "end", "kind": "for_in_statement", "has": {"field": "left", "stopBy": "end", "pattern": "$K"}}},
+             # Bind $F to the enclosing function first: ast-grep does not backtrack.
              {"inside": {"stopBy": "end", "any": [
-                 {"kind": "function_declaration", "all": [
-                     {"has": {"field": "name", "pattern": "$F"}},
-                     {"has": {"stopBy": "end", "kind": "call_expression", "has": {"field": "function", "pattern": "$F"}}}]},
-                 {"kind": "variable_declarator", "all": [
-                     {"has": {"field": "name", "pattern": "$F"}},
-                     {"has": {"stopBy": "end", "kind": "call_expression", "has": {"field": "function", "pattern": "$F"}}}]},
+                 {"kind": "function_declaration", "has": {"field": "name", "pattern": "$F"}},
+                 {"kind": "variable_declarator", "has": {"field": "name", "pattern": "$F"}},
              ]}},
+             # The loop over the keys recurses with the key: merge(target[key], source[key]).
+             {"inside": {"stopBy": "end", "kind": "for_in_statement", "all": [
+                 {"has": {"field": "left", "stopBy": "end", "pattern": "$K"}},
+                 {"has": {"field": "body", "stopBy": "end", "kind": "call_expression", "all": [
+                     {"has": {"field": "function", "pattern": "$F"}},
+                     {"has": {"field": "arguments", "stopBy": "end", "kind": "subscript_expression",
+                              "has": {"field": "index", "pattern": "$K"}}}]}}]}},
              {"not": {"inside": {"stopBy": "end", "any": [{"kind": "function_declaration"}, {"kind": "variable_declarator"}],
                                  "has": {"stopBy": "end", "kind": "string", "regex": "__proto__|constructor|prototype"}}}},
          ]}),
@@ -217,6 +220,21 @@ RULES = [
                  {"kind": "function_expression", "has": {"stopBy": "end", "regex": "\\.session\\.regenerate\\("}},
                  {"kind": "method_definition", "has": {"stopBy": "end", "regex": "\\.session\\.regenerate\\("}},
              ]}}},
+         ]}),
+    dict(id="no-jwt-none-algorithm", langs=JS, severity="error",
+         message="JWT verification accepts the `none` algorithm: anyone can forge a token.",
+         note="List only the algorithm the tokens are signed with: jwt.verify(token, key, { algorithms: ['HS256'] }).",
+         rule={"kind": "pair", "all": [
+             {"has": {"field": "key", "regex": "^['\"]?algorithms?['\"]?$"}},
+             {"has": {"field": "value", "regex": "(?i)['\"]none['\"]"}},
+         ]}),
+    dict(id="no-ldap-interpolation", langs=JS, severity="error",
+         message="LDAP filter built by interpolating values (LDAP injection).",
+         note="Escape every value with the LDAP filter escaping of your library (ldapjs: new EqualityFilter({ attribute, value }) or escapeFilter) instead of splicing it into the filter text.",
+         rule={"any": [
+             {"kind": "template_string", "regex": '^[`\'\\"]\\(\\s*[&|!]?\\s*\\(?[\\w.-]+\\s*[~<>]?=', "has": {"kind": "template_substitution"}, "not": {"regex": "(?i)escape"}},
+             {"kind": "binary_expression", "regex": '^[`\'\\"]\\(\\s*[&|!]?\\s*\\(?[\\w.-]+\\s*[~<>]?=', "has": {"field": "operator", "regex": "^\\+$"},
+              "not": {"any": [{"inside": {"kind": "binary_expression"}}, {"regex": "(?i)escape"}]}},
          ]}),
     # ---- JavaScript / TypeScript: no silencing the checks ---------------------
     dict(id="no-suppression-comment", langs=JS, severity="error",

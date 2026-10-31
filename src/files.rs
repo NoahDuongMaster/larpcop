@@ -97,14 +97,31 @@ pub fn tree(root: &Path, rev: &str) -> Vec<String> {
 fn walk(root: &Path, start: &Path) -> Vec<String> {
     // Dot-directories hold code too (`.github/workflows`, `.env`, `.husky`):
     // only `.git` itself and git-ignored files are skipped.
-    WalkBuilder::new(start)
+    let mut out: Vec<String> = WalkBuilder::new(start)
         .hidden(false)
         .filter_entry(|e| e.file_name() != ".git")
         .build()
         .filter_map(Result::ok)
         .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
         .filter_map(|e| rel_of(root, e.path()))
-        .collect()
+        .collect();
+    // A file committed despite `.gitignore` (`git add -f .env`) is in the repo
+    // all the same: tracked files are always checked.
+    let under = rel_of(root, start).unwrap_or_default();
+    let spec = if under.is_empty() {
+        ".".to_string()
+    } else {
+        under
+    };
+    if let Ok(tracked) = git_list(root, &["ls-files", "-z", "--", &spec]) {
+        let known: std::collections::HashSet<String> = out.iter().cloned().collect();
+        out.extend(
+            tracked
+                .into_iter()
+                .filter(|f| !known.contains(f) && root.join(f).is_file()),
+        );
+    }
+    out
 }
 
 /// Root-relative form of `path`, which may not exist yet (nor its parents).

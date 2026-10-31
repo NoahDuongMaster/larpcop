@@ -35,6 +35,8 @@ SECURITY = {
     "taint-xss", "taint-path", "taint-ssrf", "taint-nosql", "taint-regex", "no-unsafe-recursive-merge",
     "py-taint-path", "py-taint-ssrf", "py-taint-ssti", "py-taint-code",
     "no-session-fixation", "py-no-session-fixation",
+    "no-jwt-none-algorithm", "py-no-jwt-unverified", "no-ldap-interpolation", "py-no-ldap-interpolation",
+    "no-env-file-secrets",
 }
 
 

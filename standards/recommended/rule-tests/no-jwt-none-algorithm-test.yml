@@ -1,0 +1,6 @@
+id: no-jwt-none-algorithm
+valid:
+  - "jwt.verify(token, key, { algorithms: ['HS256'] });"
+invalid:
+  - "const options = { expiresIn: '2d', issuer: 'x', algorithms: ['HS256', 'none'] };"
+  - "jwt.verify(token, key, { algorithms: [\"none\"] });"

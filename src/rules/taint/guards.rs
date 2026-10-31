@@ -9,7 +9,7 @@ use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
 use std::ops::Range;
 
-const IFS: [&str; 2] = ["if_statement", "if_expression"];
+pub(super) const IFS: [&str; 2] = ["if_statement", "if_expression"];
 const EXITS: [&str; 6] = [
     "return_statement",
     "return_expression",

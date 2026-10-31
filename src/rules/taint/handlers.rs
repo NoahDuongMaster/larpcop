@@ -1,7 +1,8 @@
 //! Parameters that carry request data by framework convention, with no
 //! `req.query` in sight: NestJS-style decorated parameters (`@Body() dto`,
 //! `@Query('q') q`) and every parameter of a route handler declared by a
-//! decorator (FastAPI `@app.get(…)`, Flask `@app.route('/u/<name>')`).
+//! decorator (FastAPI `@app.get(…)`, Flask `@app.route('/u/<name>')`), and the
+//! arguments of GraphQL resolvers (`(parent, args) => …`, `def resolve_x(root, info, id)`).
 
 use ast_grep_core::{Doc, Node};
 use regex::Regex;
@@ -37,15 +38,24 @@ const CONVERTING_PIPES: [&str; 5] = [
     "ParseEnumPipe",
 ];
 
+/// First parameter of a GraphQL resolver: the parent object.
+const RESOLVER_PARENT: [&str; 8] = [
+    "parent", "root", "_", "obj", "source", "_parent", "_root", "_obj",
+];
+
 pub(super) fn params<D: Doc>(
     function: &Node<D>,
     param_decorators: &[String],
     handler: Option<&Regex>,
+    resolvers: bool,
 ) -> HashSet<String> {
     let mut out = HashSet::new();
     let Some(list) = function.field("parameters") else {
         return out;
     };
+    if resolvers {
+        out.extend(resolver_args(&list));
+    }
     let is_handler =
         handler.is_some_and(|re| decorators_of(function).iter().any(|d| re.is_match(d)));
     for p in list.children().filter(|c| c.is_named()) {
@@ -68,6 +78,43 @@ pub(super) fn params<D: Doc>(
         }
     }
     out
+}
+
+/// `(parent, args)` / `(parent, { id })` in JS, `(root, info, id, …)` in Python:
+/// the names the client's arguments arrive in.
+fn resolver_args<D: Doc>(list: &Node<D>) -> Vec<String> {
+    let params: Vec<Node<D>> = list
+        .children()
+        .filter(|c| c.is_named() && c.kind() != "comment")
+        .collect();
+    let text = |n: &Node<D>| {
+        n.field("pattern")
+            .unwrap_or_else(|| n.clone())
+            .text()
+            .to_string()
+    };
+    if params.len() < 2 || !RESOLVER_PARENT.contains(&text(&params[0]).as_str()) {
+        return Vec::new();
+    }
+    let second = params[1]
+        .field("pattern")
+        .unwrap_or_else(|| params[1].clone());
+    if second.kind() == "object_pattern" {
+        return second
+            .dfs()
+            .filter(|n| {
+                n.kind() == "shorthand_property_identifier_pattern"
+                    || (n.kind() == "identifier"
+                        && n.parent().is_some_and(|p| p.kind() == "pair_pattern"))
+            })
+            .map(|n| n.text().to_string())
+            .collect();
+    }
+    match text(&params[1]).as_str() {
+        "args" | "input" | "variables" => vec![text(&params[1])],
+        "info" => params[2..].iter().filter_map(name_of).collect(),
+        _ => Vec::new(),
+    }
 }
 
 /// Text of the decorators on a function (Python `decorated_definition`, or

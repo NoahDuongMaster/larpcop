@@ -21,59 +21,61 @@
       {
         "inside": {
           "stopBy": "end",
-          "kind": "for_in_statement",
-          "has": {
-            "field": "left",
-            "stopBy": "end",
-            "pattern": "$K"
-          }
+          "any": [
+            {
+              "kind": "function_declaration",
+              "has": {
+                "field": "name",
+                "pattern": "$F"
+              }
+            },
+            {
+              "kind": "variable_declarator",
+              "has": {
+                "field": "name",
+                "pattern": "$F"
+              }
+            }
+          ]
         }
       },
       {
         "inside": {
           "stopBy": "end",
-          "any": [
+          "kind": "for_in_statement",
+          "all": [
             {
-              "kind": "function_declaration",
-              "all": [
-                {
-                  "has": {
-                    "field": "name",
-                    "pattern": "$F"
-                  }
-                },
-                {
-                  "has": {
-                    "stopBy": "end",
-                    "kind": "call_expression",
-                    "has": {
-                      "field": "function",
-                      "pattern": "$F"
-                    }
-                  }
-                }
-              ]
+              "has": {
+                "field": "left",
+                "stopBy": "end",
+                "pattern": "$K"
+              }
             },
             {
-              "kind": "variable_declarator",
-              "all": [
-                {
-                  "has": {
-                    "field": "name",
-                    "pattern": "$F"
-                  }
-                },
-                {
-                  "has": {
-                    "stopBy": "end",
-                    "kind": "call_expression",
+              "has": {
+                "field": "body",
+                "stopBy": "end",
+                "kind": "call_expression",
+                "all": [
+                  {
                     "has": {
                       "field": "function",
                       "pattern": "$F"
                     }
+                  },
+                  {
+                    "has": {
+                      "field": "arguments",
+                      "stopBy": "end",
+                      "kind": "subscript_expression",
+                      "has": {
+                        "field": "index",
+                        "pattern": "$K"
+                      }
+                    }
                   }
-                }
-              ]
+                ]
+              }
             }
           ]
         }
@@ -124,59 +126,61 @@
       {
         "inside": {
           "stopBy": "end",
-          "kind": "for_in_statement",
-          "has": {
-            "field": "left",
-            "stopBy": "end",
-            "pattern": "$K"
-          }
+          "any": [
+            {
+              "kind": "function_declaration",
+              "has": {
+                "field": "name",
+                "pattern": "$F"
+              }
+            },
+            {
+              "kind": "variable_declarator",
+              "has": {
+                "field": "name",
+                "pattern": "$F"
+              }
+            }
+          ]
         }
       },
       {
         "inside": {
           "stopBy": "end",
-          "any": [
+          "kind": "for_in_statement",
+          "all": [
             {
-              "kind": "function_declaration",
-              "all": [
-                {
-                  "has": {
-                    "field": "name",
-                    "pattern": "$F"
-                  }
-                },
-                {
-                  "has": {
-                    "stopBy": "end",
-                    "kind": "call_expression",
-                    "has": {
-                      "field": "function",
-                      "pattern": "$F"
-                    }
-                  }
-                }
-              ]
+              "has": {
+                "field": "left",
+                "stopBy": "end",
+                "pattern": "$K"
+              }
             },
             {
-              "kind": "variable_declarator",
-              "all": [
-                {
-                  "has": {
-                    "field": "name",
-                    "pattern": "$F"
-                  }
-                },
-                {
-                  "has": {
-                    "stopBy": "end",
-                    "kind": "call_expression",
+              "has": {
+                "field": "body",
+                "stopBy": "end",
+                "kind": "call_expression",
+                "all": [
+                  {
                     "has": {
                       "field": "function",
                       "pattern": "$F"
                     }
+                  },
+                  {
+                    "has": {
+                      "field": "arguments",
+                      "stopBy": "end",
+                      "kind": "subscript_expression",
+                      "has": {
+                        "field": "index",
+                        "pattern": "$K"
+                      }
+                    }
                   }
-                }
-              ]
+                ]
+              }
             }
           ]
         }
@@ -227,59 +231,61 @@
       {
         "inside": {
           "stopBy": "end",
-          "kind": "for_in_statement",
-          "has": {
-            "field": "left",
-            "stopBy": "end",
-            "pattern": "$K"
-          }
+          "any": [
+            {
+              "kind": "function_declaration",
+              "has": {
+                "field": "name",
+                "pattern": "$F"
+              }
+            },
+            {
+              "kind": "variable_declarator",
+              "has": {
+                "field": "name",
+                "pattern": "$F"
+              }
+            }
+          ]
         }
       },
       {
         "inside": {
           "stopBy": "end",
-          "any": [
+          "kind": "for_in_statement",
+          "all": [
             {
-              "kind": "function_declaration",
-              "all": [
-                {
-                  "has": {
-                    "field": "name",
-                    "pattern": "$F"
-                  }
-                },
-                {
-                  "has": {
-                    "stopBy": "end",
-                    "kind": "call_expression",
-                    "has": {
-                      "field": "function",
-                      "pattern": "$F"
-                    }
-                  }
-                }
-              ]
+              "has": {
+                "field": "left",
+                "stopBy": "end",
+                "pattern": "$K"
+              }
             },
             {
-              "kind": "variable_declarator",
-              "all": [
-                {
-                  "has": {
-                    "field": "name",
-                    "pattern": "$F"
-                  }
-                },
-                {
-                  "has": {
-                    "stopBy": "end",
-                    "kind": "call_expression",
+              "has": {
+                "field": "body",
+                "stopBy": "end",
+                "kind": "call_expression",
+                "all": [
+                  {
                     "has": {
                       "field": "function",
                       "pattern": "$F"
                     }
+                  },
+                  {
+                    "has": {
+                      "field": "arguments",
+                      "stopBy": "end",
+                      "kind": "subscript_expression",
+                      "has": {
+                        "field": "index",
+                        "pattern": "$K"
+                      }
+                    }
                   }
-                }
-              ]
+                ]
+              }
             }
           ]
         }

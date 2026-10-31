@@ -1,0 +1,7 @@
+id: py-no-jwt-unverified
+valid:
+  - "jwt.decode(token, key, algorithms=['HS256'])"
+invalid:
+  - "jwt.decode(token, key, algorithms=['HS256', 'none'])"
+  - "jwt.decode(token, options={'verify_signature': False})"
+  - "jwt.decode(token, verify=False)"

@@ -214,3 +214,20 @@ fn no_console_cannot_be_dodged() {
     }
     assert!(!out.contains("fine.ts"), "false positive:\n{out}");
 }
+
+#[test]
+fn files_committed_despite_gitignore_are_checked() {
+    let repo = Repo::with_standards();
+    repo.write(".gitignore", "generated/\n");
+    repo.write("generated/bad.ts", BAD_TS);
+    repo.git(&["add", ".gitignore"]);
+    repo.git(&["add", "-f", "generated/bad.ts"]);
+    repo.git(&["commit", "-qm", "force-added"]);
+    let out = repo.run(&["check"]);
+    assert_eq!(out.code(), 1, "{}", out.stdout());
+    assert!(
+        out.stdout().contains("generated/bad.ts"),
+        "{}",
+        out.stdout()
+    );
+}

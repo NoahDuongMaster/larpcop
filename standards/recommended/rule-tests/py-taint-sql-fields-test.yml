@@ -1,0 +1,17 @@
+id: py-taint-sql
+valid:
+  - |
+    class Search:
+        def __init__(self, request):
+            self.page = int(request.args.get("page", 0))
+
+        def run(self, cur):
+            cur.execute(f"select * from items limit 20 offset {self.page * 20}")
+invalid:
+  - |
+    class Search:
+        def __init__(self, request):
+            self.term = request.args.get("q")
+
+        def run(self, cur):
+            cur.execute(f"select * from items where name like '%{self.term}%'")

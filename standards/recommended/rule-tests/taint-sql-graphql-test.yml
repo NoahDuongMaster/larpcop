@@ -1,0 +1,6 @@
+id: taint-sql
+valid:
+  - "const resolvers = { Query: { user: (parent, args) => db.query('select * from users where id = $1', [args.id]) } };"
+invalid:
+  - "const resolvers = { Query: { user: (parent, args) => db.query(`select * from users where id = ${args.id}`) } };"
+  - "const resolvers = { Query: { user: (_, { name }) => db.query(\"select * from users where name = '\" + name + \"'\") } };"

@@ -3,6 +3,8 @@ valid:
 - 'app.get(''/f'', (req, res) => res.sendFile(path.basename(req.query.file), { root: dir }));'
 - function f(req, res) { const p = path.resolve(base, req.query.f); if (!p.startsWith(base + path.sep)) { return res.sendStatus(400); } res.sendFile(p); }
 - function k(req, res) { const file = req.params.file; if (!file.includes('/')) { res.sendFile(path.resolve('keys/', file)); } }
+- async function save(req) { await fsPromises.writeFile('/uploads/' + crypto.randomUUID(), req.body.data); }
 invalid:
 - function avatar(req, res) { const name = req.query.file; res.send(fs.readFileSync('/srv/img/' + name)); }
 - app.get('/d', (req, res) => res.download(path.join(dir, req.params.name)));
+- async function save(req) { const p = '/uploads/' + req.body.name; await fsPromises.writeFile(p, req.body.data); }

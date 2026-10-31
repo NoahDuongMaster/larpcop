@@ -3,10 +3,11 @@
 
 use super::events::{Hit, Hits};
 use super::flow::Ctx;
+use super::scan::FileIndex;
 use super::summary::{self, Summaries};
-use super::{IMPORT_DEPTH, TaintRule, imports, prefix};
+use super::{IMPORT_DEPTH, TaintRule, prefix};
 use crate::files::SourceFile;
-use ast_grep_core::{Doc, Language, Node, NodeMatch};
+use ast_grep_core::{Doc, Language, NodeMatch};
 use ast_grep_language::LanguageExt;
 use ast_grep_language::SupportLang;
 use std::ops::Range;
@@ -19,11 +20,11 @@ impl TaintRule {
     pub(super) fn prepare<'a, D: Doc>(
         &self,
         lang: SupportLang,
-        root: &Node<'a, D>,
+        index: &FileIndex<'a, D>,
         file: &SourceFile,
         depth: usize,
     ) -> Option<(Ctx, Hits<'a, D>)> {
-        let [sources, sinks, sanitizers, guards] = self.patterns(lang)?.scan(root);
+        let [sources, sinks, sanitizers, guards] = self.patterns(lang)?.scan(index);
         let ranges = |ms: Vec<NodeMatch<'a, D>>| -> Vec<Range<usize>> {
             ms.iter().map(|m| m.range()).collect()
         };
@@ -46,7 +47,7 @@ impl TaintRule {
         // Overlapping sink patterns (and Go's wrapped patterns) find a call more than once.
         hits.sort_by_key(|(at, node, _)| (*at, node.range().start, node.range().end));
         hits.dedup_by_key(|(at, node, _)| (*at, node.range().start, node.range().end));
-        let hits = Hits::new(hits);
+        let hits = Hits::new(hits, &index.root, index.skeletons.clone());
         let base = Ctx {
             sources: ranges(sources),
             sanitizers: ranges(sanitizers),
@@ -59,7 +60,7 @@ impl TaintRule {
             summaries: Summaries::new(),
             source_texts: self.source_texts.clone(),
         };
-        let known = summary::with_unique_methods(self.imported_summaries(lang, root, file, depth));
+        let known = summary::with_unique_methods(self.imported_summaries(lang, index, file, depth));
         // The file being checked (not an import, whose callers need its
         // summaries) can only carry taint from a source, a destructured request
         // parameter (`{ query }`) or a callee returning source data.
@@ -73,7 +74,7 @@ impl TaintRule {
             return None;
         }
         let summaries =
-            summary::with_unique_methods(self.summarize(root, lang, file, &base, &hits, &known));
+            summary::with_unique_methods(self.summarize(index, lang, file, &base, &hits, &known));
         Some((Ctx { summaries, ..base }, hits))
     }
 
@@ -81,7 +82,7 @@ impl TaintRule {
     fn imported_summaries<D: Doc>(
         &self,
         lang: SupportLang,
-        root: &Node<D>,
+        index: &FileIndex<D>,
         file: &SourceFile,
         depth: usize,
     ) -> Summaries {
@@ -89,7 +90,7 @@ impl TaintRule {
         if depth >= IMPORT_DEPTH {
             return out;
         }
-        for imp in imports::imports(lang, root, &self.root.join(&file.rel), &self.root) {
+        for imp in index.imports(lang, &self.root.join(&file.rel), &self.root) {
             let Some(theirs) = self.file_summaries(&imp.path, depth + 1) else {
                 continue;
             };
@@ -131,7 +132,7 @@ impl TaintRule {
             .replace('\\', "/");
         let file = SourceFile { rel, content };
         let grep = lang.ast_grep(&file.content);
-        let (ctx, _) = self.prepare(lang, &grep.root(), &file, depth)?;
+        let (ctx, _) = self.prepare(lang, &FileIndex::new(grep.root()), &file, depth)?;
         let s = Arc::new(ctx.summaries);
         self.imported
             .lock()
@@ -147,5 +148,6 @@ impl TaintRule {
             .iter()
             .any(|d| content.contains(&format!("@{d}(")))
             || (self.handler_decorators.is_some() && content.contains('@'))
+            || (self.resolver_args && (content.contains("args") || content.contains("info")))
     }
 }

@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use ast_grep_core::{Doc, Language, Node, Pattern};
 use ast_grep_language::{LanguageExt, SupportLang};
 use flow::Reached;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -34,6 +34,7 @@ pub struct TaintRule {
     param_types: std::collections::BTreeMap<String, String>,
     param_decorators: Vec<String>,
     handler_decorators: Option<regex::Regex>,
+    resolver_args: bool,
     /// `sink_types`: metavariables whose type the project's language server must confirm.
     typed: typed::Typed,
     /// Per language: (sources, sinks, sanitizers, guards), compiled for that grammar.
@@ -92,6 +93,7 @@ impl TaintRule {
                 .collect(),
             param_types: cfg.param_types.clone(),
             param_decorators: cfg.param_decorators.clone(),
+            resolver_args: cfg.resolver_args,
             handler_decorators: cfg
                 .handler_decorators
                 .as_deref()
@@ -107,12 +109,13 @@ impl TaintRule {
 
     /// Names a function receives as request data: destructured typed
     /// parameters, decorated parameters, parameters of route handlers.
-    fn own_names<D: Doc>(&self, f: &Node<D>) -> std::collections::HashSet<String> {
+    fn own_names<D: Doc>(&self, f: &Node<D>) -> HashSet<String> {
         let mut out = destructure::from_params(f, &self.param_types, &self.source_texts);
         out.extend(handlers::params(
             f,
             &self.param_decorators,
             self.handler_decorators.as_ref(),
+            self.resolver_args,
         ));
         out
     }
@@ -132,27 +135,69 @@ impl TaintRule {
         }
     }
 
+    /// Parses and indexes the file itself; the engine shares one parse
+    /// across rules through [`Self::check_indexed`].
     pub fn check(&self, file: &SourceFile) -> Vec<Violation> {
-        let Some(lang) = SupportLang::from_path(&file.rel) else {
+        let Some(lang) = SupportLang::from_path(&file.rel).filter(|l| self.handles(*l)) else {
             return Vec::new();
         };
-        if self.patterns(lang).is_none() {
+        let grep = lang.ast_grep(&file.content);
+        self.check_indexed(file, lang, &FileIndex::new(grep.root()))
+    }
+
+    pub fn handles(&self, lang: SupportLang) -> bool {
+        self.patterns(lang).is_some()
+    }
+
+    /// The check on a file already parsed and indexed for `lang`.
+    pub fn check_indexed<D: Doc>(
+        &self,
+        file: &SourceFile,
+        lang: SupportLang,
+        index: &FileIndex<D>,
+    ) -> Vec<Violation> {
+        if !self.handles(lang) {
             return Vec::new();
         }
-        let grep = lang.ast_grep(&file.content);
-        let root = grep.root();
-        let Some((ctx, hits)) = self.prepare(lang, &root, file, 0) else {
+        let root = &index.root;
+        let Some((ctx, hits)) = self.prepare(lang, index, file, 0) else {
             return Vec::new();
         };
         let mut out = Vec::new();
-        let own = |n: &Node<_>| self.own_names(n);
-        ctx.run(&root, &root, own(&root), &hits, &own, &mut |r| match r {
-            Reached::Sink(arg, typed) if self.typed.holds(lang, file, &typed) => {
-                out.push(self.violation(file, &arg, None))
+        // Fields a method stores request data in, by class: read by the
+        // class's other methods, so a second walk starts them tainted.
+        let mut fields: HashMap<(usize, usize), HashSet<String>> = HashMap::new();
+        for _ in 0..2 {
+            let own = |n: &Node<_>| {
+                let mut names = self.own_names(n);
+                if let Some(f) = class_of(n).and_then(|c| fields.get(&c)) {
+                    names.extend(f.iter().cloned());
+                }
+                names
+            };
+            let mut stored: HashMap<(usize, usize), HashSet<String>> = HashMap::new();
+            ctx.run(root, own(root), &hits, &own, &mut |r| match r {
+                Reached::Sink(arg, typed) if self.typed.holds(lang, file, &typed) => {
+                    out.push(self.violation(file, &arg, None))
+                }
+                Reached::Call(arg, into) => out.push(self.violation(file, &arg, Some(into))),
+                Reached::Field(left) => {
+                    if let Some(c) = class_of(&left) {
+                        stored.entry(c).or_default().insert(left.text().to_string());
+                    }
+                }
+                _ => {}
+            });
+            let known = |(c, f): (&(usize, usize), &HashSet<String>)| {
+                fields.get(c).is_some_and(|k| f.is_subset(k))
+            };
+            if stored.iter().all(known) {
+                break;
             }
-            Reached::Call(arg, into) => out.push(self.violation(file, &arg, Some(into))),
-            _ => {}
-        });
+            for (c, f) in stored {
+                fields.entry(c).or_default().extend(f);
+            }
+        }
         // A sink reached directly and through a summary is one finding.
         out.sort_by_key(|v| (v.line, v.column));
         out.dedup_by_key(|v| (v.line, v.column));
@@ -192,6 +237,18 @@ impl TaintRule {
     }
 }
 
+/// The class a node is in (its range), for the fields its methods share.
+fn class_of<D: Doc>(n: &Node<D>) -> Option<(usize, usize)> {
+    let class = n.ancestors().find(|a| {
+        matches!(
+            a.kind().as_ref(),
+            "class_declaration" | "class_definition" | "class" | "abstract_class_declaration"
+        )
+    })?;
+    let r = class.range();
+    Some((r.start, r.end))
+}
+
 /// Go calls written alone (`db.Query($X)`) need a function body as context.
 fn pattern(p: &str, lang: SupportLang) -> Result<Pattern> {
     if lang == SupportLang::Go
@@ -211,6 +268,7 @@ mod imports;
 mod prefix;
 mod prepare;
 mod scan;
+pub use scan::FileIndex;
 mod summary;
 #[cfg(test)]
 mod tests;

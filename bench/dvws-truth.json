@@ -1,0 +1,20 @@
+{
+  "source": "CHALLENGES.md of DVWS-Node (snoopysecurity/dvws-node e83689c): the challenges whose flaw sits on one line of code, each mapped to that line by reading the code the challenge's endpoint runs. Written before any tool ran on DVWS-Node. Left out: access control, IDOR, CSRF, CORS, rate limits, enumeration, GraphQL introspection/batching and other flaws of design or configuration that no single line carries, plus XSS and CRLF/log injection, whose line the guide does not make clear.",
+  "lines": [
+    {"file": "src/controllers/passphrase.js", "line": 44, "label": "1 SQL injection (INSERT built from req.body)"},
+    {"file": "src/controllers/passphrase.js", "line": 59, "label": "1 SQL injection (SELECT by req.params.username)"},
+    {"file": "src/controllers/notes.js", "line": 164, "label": "2 NoSQL injection ($where)"},
+    {"file": "src/controllers/notes.js", "line": 69, "label": "3 OS command injection (exec of req.params.command)"},
+    {"file": "src/utils/vulnerable-xml.js", "line": 81, "label": "4/5 XXE and XML bomb (custom entity expansion)"},
+    {"file": "src/services/xml-rpc/server.js", "line": 29, "label": "6 SSRF (needle.get of a URL from the request)"},
+    {"file": "src/controllers/passphrase.js", "line": 96, "label": "7 Insecure deserialization (node-serialize)"},
+    {"file": "src/controllers/notes.js", "line": 81, "label": "8 XPath injection"},
+    {"file": "src/controllers/users.js", "line": 656, "label": "9 LDAP injection (filter built from input)"},
+    {"file": "src/controllers/files.js", "line": 93, "label": "10 Path traversal (download path from req.body.filename)"},
+    {"file": "src/server.js", "line": 40, "label": "16 JWT verification accepts alg none"},
+    {"file": ".env", "line": 4, "label": "17 Weak JWT secret"},
+    {"file": "src/controllers/users.js", "line": 138, "label": "20 Open redirect"},
+    {"file": "src/controllers/files.js", "line": 19, "label": "28 Prototype pollution (recursive merge)"},
+    {"file": "src/graphql/schema.js", "line": 123, "label": "34 GraphQL arbitrary file write (path from args)"}
+  ]
+}

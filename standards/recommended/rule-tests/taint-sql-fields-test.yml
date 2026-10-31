@@ -1,0 +1,21 @@
+id: taint-sql
+valid:
+  - |
+    class Search {
+      constructor(req) {
+        this.page = Number(req.query.page);
+      }
+      run() {
+        return db.query(`select * from items limit 20 offset ${this.page * 20}`);
+      }
+    }
+invalid:
+  - |
+    class Search {
+      constructor(req) {
+        this.term = req.query.q;
+      }
+      run() {
+        return db.query(`select * from items where name like '%${this.term}%'`);
+      }
+    }

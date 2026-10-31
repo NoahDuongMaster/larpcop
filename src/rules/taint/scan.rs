@@ -59,8 +59,36 @@ impl<'a, D: Doc> FileIndex<'a, D> {
     }
 }
 
+/// A pattern and the longest name it spells out (`FormValue` in
+/// `$R.FormValue($K)`): a node whose text lacks it cannot match, which is far
+/// cheaper to find out than matching.
+pub(super) type Compiled = (Pattern, Option<String>);
+
+/// The longest identifier of a pattern that is not a metavariable.
+pub(super) fn needle(pattern: &str) -> Option<String> {
+    let mut best: Option<&str> = None;
+    let bytes = pattern.as_bytes();
+    let mut start = None;
+    for (i, &b) in bytes.iter().chain(std::iter::once(&b' ')).enumerate() {
+        let word = b.is_ascii_alphanumeric() || b == b'_';
+        match (word, start) {
+            (true, None) => start = Some(i),
+            (false, Some(s)) => {
+                let meta = s > 0 && bytes[s - 1] == b'$';
+                let w = &pattern[s..i];
+                if !meta && best.is_none_or(|b: &str| w.len() > b.len()) {
+                    best = Some(w);
+                }
+                start = None;
+            }
+            _ => {}
+        }
+    }
+    best.map(str::to_string)
+}
+
 pub(super) struct Indexed {
-    pub groups: [Vec<Pattern>; GROUPS],
+    groups: [Vec<Compiled>; GROUPS],
     /// Node kind → (group, pattern) that can match it.
     by_kind: HashMap<u16, Vec<(usize, usize)>>,
     /// Patterns that can match any kind.
@@ -68,11 +96,11 @@ pub(super) struct Indexed {
 }
 
 impl Indexed {
-    pub fn new(groups: [Vec<Pattern>; GROUPS]) -> Self {
+    pub fn new(groups: [Vec<Compiled>; GROUPS]) -> Self {
         let mut by_kind: HashMap<u16, Vec<(usize, usize)>> = HashMap::new();
         let mut any = Vec::new();
         for (g, patterns) in groups.iter().enumerate() {
-            for (i, p) in patterns.iter().enumerate() {
+            for (i, (p, _)) in patterns.iter().enumerate() {
                 match p.potential_kinds() {
                     Some(kinds) => {
                         for k in kinds.iter() {
@@ -94,7 +122,15 @@ impl Indexed {
     pub fn scan<'a, D: Doc>(&self, index: &FileIndex<'a, D>) -> [Vec<NodeMatch<'a, D>>; GROUPS] {
         let mut found: [Vec<(usize, NodeMatch<'a, D>)>; GROUPS] = Default::default();
         let mut try_at = |at: usize, (g, i): (usize, usize)| {
-            if let Some(m) = self.groups[g][i].match_node(index.nodes[at].clone()) {
+            let (pattern, needle) = &self.groups[g][i];
+            let node = &index.nodes[at];
+            if needle
+                .as_ref()
+                .is_some_and(|n| !node.text().contains(n.as_str()))
+            {
+                return;
+            }
+            if let Some(m) = pattern.match_node(node.clone()) {
                 found[g].push((at, m));
             }
         };

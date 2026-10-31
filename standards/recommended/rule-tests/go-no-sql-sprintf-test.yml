@@ -1,10 +1,14 @@
 {
   "id": "go-no-sql-sprintf",
   "valid": [
-    "package m\nfunc f() { db.Query(\"select * from u where id = $1\", id) }"
+    "package m\nfunc f() { db.Query(\"select * from u where id = $1\", id) }",
+    "package m\nfunc f() {\n\tconst q = \"SELECT name FROM users \" + \"WHERE id = $1\"\n\tdb.Query(q, id)\n}",
+    "package m\nfunc f() { msg := fmt.Sprintf(\"selected %d rows from %s\", n, table); log.Print(msg) }"
   ],
   "invalid": [
     "package m\nfunc f() { db.Query(fmt.Sprintf(\"select * from u where id = %d\", id)) }",
-    "package m\nfunc f() { db.ExecContext(ctx, \"delete from t where id = \" + id) }"
+    "package m\nfunc f() { db.ExecContext(ctx, \"delete from t where id = \" + id) }",
+    "package m\nfunc f(uid string) {\n\tq := fmt.Sprintf(`SELECT p.name FROM profile AS p WHERE p.id=%s`, uid)\n\tdb.Query(q)\n}",
+    "package m\nfunc f(name string) {\n\tq := \"SELECT * FROM users WHERE name = '\" + name + \"'\"\n\tdb.Query(q)\n}"
   ]
 }

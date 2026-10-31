@@ -101,13 +101,36 @@ RULES = [
     dict(id="go-no-sql-sprintf", langs=["Go"], severity="error",
          message="SQL built with fmt.Sprintf or string concatenation.",
          note="Use placeholders: db.QueryContext(ctx, \"... WHERE id = $1\", id).",
+         rule={"any": [
+             {"kind": "call_expression", "all": [
+                 {"has": {"field": "function", "kind": "selector_expression",
+                          "has": {"field": "field", "regex": "^(Query|QueryContext|QueryRow|QueryRowContext|Exec|ExecContext)$"}}},
+                 {"has": {"field": "arguments", "has": {"any": [
+                     {"kind": "call_expression", "has": {"field": "function", "regex": "^fmt\\.Sprintf$"}},
+                     {"kind": "binary_expression", "has": {"field": "operator", "regex": "^\\+$"}},
+                 ]}}},
+             ]},
+             # SQL text formatted or concatenated anywhere, then passed on in a variable.
+             {"kind": "call_expression", "not": {"inside": {"kind": "argument_list"}}, "all": [
+                 {"has": {"field": "function", "regex": "^fmt\\.Sprintf$"}},
+                 {"has": {"field": "arguments", "has": {"nthChild": 1, "regex": SQL_TEXT}}},
+                 {"has": {"field": "arguments", "has": {"nthChild": 2}}},
+             ]},
+             {"kind": "binary_expression", "regex": SQL_TEXT, "has": {"field": "operator", "regex": "^\\+$"},
+              "all": [{"has": {"stopBy": "end", "any": [{"kind": "identifier"}, {"kind": "call_expression"}]}}],
+              "not": {"any": [{"inside": {"kind": "binary_expression"}}, {"inside": {"kind": "argument_list"}}]}},
+         ]}),
+    dict(id="go-no-unsafe-template-type", langs=["Go"], severity="error",
+         message="html/template's escaping is turned off for a value that is not a constant (XSS).",
+         note="Pass the value as data and let html/template escape it; keep template.HTML/JS/URL/CSS "
+              "for constants, or for HTML a sanitizer (bluemonday) produced.",
          rule={"kind": "call_expression", "all": [
-             {"has": {"field": "function", "kind": "selector_expression",
-                      "has": {"field": "field", "regex": "^(Query|QueryContext|QueryRow|QueryRowContext|Exec|ExecContext)$"}}},
-             {"has": {"field": "arguments", "has": {"any": [
-                 {"kind": "call_expression", "has": {"field": "function", "regex": "^fmt\\.Sprintf$"}},
-                 {"kind": "binary_expression", "has": {"field": "operator", "regex": "^\\+$"}},
-             ]}}},
+             {"has": {"field": "function", "regex": "^template\\.(HTML|JS|JSStr|URL|CSS|HTMLAttr|Srcset)$"}},
+             {"has": {"field": "arguments", "has": {"nthChild": 1,
+                      "not": {"kind": "interpreted_string_literal"},
+                      "all": [{"not": {"kind": "raw_string_literal"}},
+                              {"not": {"has": {"stopBy": "end", "regex": "(?i)sanitize"}}},
+                              {"not": {"regex": "(?i)sanitize"}}]}}},
          ]}),
     dict(id="go-no-insecure-tls", langs=["Go"], severity="error",
          message="`InsecureSkipVerify: true` turns off TLS certificate checks.",

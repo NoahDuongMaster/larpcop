@@ -14,6 +14,9 @@ use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
 
+/// One imported file's summaries (`None`: not a file the rule reads).
+pub(super) type Slot = Option<Arc<Summaries>>;
+
 impl TaintRule {
     /// Sources, sanitizers and sinks found in `root`, and the summaries of the
     /// functions it defines or imports.
@@ -30,7 +33,14 @@ impl TaintRule {
         };
         let mut hits: Vec<Hit<_>> = Vec::new();
         {
-            for m in sinks {
+            // A source expression is not a sink call: gin's `c.Query("q")`
+            // also has the shape of `db.Query(sql)`.
+            let is_source = |r: &Range<usize>| {
+                sources
+                    .iter()
+                    .any(|s| s.range().start <= r.start && r.end <= s.range().end)
+            };
+            for m in sinks.into_iter().filter(|m| !is_source(&m.range())) {
                 let arg = self
                     .sink_arg
                     .as_deref()
@@ -59,6 +69,7 @@ impl TaintRule {
             ),
             summaries: Summaries::new(),
             source_texts: self.source_texts.clone(),
+            sourcing: Default::default(),
         };
         let known = summary::with_unique_methods(self.imported_summaries(lang, index, file, depth));
         // The file being checked (not an import, whose callers need its
@@ -73,9 +84,23 @@ impl TaintRule {
         {
             return None;
         }
-        let summaries =
-            summary::with_unique_methods(self.summarize(index, lang, file, &base, &hits, &known));
-        Some((Ctx { summaries, ..base }, hits))
+        let mut summaries = self.summarize(index, lang, file, &base, &hits, &known);
+        // An imported Go file stands for its own functions only: Go has no
+        // re-exports, and its package's other files are imported directly.
+        // Passing on everything it imported made a package of n files cost n².
+        if depth > 0 && lang == SupportLang::Go {
+            let own: std::collections::HashSet<&str> =
+                index.functions().iter().map(|(n, ..)| n.as_str()).collect();
+            summaries.retain(|name, _| own.contains(name.as_str()));
+        }
+        Some((
+            Ctx {
+                summaries: summary::with_unique_methods(summaries),
+                sourcing: Default::default(),
+                ..base
+            },
+            hits,
+        ))
     }
 
     /// Summaries of what `root` imports, keyed the way calls name them here.
@@ -110,7 +135,9 @@ impl TaintRule {
                 if let Some(ns) = &imp.namespace {
                     out.insert(format!("{ns}.{name}"), s.clone());
                 }
-                if imp.all && !name.contains('.') {
+                // Same package (Go): its functions and its types' methods
+                // (`Profile.Load`) are named here as there.
+                if imp.all && !name.starts_with("*.") {
                     out.entry(name.clone()).or_insert_with(|| s.clone());
                 }
             }
@@ -118,10 +145,24 @@ impl TaintRule {
         out
     }
 
+    /// Keyed by depth too, so the result never depends on which thread got
+    /// there first. Two threads may compute the same entry at once: waiting
+    /// for each other instead serialized whole packages.
     fn file_summaries(&self, path: &Path, depth: usize) -> Option<Arc<Summaries>> {
-        if let Some(s) = self.imported.lock().ok()?.get(path) {
-            return Some(s.clone());
+        let key = (path.to_path_buf(), depth);
+        if let Some(known) = self.imported.lock().ok()?.get(&key) {
+            return known.clone();
         }
+        let computed = self.compute_summaries(path, depth);
+        self.imported
+            .lock()
+            .ok()?
+            .entry(key)
+            .or_insert(computed)
+            .clone()
+    }
+
+    fn compute_summaries(&self, path: &Path, depth: usize) -> Option<Arc<Summaries>> {
         let lang = SupportLang::from_path(path)?;
         self.patterns(lang)?;
         let content = std::fs::read_to_string(path).ok()?;
@@ -133,12 +174,7 @@ impl TaintRule {
         let file = SourceFile { rel, content };
         let grep = lang.ast_grep(&file.content);
         let (ctx, _) = self.prepare(lang, &FileIndex::new(grep.root()), &file, depth)?;
-        let s = Arc::new(ctx.summaries);
-        self.imported
-            .lock()
-            .ok()?
-            .insert(path.to_path_buf(), s.clone());
-        Some(s)
+        Some(Arc::new(ctx.summaries))
     }
 
     /// Could a decorator bring request data into this file (`@Body()`, a route

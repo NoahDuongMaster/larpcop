@@ -50,6 +50,8 @@ pub(super) struct Ctx {
     pub guards: Vec<Range<usize>>,
     pub summaries: Summaries,
     pub source_texts: Vec<String>,
+    /// Does any known function return source data? (computed on first use)
+    pub sourcing: std::cell::OnceCell<bool>,
 }
 
 fn within(r: &Range<usize>, outer: &Range<usize>) -> bool {
@@ -68,6 +70,12 @@ impl Ctx {
         })
     }
 
+    fn any_sourcing(&self) -> bool {
+        *self
+            .sourcing
+            .get_or_init(|| self.summaries.values().any(|s| s.returns_source))
+    }
+
     /// Does `node` carry source data (not passed through a sanitizer)?
     pub fn tainted<D: Doc>(&self, node: &Node<D>, names: &HashSet<String>) -> bool {
         // A function value is code, not data; what it captures is followed when
@@ -82,13 +90,26 @@ impl Ctx {
         if self.sources.iter().any(|s| within(&r, s)) {
             return true;
         }
-        if (VARIABLES[..2].contains(&node.kind().as_ref()) || is_field(node))
-            && names.contains(node.text().as_ref())
+        let text = node.text();
+        // Nothing below can be tainted: no source in it, no tainted name
+        // spelled in it, no call that could return source data.
+        if !self
+            .sources
+            .iter()
+            .any(|s| s.start < r.end && r.start < s.end)
+            && !names.iter().any(|n| text.contains(n.as_str()))
+            && !(text.contains('(') && self.any_sourcing())
+        {
+            return false;
+        }
+        let kind = node.kind();
+        if (VARIABLES[..2].contains(&kind.as_ref()) || is_field(node))
+            && names.contains(text.as_ref())
         {
             return true;
         }
         // A function we have a summary for: only what it really passes through.
-        if CALLS.contains(&node.kind().as_ref())
+        if CALLS.contains(&kind.as_ref())
             && let Some(s) = self.summary(node)
         {
             return s.returns_source
@@ -211,10 +232,10 @@ impl Ctx {
 
 /// `this.x` (JS/TS) or `self.x` (Python): a field of the object a method runs on.
 pub(super) fn is_field<D: Doc>(node: &Node<D>) -> bool {
-    let object = node.field("object");
+    // Kind first: a field lookup on every node the walk visits is costly.
     match node.kind().as_ref() {
-        "member_expression" => object.is_some_and(|o| o.kind() == "this"),
-        "attribute" => object.is_some_and(|o| o.text() == "self"),
+        "member_expression" => node.field("object").is_some_and(|o| o.kind() == "this"),
+        "attribute" => node.field("object").is_some_and(|o| o.text() == "self"),
         _ => false,
     }
 }

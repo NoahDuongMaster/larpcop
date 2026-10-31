@@ -156,15 +156,7 @@ impl Engine {
     pub fn check(&self, root: &Path, files: &[SourceFile]) -> Result<Vec<Violation>> {
         let mut found: Vec<Violation> = files
             .par_iter()
-            .flat_map_iter(|file| {
-                let mut v = self.ast.check(file);
-                v.extend(self.max_lines.as_ref().and_then(|m| m.check(file)));
-                v.extend(self.metrics.iter().flat_map(|m| m.check(file)));
-                v.extend(self.secrets(file));
-                v.extend(self.taint_check(file));
-                v.extend(self.text.iter().flat_map(|t| t.check(file)));
-                v
-            })
+            .flat_map_iter(|file| self.check_file(file))
             .collect();
         for linter in &self.linters {
             found.extend(linter.run(root, files)?);
@@ -175,13 +167,23 @@ impl Engine {
     /// Built-in and ast-grep rules on one file's content (no external linters,
     /// which only see the disk).
     pub fn check_source(&self, file: &SourceFile) -> Vec<Violation> {
-        let mut v = self.ast.check(file);
+        let mut v = self.check_file(file);
+        sort(&mut v);
+        v
+    }
+
+    /// Every built-in rule on one file. A minified bundle (a vendored library
+    /// nobody edits) is only searched for secrets, which do ship in bundles.
+    fn check_file(&self, file: &SourceFile) -> Vec<Violation> {
+        let mut v = self.secrets(file);
+        if crate::files::minified(&file.content) {
+            return v;
+        }
+        v.extend(self.ast.check(file));
         v.extend(self.max_lines.as_ref().and_then(|m| m.check(file)));
         v.extend(self.metrics.iter().flat_map(|m| m.check(file)));
-        v.extend(self.secrets(file));
         v.extend(self.taint_check(file));
         v.extend(self.text.iter().flat_map(|t| t.check(file)));
-        sort(&mut v);
         v
     }
 

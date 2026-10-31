@@ -214,3 +214,10 @@ fn git_bytes(root: &Path, object: &str) -> Option<Vec<u8>> {
         .ok()?;
     out.status.success().then_some(out.stdout)
 }
+
+/// Minified or bundled code: lines averaging over 300 bytes. Hand-written code
+/// stays far below that; prism.js, a 67 KB bundle in 28 lines, averages 2,400.
+pub fn minified(content: &str) -> bool {
+    let lines = content.lines().count().max(1);
+    content.len() >= 1024 && content.len() / lines > 300
+}

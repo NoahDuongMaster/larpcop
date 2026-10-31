@@ -5,7 +5,9 @@ use ast_grep_core::{Doc, Node};
 use std::path::{Path, PathBuf};
 
 pub(super) fn imports<D: Doc>(root: &Node<D>, file: &Path, repo: &Path) -> Vec<Import> {
-    let mut out: Vec<Import> = go_files(file.parent().unwrap_or(repo))
+    // `_test.go` files belong to the package only when building its tests.
+    let testing = file.to_string_lossy().ends_with("_test.go");
+    let mut out: Vec<Import> = go_files(file.parent().unwrap_or(repo), testing)
         .into_iter()
         .filter(|p| p != file)
         .map(|path| Import {
@@ -37,7 +39,7 @@ pub(super) fn imports<D: Doc>(root: &Node<D>, file: &Path, repo: &Path) -> Vec<I
             || import.rsplit('/').next().unwrap_or(&import).to_string(),
             |n| n.text().to_string(),
         );
-        for path in go_files(&repo.join(sub.trim_start_matches('/'))) {
+        for path in go_files(&repo.join(sub.trim_start_matches('/')), false) {
             out.push(Import {
                 path,
                 names: Vec::new(),
@@ -49,13 +51,14 @@ pub(super) fn imports<D: Doc>(root: &Node<D>, file: &Path, repo: &Path) -> Vec<I
     out
 }
 
-fn go_files(dir: &Path) -> Vec<PathBuf> {
+fn go_files(dir: &Path, tests: bool) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
     let mut files: Vec<PathBuf> = entries
         .filter_map(|e| Some(e.ok()?.path()))
         .filter(|p| p.extension().is_some_and(|e| e == "go"))
+        .filter(|p| tests || !p.to_string_lossy().ends_with("_test.go"))
         .collect();
     files.sort();
     files

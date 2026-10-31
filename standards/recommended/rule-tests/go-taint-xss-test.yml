@@ -1,0 +1,26 @@
+id: go-taint-xss
+valid:
+  - |
+    package api
+    func Search(w http.ResponseWriter, r *http.Request) {
+    	q := r.URL.Query().Get("q")
+    	fmt.Fprintf(w, "<p>No results for %s</p>", html.EscapeString(q))
+    }
+  - |
+    package api
+    func Search(w http.ResponseWriter, r *http.Request) {
+    	tmpl.Execute(w, map[string]string{"Query": r.URL.Query().Get("q")})
+    }
+invalid:
+  - |
+    package api
+    func Search(w http.ResponseWriter, r *http.Request) {
+    	q := r.URL.Query().Get("q")
+    	fmt.Fprintf(w, "<p>No results for %s</p>", q)
+    }
+  - |
+    package api
+    func Search(w http.ResponseWriter, r *http.Request) {
+    	term := r.FormValue("term")
+    	data["term"] = template.HTML(fmt.Sprintf("<b>%s</b> not found", term))
+    }

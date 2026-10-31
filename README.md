@@ -140,7 +140,7 @@ taint:
 
 `guards` là phép kiểm trong điều kiện `if`: sau một nhánh `return`/`throw`, hoặc bên trong nhánh chạy khi phép kiểm đúng, biến được kiểm là sạch. `safe_prefix` là regex trên phần chuỗi cố định ở đầu đối số được ghép (`res.redirect("/p/" + id)` không thể dẫn ra ngoài site); nó cũng quyết định một guard `x.startsWith("…")` có đáng tin không. `exclude` là glob của file rule không báo (bộ `recommended` bỏ file test: `res.end('poking ' + req.params.user)` trong test của Express không phải lỗ hổng); hàm trong các file đó vẫn được dùng khi file khác gọi tới.
 
-Bộ `recommended` có sẵn 16 rule taint: SQL, shell, open redirect, code injection (`eval`, `vm`, `mathjs.eval`), XSS phản chiếu (`res.send` của chuỗi HTML, `innerHTML`), path traversal, SSRF, NoSQL injection (MongoDB/Mongoose; filter của Sequelize thì không), regex injection, log injection cho JS/TS; SQL, path traversal, SSRF, SSTI (`render_template_string`), code injection/deserialization, log injection cho Python (nguồn của Flask, Django, FastAPI/Starlette, aiohttp, Tornado). Dữ liệu request không qua `req.query` cũng được tính: tham số có decorator của NestJS (`@Body()`, `@Query()`; trừ khi qua `ParseIntPipe`…) tham số của hàm route khai bằng decorator (FastAPI, Flask; trừ `int`/`UUID`… mà framework đã kiểm, và `Depends(...)`), và đối số của resolver GraphQL (`(parent, args) => …`, `def resolve_x(root, info, id)`). Sink được khai theo tên đối tượng (`cp.exec`, `res.send`, `session.get`), vì `$X.exec` cũng khớp `RegExp.prototype.exec` và `$X.get` khớp `dict.get`. Lớp 1 bắt ``db.query(`…${id}`)`` ngay tại chỗ gọi; lớp 2 bắt trường hợp lớp 1 không thấy, khi chuỗi SQL được dựng ở biến hoặc ở hàm khác:
+Bộ `recommended` có sẵn 22 rule taint: SQL, shell, open redirect, code injection (`eval`, `vm`, `mathjs.eval`), XSS phản chiếu (`res.send` của chuỗi HTML, `innerHTML`), path traversal, SSRF, NoSQL injection (MongoDB/Mongoose; filter của Sequelize thì không), regex injection, log injection cho JS/TS; SQL, path traversal, SSRF, SSTI (`render_template_string`), code injection/deserialization, log injection cho Python (nguồn của Flask, Django, FastAPI/Starlette, aiohttp, Tornado); SQL, shell, path traversal, SSRF, open redirect, XSS (`template.HTML`, ghi thẳng vào `ResponseWriter`) cho Go (net/http, gin, echo, chi, gorilla/mux). Dữ liệu request không qua `req.query` cũng được tính: tham số có decorator của NestJS (`@Body()`, `@Query()`; trừ khi qua `ParseIntPipe`…) tham số của hàm route khai bằng decorator (FastAPI, Flask; trừ `int`/`UUID`… mà framework đã kiểm, và `Depends(...)`), và đối số của resolver GraphQL (`(parent, args) => …`, `def resolve_x(root, info, id)`). Sink được khai theo tên đối tượng (`cp.exec`, `res.send`, `session.get`), vì `$X.exec` cũng khớp `RegExp.prototype.exec` và `$X.get` khớp `dict.get`. Lớp 1 bắt ``db.query(`…${id}`)`` ngay tại chỗ gọi; lớp 2 bắt trường hợp lớp 1 không thấy, khi chuỗi SQL được dựng ở biến hoặc ở hàm khác:
 
 ```ts
 const name = req.query.name as string;
@@ -225,7 +225,7 @@ llm:
 
 `--json` xuất cùng dữ liệu đó cho dashboard khác dùng.
 
-**Benchmark công khai**: [`bench/`](bench) (chạy lại bằng `bench/run.sh`), trên sáu ứng dụng cố ý có lỗ hổng, mỗi bộ có đáp án từ chính dự án đó:
+**Benchmark công khai**: [`bench/`](bench) (chạy lại bằng `bench/run.sh`), trên bảy ứng dụng cố ý có lỗ hổng, mỗi bộ có đáp án từ chính dự án đó:
 
 | | larpcop | Semgrep OSS (`p/default`) | gitleaks |
 |---|---|---|---|
@@ -235,10 +235,11 @@ llm:
 | DVNA: dòng tìm thấy | **12/14** | 7/14 | – |
 | DVPWA (Python): dòng tìm thấy | **4/4** | 2/4 | – |
 | DVWS-Node (REST, GraphQL, SOAP): dòng tìm thấy | **13/15** | 7/15 | – |
+| GoVWA (Go): dòng tìm thấy | 4/4 | 4/4 | – |
 | vulnerable-node `sast/seeds` (chấm bằng script của dự án) | **11/12**, 1 báo nhầm (0 nếu bỏ rule chung chung) | 10/12, 1 báo nhầm (8/12 nếu bỏ rule chung chung) | – |
 | Secrets | trùng khớp hoàn toàn với gitleaks | – | 69 + 3 |
 
-Mỗi bộ từng là bộ kiểm chứng ở lần chạy đầu, rồi được dùng để thêm rule: NodeGoat lần đầu 8/14, DVNA 5/14 (Semgrep 7/14), vulnerable-node 10/12 với 1 báo nhầm, DVPWA 1/4 (Semgrep 2/4), DVWS-Node 10/15 (Semgrep 7/15). Thứ tự đó và từng dòng bị bỏ sót nằm trong [bench/README.md](bench/README.md).
+Mỗi bộ từng là bộ kiểm chứng ở lần chạy đầu, rồi được dùng để thêm rule: NodeGoat lần đầu 8/14, DVNA 5/14 (Semgrep 7/14), vulnerable-node 10/12 với 1 báo nhầm, DVPWA 1/4 (Semgrep 2/4), DVWS-Node 10/15 (Semgrep 7/15), GoVWA 0/4 (Semgrep 4/4). Thứ tự đó và từng dòng bị bỏ sót nằm trong [bench/README.md](bench/README.md).
 
 ## Lệnh
 
@@ -288,7 +289,7 @@ extends:
   - https://github.com/NoahDuongMaster/larpcop.git#v0.3.0//standards/recommended
 ```
 
-(`URL#tag//thư-mục` lấy một thư mục con của repo standards.) Bộ này có 53 rule ast-grep, 16 rule taint, 4 rule `text:`, cùng secrets và `dependency-vulnerability`. Rule bảo mật và metric độ dài/độ phức tạp không áp lên file test (`test/`, `tests/`, `*.spec.*`, `test_*.py`, `tests.py`…); rule chất lượng (`no-explicit-any`, `no-console`, `no-empty-catch`…) thì vẫn áp: chạy thử trên repo `expressjs/express`, test của Express chiếm 96/129 finding `validate-request-input` và 118/120 finding `function-length`. Mọi rule kèm fixture, và `larpcop test standards/recommended --require-all` chạy trong `cargo test`:
+(`URL#tag//thư-mục` lấy một thư mục con của repo standards.) Bộ này có 54 rule ast-grep, 22 rule taint, 4 rule `text:`, cùng secrets và `dependency-vulnerability`. Rule bảo mật và metric độ dài/độ phức tạp không áp lên file test (`test/`, `tests/`, `*.spec.*`, `test_*.py`, `tests.py`…); rule chất lượng (`no-explicit-any`, `no-console`, `no-empty-catch`…) thì vẫn áp: chạy thử trên repo `expressjs/express`, test của Express chiếm 96/129 finding `validate-request-input` và 118/120 finding `function-length`. File minified (dòng trung bình trên 300 byte, như `prism.js` hay `jquery-3.2.1-min.js` được commit vào repo) chỉ được quét secrets, vì secret có thể nằm trong bundle; method Go được biết theo kiểu receiver (`Profile.Load`), method Rust theo kiểu của `impl`. Mọi rule kèm fixture, và `larpcop test standards/recommended --require-all` chạy trong `cargo test`:
 
 - **Biến lỗi bảo mật thành quy ước cú pháp** (không cần taint): SQL chỉ qua tham số (`no-sql-interpolation`, `py-no-sql-interpolation`, `go-no-sql-sprintf`; chuỗi có dạng câu SQL mà được ghép hay format ở bất kỳ đâu cũng bị bắt, không chỉ trong lời gọi `query`), lệnh shell chỉ qua mảng tham số (`no-shell-interpolation`, `py-no-shell-true`), không `eval`/`new Function`/`exec`, không gán HTML từ biến vào `innerHTML`, không `dangerouslySetInnerHTML` hay `bypassSecurityTrust*` (Angular), không `serve-index`, không MD5/SHA-1, không `$where` của MongoDB, input của request phải qua schema (`validate-request-input`), không tắt kiểm chứng chỉ TLS (`py-no-tls-verify-off`, `go-no-insecure-tls`), `yaml.safe_load` (có auto-fix), regex có lượng từ lồng nhau (ReDoS), tắt autoescape của template, so sánh mật khẩu dạng plain text, secret của session/JWT viết cứng, XML bật external entity (XXE), thư viện deserialize chạy được code (`node-serialize`, `pickle`), hàm merge đệ quy không chặn `__proto__` (prototype pollution), ghi user vào session phía server mà không cấp session id mới (session fixation: `req.session.regenerate`, `new_session` của aiohttp).
 - **Không tắt kiểm tra**: `@ts-ignore`, `@ts-expect-error`, `eslint-disable`, `biome-ignore` là vi phạm; `any`, catch rỗng, `debugger` (có auto-fix).
@@ -438,7 +439,7 @@ Binary nặng 47 MB trên đĩa, nhưng chỉ khoảng **4 MB khi tải về** (
 
 ## Đã kiểm chứng
 
-`cargo test` có 115 test:
+`cargo test` có 116 test:
 
 - Unit: guard, tìm shell, path trong patch Codex; đọc lockfile thật của npm 11, pnpm 11, uv 0.11, cargo 1.98, bun 1.4, bundler (kèm yarn v1/Berry, Poetry, go.mod, NuGet, Gradle, Composer, pom.xml, csproj, và các entry registry riêng/git/workspace phải bị bỏ qua); manifest; nhận diện lệnh cài; thiết lập gate của 4 package manager.
 - Dashboard: số mở/baseline theo rule, xu hướng nợ qua lịch sử git, trang không có script.

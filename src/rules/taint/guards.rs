@@ -58,7 +58,9 @@ fn exits<D: Doc>(branch: &Node<D>) -> bool {
         .filter(|c| c.is_named() && c.kind() != "comment")
         .last();
     last.is_some_and(|l| {
-        EXITS.contains(&l.kind().as_ref())
+        // Go wraps a block's statements in a `statement_list`.
+        (l.kind() == "statement_list" && exits(&l))
+            || EXITS.contains(&l.kind().as_ref())
             || (l.kind() == "expression_statement"
                 && l.children().any(|c| EXITS.contains(&c.kind().as_ref())))
     })

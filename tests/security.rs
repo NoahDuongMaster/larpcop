@@ -184,3 +184,31 @@ fn taint_rules_follow_request_data_through_variables() {
         .collect();
     assert_eq!(hits, [("taint-sql".to_string(), 4)], "{}", run.stdout());
 }
+
+#[test]
+fn minified_bundles_are_only_searched_for_secrets() {
+    let repo = repo(
+        "secrets: {}\ntaint:\n  - id: taint-code\n    languages: [JavaScript]\n    message: Request data reaches eval.\n    \
+         sources: [\"req.query\"]\n    sinks: [\"eval($X)\"]\n",
+    );
+    let token = format!("ghp_{}", "x7Rk2mQ9vTz4LpW8sYb3NcD6fJh1Ga5Ue0Ki");
+    let body: String = (0..40)
+        .map(|i| format!("function f{i}(req){{eval(req.query.c{i});}}"))
+        .collect();
+    repo.write(
+        "public/libs/bundle.js",
+        &format!("{body}\nvar t=\"{token}\";\n"),
+    );
+    repo.write("src/app.js", "function h(req) { eval(req.query.code); }\n");
+    let run = repo.run(&["check"]);
+    let out = run.stdout();
+    assert!(
+        out.contains("src/app.js") && out.contains("taint-code"),
+        "{out}"
+    );
+    assert!(
+        out.contains("bundle.js") && out.contains("github-pat"),
+        "{out}"
+    );
+    assert_eq!(out.matches("taint-code").count(), 1, "{out}");
+}

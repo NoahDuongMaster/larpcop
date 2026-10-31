@@ -1,0 +1,9 @@
+{
+  "source": "GoVWA (0c34/govwa 4058f79): the vulnerability modules (vulnerability/sqli, vulnerability/xss) whose flaw sits on one line, located by the project's own comments (\"here is the vulnerable query\", \"vulnerable function\", \"this will render the javascript\"). Written before any tool ran on GoVWA. Left out: IDOR and client-side authentication (logic), and the XXE module, which is an empty stub.",
+  "lines": [
+    {"file": "vulnerability/sqli/function.go", "line": 39, "label": "SQL injection (fmt.Sprintf of the uid form value, called from sqli.go)"},
+    {"file": "vulnerability/xss/xss.go", "line": 59, "label": "Reflected XSS (template.HTML of the search term)"},
+    {"file": "vulnerability/xss/xss.go", "line": 63, "label": "Reflected XSS (template.HTML of the search term, second branch)"},
+    {"file": "vulnerability/xss/xss.go", "line": 100, "label": "XSS in inline JavaScript (template.HTML of a script built from the uid form value)"}
+  ]
+}

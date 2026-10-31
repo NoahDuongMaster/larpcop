@@ -37,6 +37,8 @@ SECURITY = {
     "no-session-fixation", "py-no-session-fixation",
     "no-jwt-none-algorithm", "py-no-jwt-unverified", "no-ldap-interpolation", "py-no-ldap-interpolation",
     "no-env-file-secrets",
+    "go-no-unsafe-template-type", "go-taint-sql", "go-taint-shell", "go-taint-path", "go-taint-ssrf",
+    "go-taint-redirect", "go-taint-xss",
 }
 
 

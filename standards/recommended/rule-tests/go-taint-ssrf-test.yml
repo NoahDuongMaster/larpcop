@@ -1,0 +1,8 @@
+id: go-taint-ssrf
+valid:
+- "package api\nfunc Proxy(w http.ResponseWriter, r *http.Request) {\n\tresp, _ := http.Get(\"https://api.example.com/status\")\n\t_ = resp\n}\n"
+- "package api\nfunc Who(w http.ResponseWriter, r *http.Request) {\n\tlog.Printf(\"from %s\", r.Header.Get(\"User-Agent\"))\n}\n"
+invalid:
+- "package api\nfunc Proxy(w http.ResponseWriter, r *http.Request) {\n\ttarget := r.URL.Query().Get(\"url\")\n\tresp, _ := http.Get(target)\n\t_ = resp\n}\n"
+- "package api\nfunc Hook(c echo.Context) error {\n\treq, _ := http.NewRequestWithContext(ctx, \"POST\", c.FormValue(\"callback\"), nil)\n\t_, err := client.Do(req)\n\treturn err\n}\n"
+- "package api\nfunc Fetch(w http.ResponseWriter, r *http.Request) {\n\tresp, _ := client.Get(r.URL.Query().Get(\"u\"))\n\t_ = resp\n}\n"

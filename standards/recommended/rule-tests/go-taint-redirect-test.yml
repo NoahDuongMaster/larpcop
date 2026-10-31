@@ -1,0 +1,19 @@
+id: go-taint-redirect
+valid:
+  - |
+    package api
+    func Back(w http.ResponseWriter, r *http.Request) {
+    	http.Redirect(w, r, "/items/"+r.URL.Query().Get("id"), http.StatusFound)
+    }
+invalid:
+  - |
+    package api
+    func Back(w http.ResponseWriter, r *http.Request) {
+    	next := r.URL.Query().Get("next")
+    	http.Redirect(w, r, next, http.StatusFound)
+    }
+  - |
+    package api
+    func Back(c *gin.Context) {
+    	c.Redirect(302, c.Query("return_to"))
+    }

@@ -6,39 +6,113 @@
   "message": "SQL built with fmt.Sprintf or string concatenation.",
   "note": "Use placeholders: db.QueryContext(ctx, \"... WHERE id = $1\", id).",
   "rule": {
-    "kind": "call_expression",
-    "all": [
+    "any": [
       {
-        "has": {
-          "field": "function",
-          "kind": "selector_expression",
-          "has": {
-            "field": "field",
-            "regex": "^(Query|QueryContext|QueryRow|QueryRowContext|Exec|ExecContext)$"
+        "kind": "call_expression",
+        "all": [
+          {
+            "has": {
+              "field": "function",
+              "kind": "selector_expression",
+              "has": {
+                "field": "field",
+                "regex": "^(Query|QueryContext|QueryRow|QueryRowContext|Exec|ExecContext)$"
+              }
+            }
+          },
+          {
+            "has": {
+              "field": "arguments",
+              "has": {
+                "any": [
+                  {
+                    "kind": "call_expression",
+                    "has": {
+                      "field": "function",
+                      "regex": "^fmt\\.Sprintf$"
+                    }
+                  },
+                  {
+                    "kind": "binary_expression",
+                    "has": {
+                      "field": "operator",
+                      "regex": "^\\+$"
+                    }
+                  }
+                ]
+              }
+            }
           }
-        }
+        ]
       },
       {
-        "has": {
-          "field": "arguments",
-          "has": {
-            "any": [
-              {
-                "kind": "call_expression",
-                "has": {
-                  "field": "function",
-                  "regex": "^fmt\\.Sprintf$"
-                }
-              },
-              {
-                "kind": "binary_expression",
-                "has": {
-                  "field": "operator",
-                  "regex": "^\\+$"
-                }
-              }
-            ]
+        "kind": "call_expression",
+        "not": {
+          "inside": {
+            "kind": "argument_list"
           }
+        },
+        "all": [
+          {
+            "has": {
+              "field": "function",
+              "regex": "^fmt\\.Sprintf$"
+            }
+          },
+          {
+            "has": {
+              "field": "arguments",
+              "has": {
+                "nthChild": 1,
+                "regex": "(?s)^[rRbBuUfF]*[`'\\\"]{1,3}\\s*(SELECT\\s.+?\\sFROM\\s|INSERT\\s+INTO\\s|UPDATE\\s+\\S+\\s+SET\\s|DELETE\\s+FROM\\s|(?i:insert\\s+into\\s|delete\\s+from\\s|update\\s+[\\w.\\\"`]+\\s+set\\s|select\\s+[\\w.*,\\s\\\"`()]+?\\s+from\\s+[\\w.\\\"`]))"
+              }
+            }
+          },
+          {
+            "has": {
+              "field": "arguments",
+              "has": {
+                "nthChild": 2
+              }
+            }
+          }
+        ]
+      },
+      {
+        "kind": "binary_expression",
+        "regex": "(?s)^[rRbBuUfF]*[`'\\\"]{1,3}\\s*(SELECT\\s.+?\\sFROM\\s|INSERT\\s+INTO\\s|UPDATE\\s+\\S+\\s+SET\\s|DELETE\\s+FROM\\s|(?i:insert\\s+into\\s|delete\\s+from\\s|update\\s+[\\w.\\\"`]+\\s+set\\s|select\\s+[\\w.*,\\s\\\"`()]+?\\s+from\\s+[\\w.\\\"`]))",
+        "has": {
+          "field": "operator",
+          "regex": "^\\+$"
+        },
+        "all": [
+          {
+            "has": {
+              "stopBy": "end",
+              "any": [
+                {
+                  "kind": "identifier"
+                },
+                {
+                  "kind": "call_expression"
+                }
+              ]
+            }
+          }
+        ],
+        "not": {
+          "any": [
+            {
+              "inside": {
+                "kind": "binary_expression"
+              }
+            },
+            {
+              "inside": {
+                "kind": "argument_list"
+              }
+            }
+          ]
         }
       }
     ]

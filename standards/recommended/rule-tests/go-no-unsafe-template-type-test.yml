@@ -1,0 +1,7 @@
+id: go-no-unsafe-template-type
+valid:
+  - "package m\nfunc f() { data[\"msg\"] = template.HTML(\"<b>Saved</b>\") }"
+  - "package m\nfunc f(raw string) { data[\"body\"] = template.HTML(policy.Sanitize(raw)) }"
+invalid:
+  - "package m\nfunc f(term string) { data[\"term\"] = template.HTML(fmt.Sprintf(\"<b>%s</b>\", term)) }"
+  - "package m\nfunc f(js string) { data[\"js\"] = template.JS(js) }"

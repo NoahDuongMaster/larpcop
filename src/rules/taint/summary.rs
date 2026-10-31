@@ -81,15 +81,23 @@ pub fn with_unique_methods(mut s: Summaries) -> Summaries {
     s
 }
 
-/// The class a method is defined in.
+/// The class a method is defined in: the enclosing class, the receiver type
+/// of a Go method (`func (p *Profile) Load()`), the type of a Rust `impl`.
 fn class_of<D: Doc>(f: &Node<D>) -> Option<String> {
+    if f.kind() == "method_declaration"
+        && let Some(receiver) = f.field("receiver")
+    {
+        let ty = receiver.dfs().find(|n| n.kind() == "type_identifier")?;
+        return Some(ty.text().to_string());
+    }
     let class = f.ancestors().take_while(|a| !is_function(a)).find(|a| {
         matches!(
             a.kind().as_ref(),
-            "class_definition" | "class_declaration" | "class"
+            "class_definition" | "class_declaration" | "class" | "impl_item"
         )
     })?;
-    Some(class.field("name")?.text().to_string())
+    let name = class.field("name").or_else(|| class.field("type"))?;
+    Some(name.text().split('<').next()?.trim().to_string())
 }
 
 fn named<'a, D: Doc>(
@@ -166,6 +174,7 @@ impl TaintRule {
                 guards: ctx.guards.clone(),
                 summaries: out.clone(),
                 source_texts: ctx.source_texts.clone(),
+                sourcing: Default::default(),
             };
             let params_only = round.clone_without_sources();
             for (name, f, params) in defs {
@@ -229,6 +238,7 @@ impl Ctx {
             guards: self.guards.clone(),
             summaries: self.summaries.clone(),
             source_texts: Vec::new(),
+            sourcing: Default::default(),
         }
     }
 }

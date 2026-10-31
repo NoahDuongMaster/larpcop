@@ -16,8 +16,7 @@ use flow::Reached;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
-use summary::Summaries;
+use std::sync::Mutex;
 
 /// How many imports deep summaries are followed.
 const IMPORT_DEPTH: usize = 2;
@@ -41,8 +40,9 @@ pub struct TaintRule {
     /// Per language: (sources, sinks, sanitizers, guards), compiled for that grammar.
     langs: Vec<(SupportLang, scan::Indexed)>,
     root: PathBuf,
-    /// Summaries of imported files, computed once per run.
-    imported: Mutex<HashMap<PathBuf, Arc<Summaries>>>,
+    /// Summaries of imported files by (path, import depth), computed once per
+    /// run even when several threads need the same file at once.
+    imported: Mutex<HashMap<(PathBuf, usize), prepare::Slot>>,
 }
 
 const VARIABLES: [&str; 3] = [
@@ -53,11 +53,13 @@ const VARIABLES: [&str; 3] = [
 
 impl TaintRule {
     pub fn new(cfg: &TaintConfig, typed: typed::Typed, root: PathBuf) -> Result<Self> {
-        let compile = |lang: SupportLang, list: &[String]| -> Result<Vec<Pattern>> {
+        let compile = |lang: SupportLang, list: &[String]| -> Result<Vec<scan::Compiled>> {
             list.iter()
                 .flat_map(|p| super::pattern_fixes::variants(p))
                 .map(|p| {
-                    pattern(&p, lang).with_context(|| format!("taint `{}`: pattern `{p}`", cfg.id))
+                    let compiled = pattern(&p, lang)
+                        .with_context(|| format!("taint `{}`: pattern `{p}`", cfg.id))?;
+                    Ok((compiled, scan::needle(&p)))
                 })
                 .collect()
         };

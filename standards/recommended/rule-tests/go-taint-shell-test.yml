@@ -1,0 +1,21 @@
+id: go-taint-shell
+valid:
+  - |
+    package api
+    func Ping(w http.ResponseWriter, r *http.Request) {
+    	host := r.URL.Query().Get("host")
+    	exec.Command("ping", "-c", "1", host).Run()
+    }
+invalid:
+  - |
+    package api
+    func Ping(w http.ResponseWriter, r *http.Request) {
+    	host := r.URL.Query().Get("host")
+    	exec.Command("sh", "-c", "ping -c 1 "+host).Run()
+    }
+  - |
+    package api
+    func Run(c *gin.Context) {
+    	tool := c.PostForm("tool")
+    	exec.CommandContext(c, tool, "--version").Run()
+    }

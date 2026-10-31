@@ -1,0 +1,12 @@
+id: go-taint-sql
+valid:
+- "package api\nfunc User(w http.ResponseWriter, r *http.Request) {\n\tid := r.URL.Query().Get(\"id\")\n\trow := db.QueryRowContext(r.Context(), \"SELECT name FROM users WHERE id = $1\", id)\n\t_ = row\n\
+  }\n"
+- "package api\nfunc User(c *gin.Context) {\n\tid, err := strconv.Atoi(c.Param(\"id\"))\n\tif err != nil {\n\t\treturn\n\t}\n\tdb.Raw(fmt.Sprintf(\"SELECT * FROM users WHERE id = %d\", id))\n}\n"
+- "package store\nfunc Find(id string) {\n\tq := \"SELECT * FROM t WHERE id = \" + id\n\trows, _ := db.Query(q)\n\t_ = rows\n}\n"
+- "package api\nfunc Update(w http.ResponseWriter, r *http.Request) {\n\tstmt, _ := db.Prepare(\"UPDATE profile SET name = ? WHERE id = ?\")\n\tstmt.Exec(r.FormValue(\"name\"), r.FormValue(\"uid\"))\n}\n"
+- "package api\nfunc Who(c *gin.Context) {\n\tlog.Printf(\"from %s for %s\", c.Request.Header.Get(\"User-Agent\"), c.Query(\"q\"))\n}\n"
+invalid:
+- "package api\nfunc User(w http.ResponseWriter, r *http.Request) {\n\tname := r.FormValue(\"name\")\n\tq := \"SELECT * FROM users WHERE name = '\" + name + \"'\"\n\trows, _ := db.Query(q)\n\t_ = rows\n\
+  }\n"
+- "package api\nfunc User(c *gin.Context) {\n\tsort := c.Query(\"sort\")\n\tdb.Raw(fmt.Sprintf(\"SELECT * FROM users ORDER BY %s\", sort))\n}\n"

@@ -1,0 +1,686 @@
+[
+ {
+  "file": "src/main/java/org/joychou/controller/CommandInject.java",
+  "start": 24,
+  "end": 32,
+  "method": "codeInject",
+  "route": "/codeinject",
+  "category": "shell",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/CommandInject.java",
+  "start": 39,
+  "end": 49,
+  "method": "codeInjectHost",
+  "route": "/codeinject/host",
+  "category": "shell",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/CommandInject.java",
+  "start": 51,
+  "end": 62,
+  "method": "codeInjectSec",
+  "route": "/codeinject/sec",
+  "category": "shell",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/Deserialize.java",
+  "start": 36,
+  "end": 54,
+  "method": "rememberMeVul",
+  "route": "/rememberMe/vuln",
+  "category": "deserialization",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/Deserialize.java",
+  "start": 61,
+  "end": 85,
+  "method": "rememberMeBlackClassCheck",
+  "route": "/rememberMe/security",
+  "category": "deserialization",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/Deserialize.java",
+  "start": 88,
+  "end": 98,
+  "method": "Jackson",
+  "route": "/jackson",
+  "category": "deserialization",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/Fastjson.java",
+  "start": 17,
+  "end": 28,
+  "method": "Deserialize",
+  "route": "/deserialize",
+  "category": "deserialization",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/PathTraversal.java",
+  "start": 24,
+  "end": 27,
+  "method": "getImage",
+  "route": "/path_traversal/vul",
+  "category": "path",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/PathTraversal.java",
+  "start": 29,
+  "end": 36,
+  "method": "getImageSec",
+  "route": "/path_traversal/sec",
+  "category": "path",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/QLExpress.java",
+  "start": 20,
+  "end": 29,
+  "method": "vuln1",
+  "route": "/vuln1",
+  "category": "code",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/QLExpress.java",
+  "start": 31,
+  "end": 43,
+  "method": "sec",
+  "route": "/sec",
+  "category": "code",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/Rce.java",
+  "start": 30,
+  "end": 56,
+  "method": "CommandExec",
+  "route": "/runtime/exec",
+  "category": "shell",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/Rce.java",
+  "start": 62,
+  "end": 83,
+  "method": "processBuilder",
+  "route": "/ProcessBuilder",
+  "category": "shell",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/Rce.java",
+  "start": 94,
+  "end": 101,
+  "method": "jsEngine",
+  "route": "/jscmd",
+  "category": "code",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/Rce.java",
+  "start": 110,
+  "end": 114,
+  "method": "yarm",
+  "route": "/vuln/yarm",
+  "category": "deserialization",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/Rce.java",
+  "start": 116,
+  "end": 120,
+  "method": "secYarm",
+  "route": "/sec/yarm",
+  "category": "deserialization",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/Rce.java",
+  "start": 126,
+  "end": 130,
+  "method": "groovyshell",
+  "route": "groovy",
+  "category": "code",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SQLI.java",
+  "start": 51,
+  "end": 86,
+  "method": "jdbc_sqli_vul",
+  "route": "/jdbc/vuln",
+  "category": "sql",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SQLI.java",
+  "start": 94,
+  "end": 131,
+  "method": "jdbc_sqli_sec",
+  "route": "/jdbc/sec",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SQLI.java",
+  "start": 138,
+  "end": 173,
+  "method": "jdbc_ps_vuln",
+  "route": "/jdbc/ps/vuln",
+  "category": "sql",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SQLI.java",
+  "start": 181,
+  "end": 184,
+  "method": "mybatisVuln01",
+  "route": "/mybatis/vuln01",
+  "category": "sql",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SQLI.java",
+  "start": 191,
+  "end": 194,
+  "method": "mybatisVuln02",
+  "route": "/mybatis/vuln02",
+  "category": "sql",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SQLI.java",
+  "start": 201,
+  "end": 204,
+  "method": "mybatisVuln03",
+  "route": "/mybatis/orderby/vuln03",
+  "category": "sql",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SQLI.java",
+  "start": 211,
+  "end": 214,
+  "method": "mybatisSec01",
+  "route": "/mybatis/sec01",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SQLI.java",
+  "start": 220,
+  "end": 223,
+  "method": "mybatisSec02",
+  "route": "/mybatis/sec02",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SQLI.java",
+  "start": 230,
+  "end": 233,
+  "method": "mybatisSec03",
+  "route": "/mybatis/sec03",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SQLI.java",
+  "start": 240,
+  "end": 243,
+  "method": "mybatisOrderBySec04",
+  "route": "/mybatis/orderby/sec04",
+  "category": "sql",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 44,
+  "end": 47,
+  "method": "URLConnectionVuln",
+  "route": "/urlConnection/vuln",
+  "category": "ssrf",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 50,
+  "end": 67,
+  "method": "URLConnectionSec",
+  "route": "/urlConnection/sec",
+  "category": "ssrf",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 74,
+  "end": 84,
+  "method": "httpURLConnection",
+  "route": "/HttpURLConnection/sec",
+  "category": "ssrf",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 87,
+  "end": 90,
+  "method": "httpURLConnectionVuln",
+  "route": "/HttpURLConnection/vuln",
+  "category": "ssrf",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 97,
+  "end": 107,
+  "method": "request",
+  "route": "/request/sec",
+  "category": "ssrf",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 118,
+  "end": 146,
+  "method": "openStream",
+  "route": "/openStream",
+  "category": "ssrf",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 153,
+  "end": 165,
+  "method": "ImageIO",
+  "route": "/ImageIO/sec",
+  "category": "ssrf",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 168,
+  "end": 180,
+  "method": "okhttp",
+  "route": "/okhttp/sec",
+  "category": "ssrf",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 187,
+  "end": 199,
+  "method": "HttpClient",
+  "route": "/httpclient/sec",
+  "category": "ssrf",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 207,
+  "end": 219,
+  "method": "commonsHttpClient",
+  "route": "/commonsHttpClient/sec",
+  "category": "ssrf",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 226,
+  "end": 238,
+  "method": "Jsoup",
+  "route": "/Jsoup/sec",
+  "category": "ssrf",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 246,
+  "end": 258,
+  "method": "IOUtils",
+  "route": "/IOUtils/sec",
+  "category": "ssrf",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 265,
+  "end": 268,
+  "method": "HttpSyncClients",
+  "route": "/HttpSyncClients/vuln",
+  "category": "ssrf",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 277,
+  "end": 282,
+  "method": "RestTemplateUrlBanRedirects",
+  "route": "/restTemplate/vuln1",
+  "category": "ssrf",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 285,
+  "end": 290,
+  "method": "RestTemplateUrl",
+  "route": "/restTemplate/vuln2",
+  "category": "ssrf",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 298,
+  "end": 301,
+  "method": "hutoolHttp",
+  "route": "/hutool/vuln",
+  "category": "ssrf",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSRF.java",
+  "start": 308,
+  "end": 315,
+  "method": "DnsRebind",
+  "route": "/dnsrebind/vuln",
+  "category": "ssrf",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SSTI.java",
+  "start": 26,
+  "end": 38,
+  "method": "velocity",
+  "route": "/velocity",
+  "category": "ssti",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SpEL.java",
+  "start": 24,
+  "end": 28,
+  "method": "spel_vuln1",
+  "route": "/spel/vuln1",
+  "category": "code",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SpEL.java",
+  "start": 35,
+  "end": 42,
+  "method": "spel_vuln2",
+  "route": "spel/vuln2",
+  "category": "code",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/SpEL.java",
+  "start": 47,
+  "end": 54,
+  "method": "spel_sec",
+  "route": "spel/sec",
+  "category": "code",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/URLRedirect.java",
+  "start": 31,
+  "end": 34,
+  "method": "redirect",
+  "route": "/redirect",
+  "category": "redirect",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/URLRedirect.java",
+  "start": 40,
+  "end": 46,
+  "method": "setHeader",
+  "route": "/setHeader",
+  "category": "redirect",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/URLRedirect.java",
+  "start": 52,
+  "end": 57,
+  "method": "sendRedirect",
+  "route": "/sendRedirect",
+  "category": "redirect",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/URLRedirect.java",
+  "start": 64,
+  "end": 74,
+  "method": "forward",
+  "route": "/forward",
+  "category": "redirect",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/URLRedirect.java",
+  "start": 81,
+  "end": 92,
+  "method": "sendRedirect_seccode",
+  "route": "/sendRedirect/sec",
+  "category": "redirect",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XSS.java",
+  "start": 27,
+  "end": 31,
+  "method": "reflect",
+  "route": "/reflect",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XSS.java",
+  "start": 55,
+  "end": 59,
+  "method": "show",
+  "route": "/stored/show",
+  "category": "xss",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XSS.java",
+  "start": 65,
+  "end": 69,
+  "method": "safe",
+  "route": "/safe",
+  "category": "xss",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XStreamRce.java",
+  "start": 24,
+  "end": 31,
+  "method": "parseXml",
+  "route": "/xstream",
+  "category": "deserialization",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 48,
+  "end": 60,
+  "method": "xmlReaderVuln",
+  "route": "/xmlReader/vuln",
+  "category": "xxe",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 63,
+  "end": 83,
+  "method": "xmlReaderSec",
+  "route": "/xmlReader/sec",
+  "category": "xxe",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 86,
+  "end": 100,
+  "method": "SAXBuilderVuln",
+  "route": "/SAXBuilder/vuln",
+  "category": "xxe",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 102,
+  "end": 121,
+  "method": "SAXBuilderSec",
+  "route": "/SAXBuilder/sec",
+  "category": "xxe",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 123,
+  "end": 139,
+  "method": "SAXReaderVuln",
+  "route": "/SAXReader/vuln",
+  "category": "xxe",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 141,
+  "end": 158,
+  "method": "SAXReaderSec",
+  "route": "/SAXReader/sec",
+  "category": "xxe",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 160,
+  "end": 175,
+  "method": "SAXParserVuln",
+  "route": "/SAXParser/vuln",
+  "category": "xxe",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 178,
+  "end": 195,
+  "method": "SAXParserSec",
+  "route": "/SAXParser/sec",
+  "category": "xxe",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 198,
+  "end": 211,
+  "method": "DigesterVuln",
+  "route": "/Digester/vuln",
+  "category": "xxe",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 213,
+  "end": 230,
+  "method": "DigesterSec",
+  "route": "/Digester/sec",
+  "category": "xxe",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 236,
+  "end": 261,
+  "method": "DocumentBuilderVuln",
+  "route": "/DocumentBuilder/vuln",
+  "category": "xxe",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 263,
+  "end": 283,
+  "method": "DocumentBuilderSec",
+  "route": "/DocumentBuilder/Sec",
+  "category": "xxe",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 286,
+  "end": 309,
+  "method": "DocumentBuilderXincludeVuln",
+  "route": "/DocumentBuilder/xinclude/vuln",
+  "category": "xxe",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 312,
+  "end": 339,
+  "method": "DocumentBuilderXincludeSec",
+  "route": "/DocumentBuilder/xinclude/sec",
+  "category": "xxe",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 342,
+  "end": 359,
+  "method": "XMLReaderVuln",
+  "route": "/XMLReader/vuln",
+  "category": "xxe",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 362,
+  "end": 381,
+  "method": "XMLReaderSec",
+  "route": "/XMLReader/sec",
+  "category": "xxe",
+  "vulnerable": false
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/XXE.java",
+  "start": 388,
+  "end": 399,
+  "method": "DocumentHelper",
+  "route": "/DocumentHelper/vuln",
+  "category": "xxe",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/othervulns/ooxmlXXE.java",
+  "start": 43,
+  "end": 74,
+  "method": "ooxml_xxe",
+  "route": "/readxlsx",
+  "category": "xxe",
+  "vulnerable": true
+ },
+ {
+  "file": "src/main/java/org/joychou/controller/othervulns/xlsxStreamerXXE.java",
+  "start": 34,
+  "end": 37,
+  "method": "xllx_streamer_xxe",
+  "route": "/readxlsx",
+  "category": "xxe",
+  "vulnerable": true
+ }
+]

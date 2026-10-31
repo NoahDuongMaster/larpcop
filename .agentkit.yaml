@@ -18,6 +18,7 @@ dependencies:
     - cargo:lsp-types
     - cargo:percent-encoding
     - cargo:rmcp
+    - cargo:roxmltree
     - cargo:tokio
     - cargo:toml
     - cargo:ureq

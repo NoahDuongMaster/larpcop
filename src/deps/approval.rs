@@ -79,11 +79,14 @@ pub(super) fn known_now(root: &Path, cwd: &Path) -> Direct {
     let nearby = cwd
         .ancestors()
         .take_while(|dir| dir.starts_with(root))
-        .flat_map(|dir| {
-            manifest::NAMES.iter().filter_map(move |name| {
-                let content = fs::read_to_string(dir.join(name)).ok()?;
-                manifest::parse(name, &content)?.ok()
-            })
+        .flat_map(|dir| fs::read_dir(dir).into_iter().flatten().flatten())
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !manifest::is_manifest(&name) {
+                return None;
+            }
+            let content = fs::read_to_string(entry.path()).ok()?;
+            manifest::parse(&name, &content)?.ok()
         })
         .flatten();
     let mut out = known(&view);

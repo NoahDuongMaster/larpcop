@@ -61,6 +61,8 @@ const PIP_FLAGS: &[&str] = &[
     "-P",
     "--upgrade-package",
 ];
+const GEM_FLAGS: &[&str] = &["-v", "--version", "--source", "--group", "--require"];
+const DOTNET_FLAGS: &[&str] = &["-v", "--version", "-f", "--framework", "-s", "--source"];
 const CARGO_FLAGS: &[&str] = &[
     "--git",
     "--path",
@@ -112,6 +114,13 @@ fn parse(tokens: &[String]) -> Vec<Request> {
         | ["uv" | "poetry", "add", rest @ ..] => (PyPI, rest, PIP_FLAGS),
         ["cargo", "add", rest @ ..] => (Cargo, rest, CARGO_FLAGS),
         ["go", "get", rest @ ..] => (Go, rest, &[][..]),
+        ["gem", "install", rest @ ..] | ["bundle", "add", rest @ ..] => (RubyGems, rest, GEM_FLAGS),
+        ["composer", "require", rest @ ..] => (Packagist, rest, &[][..]),
+        // dotnet add [PROJECT] package NAME [--version V]
+        ["dotnet", "add", rest @ ..] => match rest.iter().position(|w| *w == "package") {
+            Some(at) => (NuGet, &rest[at + 1..], DOTNET_FLAGS),
+            None => return Vec::new(),
+        },
         _ => return Vec::new(),
     };
     let mut out = Vec::new();
@@ -158,6 +167,12 @@ fn registry_name(eco: Ecosystem, spec: &str) -> Option<String> {
         }
         Ecosystem::Cargo | Ecosystem::Go => {
             Some(spec.split('@').next().unwrap_or(spec).to_string())
+        }
+        // `composer require vendor/pkg:^2`
+        Ecosystem::Packagist => (!local && spec.contains('/'))
+            .then(|| eco.normalize(spec.split(':').next().unwrap_or(spec))),
+        Ecosystem::RubyGems | Ecosystem::NuGet | Ecosystem::Maven => {
+            (!local).then(|| eco.normalize(spec))
         }
     }
 }
@@ -213,6 +228,18 @@ mod tests {
             ["npm:slugify"]
         );
         assert_eq!(names("npm i zod > install.log 2>/dev/null"), ["npm:zod"]);
+        assert_eq!(
+            names("gem install rack -v 2.2.3 && bundle add Nokogiri"),
+            ["rubygems:rack", "rubygems:Nokogiri"]
+        );
+        assert_eq!(
+            names("dotnet add src/App.csproj package Newtonsoft.Json --version 12.0.1"),
+            ["nuget:newtonsoft.json"]
+        );
+        assert_eq!(
+            names("composer require Guzzlehttp/Guzzle:7.4.0"),
+            ["composer:guzzlehttp/guzzle"]
+        );
         assert_eq!(
             names("npm i zod & pnpm add yup &> log"),
             ["npm:zod", "npm:yup"]

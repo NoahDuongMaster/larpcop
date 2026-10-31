@@ -92,7 +92,11 @@ pub fn tree(root: &Path, rev: &str) -> Vec<String> {
 }
 
 fn walk(root: &Path, start: &Path) -> Vec<String> {
+    // Dot-directories hold code too (`.github/workflows`, `.env`, `.husky`):
+    // only `.git` itself and git-ignored files are skipped.
     WalkBuilder::new(start)
+        .hidden(false)
+        .filter_entry(|e| e.file_name() != ".git")
         .build()
         .filter_map(Result::ok)
         .filter(|e| e.file_type().is_some_and(|t| t.is_file()))

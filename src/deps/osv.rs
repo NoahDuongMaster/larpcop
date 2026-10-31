@@ -67,6 +67,10 @@ pub fn system(eco: Ecosystem) -> &'static str {
         Ecosystem::PyPI => "PyPI",
         Ecosystem::Cargo => "crates.io",
         Ecosystem::Go => "Go",
+        Ecosystem::RubyGems => "RubyGems",
+        Ecosystem::NuGet => "NuGet",
+        Ecosystem::Maven => "Maven",
+        Ecosystem::Packagist => "Packagist",
     }
 }
 

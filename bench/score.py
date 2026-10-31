@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Scores SAST results against OWASP Juice Shop's own vulnerability markers.
+"""Scores SAST results against known vulnerable lines.
 
-Ground truth: every `// vuln-code-snippet vuln-line <challenge>` comment in the
-Juice Shop source, written by the Juice Shop maintainers for their coding
-challenges (outside test/ and data/static/codefixes/). A tool finds a marked
-line when one of its findings spans it, give or take WINDOW lines.
+Juice Shop: every `// vuln-code-snippet vuln-line <challenge>` comment, written
+by the Juice Shop maintainers for their coding challenges (outside test/ and
+data/static/codefixes/). Other targets: a truth file (`--truth x.json`) fixed
+before any tool ran on them. A tool finds a line when one of its findings spans
+it, give or take WINDOW lines.
 
-Usage: score.py JUICE_SHOP_DIR AGENTKIT_JSON SEMGREP_JSON GITLEAKS_JSON
+Usage: score.py REPO_DIR AGENTKIT_JSON SEMGREP_JSON [GITLEAKS_JSON] [--truth TRUTH_JSON]
 """
 import collections
 import json
@@ -24,6 +25,8 @@ SECURITY = {
     "no-inner-html", "no-dangerously-set-inner-html", "no-bypass-security-trust", "no-directory-listing",
     "no-weak-hash", "py-no-weak-hash", "no-mongo-where", "py-no-tls-verify-off", "go-no-insecure-tls",
     "py-yaml-safe-load", "secrets", "validate-request-input", "dependency-vulnerability",
+    "gha-script-injection", "gha-curl-pipe-shell", "gha-unpinned-action", "gha-pr-target-checkout",
+    "tf-public-bucket-acl", "tf-open-ingress", "tf-publicly-accessible-db", "tf-iam-wildcard",
 }
 
 
@@ -71,12 +74,22 @@ def secrets_parity(ak, gl):
         out(f"- only agentkit: `{k[0]}:{k[1]}` ({k[2]})")
 
 
+def truth(path):
+    doc = json.load(open(path))
+    return [(x["file"], x["line"], [x["label"]]) for x in doc["lines"]]
+
+
 def main():
-    root, ak, sg, gl = pathlib.Path(sys.argv[1]), *sys.argv[2:5]
+    args = sys.argv[1:]
+    truth_file = args.pop(args.index("--truth") + 1) if "--truth" in args else None
+    if truth_file:
+        args.remove("--truth")
+    root, ak, sg = pathlib.Path(args[0]), args[1], args[2]
+    gl = args[3] if len(args) > 3 else None
     tools = load(ak, sg)
-    rows = markers(root)
+    rows = truth(truth_file) if truth_file else markers(root)
     found = collections.Counter()
-    out("| Marked line | Challenge | " + " | ".join(tools) + " |\n|---|---|---|---|")
+    out("| Line | Vulnerability | " + " | ".join(tools) + " |\n|---|---|---|---|")
     for rel, line, challenges in rows:
         cells = []
         for name, spans in tools.items():
@@ -87,9 +100,10 @@ def main():
     out()
     for name, spans in tools.items():
         per_rule = collections.Counter(s[3] for s in spans).most_common()
-        out(f"- {name}: {found[name]}/{len(rows)} marked lines; {len(spans)} security findings: "
+        out(f"- {name}: {found[name]}/{len(rows)} lines; {len(spans)} security findings: "
             + ", ".join(f"{r} {n}" for r, n in per_rule))
-    secrets_parity(ak, gl)
+    if gl:
+        secrets_parity(ak, gl)
 
 
 main()

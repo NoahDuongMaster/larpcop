@@ -8,17 +8,27 @@ use toml::{Table, Value};
 
 pub type Direct = BTreeSet<(Ecosystem, String)>;
 
-/// Manifests read when looking for already-declared dependencies of a directory.
-pub const NAMES: [&str; 5] = [
+mod other;
+
+/// Manifests with a fixed name (plus `requirements*.txt` and .NET project files).
+const NAMES: [&str; 11] = [
     "package.json",
     "Cargo.toml",
     "pyproject.toml",
     "go.mod",
     "requirements.txt",
+    "Gemfile",
+    "composer.json",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+    "libs.versions.toml",
 ];
 
 pub fn is_manifest(file_name: &str) -> bool {
-    NAMES.contains(&file_name) || is_requirements(file_name)
+    NAMES.contains(&file_name)
+        || is_requirements(file_name)
+        || super::lockfile::is_project_file(file_name)
 }
 
 fn is_requirements(name: &str) -> bool {
@@ -37,6 +47,12 @@ pub fn parse(file_name: &str, content: &str) -> Option<Result<Direct>> {
             .map(|r| (Ecosystem::Go, r.module))
             .collect()),
         n if is_requirements(n) => Ok(requirements(content)),
+        "Gemfile" => Ok(other::gemfile(content)),
+        "composer.json" => other::composer_json(content),
+        "pom.xml" => other::pom(content),
+        "build.gradle" | "build.gradle.kts" => Ok(other::gradle(content)),
+        "libs.versions.toml" => other::version_catalog(content),
+        n if super::lockfile::is_project_file(n) => other::csproj(content),
         _ => return None,
     };
     Some(parsed.with_context(|| format!("reading {file_name}")))
@@ -44,13 +60,20 @@ pub fn parse(file_name: &str, content: &str) -> Option<Result<Direct>> {
 
 /// First line naming the dependency, for annotations; 0 when not found.
 pub fn line_of(content: &str, name: &str) -> usize {
-    let quoted = format!("\"{name}\"");
     let lower = name.to_ascii_lowercase();
+    let artifact = lower.rsplit(':').next().unwrap_or(&lower);
+    let needles = [
+        format!("\"{lower}\""),
+        format!("'{lower}'"),
+        format!("\"{lower}:"),
+        format!("'{lower}:"),
+        format!("<artifactid>{artifact}</artifactid>"),
+    ];
     content
         .lines()
         .position(|l| {
             let t = l.trim_start().to_ascii_lowercase();
-            l.contains(&quoted) || t.starts_with(&lower)
+            t.starts_with(&lower) || needles.iter().any(|n| t.contains(n.as_str()))
         })
         .map_or(0, |i| i + 1)
 }

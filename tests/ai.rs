@@ -99,7 +99,7 @@ const BAD: &str = r#"[{"id": "no-lodash", "language": "TypeScript", "severity": 
   "valid": ["import { map } from 'remeda'"],
   "invalid": ["import _ from 'lodash'", "const _ = require('lodash')"]}]"#;
 
-const GOOD: &str = r#"[{"id": "no-lodash", "language": "TypeScript", "severity": "error",
+const GOOD: &str = r#"[{"id": "no-lodash", "languages": ["TypeScript", "JavaScript"], "severity": "error",
   "message": "Use native methods instead of lodash.", "note": "Array and Object methods cover it.",
   "rule": {"any": [{"pattern": "import $X from 'lodash'"}, {"pattern": "require('lodash')"}]},
   "valid": ["import { map } from 'remeda'", "import x from 'lodash-es-free'"],
@@ -145,11 +145,15 @@ fn learn_keeps_only_rules_that_pass_their_tests_after_feedback() {
         repo.read(".agentkit/rule-tests/no-lodash-test.yml")
             .contains("remeda")
     );
+    // One id, one document per language.
+    let rule = repo.read(".agentkit/rules/no-lodash.yml");
+    assert_eq!(rule.matches("id: no-lodash").count(), 2, "{rule}");
+    repo.write("src/b.js", "const _ = require('lodash');\n");
     repo.write(".agentkit.yaml", "rule_dirs: [.agentkit/rules]\n");
     assert_eq!(repo.run(&["test", "--require-all"]).code(), 0);
     let check = repo.run(&["check"]).stdout();
     assert!(
-        check.contains("no-lodash") && check.contains("src/a.ts"),
+        check.contains("src/a.ts") && check.contains("src/b.js"),
         "{check}"
     );
 }

@@ -2,6 +2,7 @@
 //! private registries, git, path and workspace entries have no public publish date.
 
 mod js;
+mod other;
 #[cfg(test)]
 mod tests;
 
@@ -17,6 +18,12 @@ pub fn parse(file_name: &str, content: &str) -> Option<Result<Vec<Pinned>>> {
         "pnpm-lock.yaml" => js::pnpm(content),
         "yarn.lock" => js::yarn(content),
         "bun.lock" => js::bun(content),
+        "Gemfile.lock" => Ok(other::gemfile_lock(content)),
+        "packages.lock.json" => other::nuget_lock(content),
+        "gradle.lockfile" => Ok(other::gradle_lock(content)),
+        "composer.lock" => other::composer_lock(content),
+        "pom.xml" => other::pom(content),
+        n if is_project_file(n) => other::csproj(content),
         "Cargo.lock" => cargo(content),
         "uv.lock" => uv(content),
         "poetry.lock" => poetry(content),
@@ -29,6 +36,13 @@ pub fn parse(file_name: &str, content: &str) -> Option<Result<Vec<Pinned>>> {
     Some(parsed.with_context(|| format!("reading {file_name}")))
 }
 
+/// .NET project files (`App.csproj`, `Lib.fsproj`, `X.vbproj`).
+pub fn is_project_file(name: &str) -> bool {
+    [".csproj", ".fsproj", ".vbproj"]
+        .iter()
+        .any(|s| name.ends_with(s))
+}
+
 /// Line where `p` is pinned, for annotations; 0 when not found.
 pub fn line_of(file_name: &str, content: &str, p: &Pinned) -> usize {
     let needles = match file_name {
@@ -36,6 +50,19 @@ pub fn line_of(file_name: &str, content: &str, p: &Pinned) -> usize {
         "pnpm-lock.yaml" | "yarn.lock" => vec![p.to_string(), format!("{}@", p.name)],
         "go.mod" => vec![format!("{} {}", p.name, p.version)],
         "bun.lock" => vec![format!("\"{p}\"")],
+        "Gemfile.lock" => vec![format!("    {} (", p.name)],
+        "gradle.lockfile" => vec![format!("{}:{}", p.name, p.version)],
+        "composer.lock" => vec![format!("\"name\": \"{}\"", p.name)],
+        "pom.xml" => vec![format!(
+            "<artifactId>{}</artifactId>",
+            p.name.rsplit(':').next().unwrap_or("")
+        )],
+        n if n == "packages.lock.json" || is_project_file(n) => {
+            return content
+                .lines()
+                .position(|l| l.to_ascii_lowercase().contains(&format!("\"{}\"", p.name)))
+                .map_or(0, |i| i + 1);
+        }
         _ => vec![format!("name = \"{}\"", p.name)],
     };
     needles

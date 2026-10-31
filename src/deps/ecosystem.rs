@@ -11,10 +11,25 @@ pub enum Ecosystem {
     PyPI,
     Cargo,
     Go,
+    RubyGems,
+    NuGet,
+    /// `group:artifact` names (Gradle lockfiles, pom.xml).
+    Maven,
+    /// Composer packages (`vendor/name`).
+    Packagist,
 }
 
 impl Ecosystem {
-    const ALL: [Self; 4] = [Self::Npm, Self::PyPI, Self::Cargo, Self::Go];
+    const ALL: [Self; 8] = [
+        Self::Npm,
+        Self::PyPI,
+        Self::Cargo,
+        Self::Go,
+        Self::RubyGems,
+        Self::NuGet,
+        Self::Maven,
+        Self::Packagist,
+    ];
 
     /// Prefix in config patterns (`npm:left-pad`) and in messages.
     pub fn label(self) -> &'static str {
@@ -23,6 +38,10 @@ impl Ecosystem {
             Self::PyPI => "pypi",
             Self::Cargo => "cargo",
             Self::Go => "go",
+            Self::RubyGems => "rubygems",
+            Self::NuGet => "nuget",
+            Self::Maven => "maven",
+            Self::Packagist => "composer",
         }
     }
 
@@ -31,8 +50,12 @@ impl Ecosystem {
         self.label()
     }
 
-    /// PyPI names are case-insensitive and treat runs of `-`, `_`, `.` alike (PEP 503).
+    /// PyPI names are case-insensitive and treat runs of `-`, `_`, `.` alike
+    /// (PEP 503); NuGet and Composer names are case-insensitive.
     pub fn normalize(self, name: &str) -> String {
+        if matches!(self, Self::NuGet | Self::Packagist) {
+            return name.to_ascii_lowercase();
+        }
         if self != Self::PyPI {
             return name.to_string();
         }

@@ -62,7 +62,7 @@ pub fn learn(
                     dropped.remove(&id);
                     kept.push(Learned {
                         existing: existing(&p, &sources),
-                        language: p["language"].as_str().unwrap_or("").into(),
+                        language: languages(&p).join(","),
                         id,
                         cases,
                     });
@@ -106,6 +106,9 @@ fn validate(p: &Value, known: &[String], kept: &[Learned]) -> Result<usize> {
     if known.iter().any(|k| k == id) || kept.iter().any(|k| k.id == id) {
         bail!("a rule `{id}` already exists; pick another id");
     }
+    if languages(p).is_empty() {
+        bail!("missing `language` (or `languages`)");
+    }
     let (valid, invalid) = (cases(p, "valid"), cases(p, "invalid"));
     if valid.is_empty() || invalid.is_empty() {
         bail!("needs at least one `valid` and one `invalid` example");
@@ -128,24 +131,45 @@ fn cases(p: &Value, key: &str) -> Vec<String> {
         .collect()
 }
 
-/// `<dir>/rules/<id>.yml` and `<dir>/rule-tests/<id>-test.yml`.
+/// `"languages": [..]` or `"language": ".."`.
+fn languages(p: &Value) -> Vec<String> {
+    match p["languages"].as_array() {
+        Some(list) => list
+            .iter()
+            .filter_map(|l| l.as_str().map(String::from))
+            .collect(),
+        None => p["language"]
+            .as_str()
+            .map(String::from)
+            .into_iter()
+            .collect(),
+    }
+}
+
+/// `<dir>/rules/<id>.yml` (one document per language) and `<dir>/rule-tests/<id>-test.yml`.
 fn write(dir: &Path, p: &Value) -> Result<()> {
     let id = p["id"].as_str().unwrap_or("rule");
-    let mut rule = json!({ "id": id, "language": p["language"], "severity": p["severity"].as_str().unwrap_or("error"),
-        "message": p["message"], "note": p["note"], "rule": p["rule"] });
-    if let Some(fix) = p["fix"].as_str() {
-        rule["fix"] = json!(fix);
+    let mut docs = Vec::new();
+    for language in languages(p) {
+        let mut rule = json!({ "id": id, "language": language,
+            "severity": p["severity"].as_str().unwrap_or("error"),
+            "message": p["message"], "note": p["note"], "rule": p["rule"] });
+        if let Some(fix) = p["fix"].as_str() {
+            rule["fix"] = json!(fix);
+        }
+        docs.push(serde_saphyr::to_string(&rule)?);
     }
     let tests = json!({ "id": id, "valid": cases(p, "valid"), "invalid": cases(p, "invalid") });
-    for (sub, name, doc) in [
-        ("rules", format!("{id}.yml"), rule),
-        ("rule-tests", format!("{id}-test.yml"), tests),
+    for (sub, name, body) in [
+        ("rules", format!("{id}.yml"), docs.join("---\n")),
+        (
+            "rule-tests",
+            format!("{id}-test.yml"),
+            serde_saphyr::to_string(&tests)?,
+        ),
     ] {
         std::fs::create_dir_all(dir.join(sub))?;
-        let yaml = format!(
-            "# Learned by `agentkit learn`; review before merging.\n{}",
-            serde_saphyr::to_string(&doc)?
-        );
+        let yaml = format!("# Learned by `agentkit learn`; review before merging.\n{body}");
         std::fs::write(dir.join(sub).join(name), yaml)?;
     }
     Ok(())

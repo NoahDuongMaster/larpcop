@@ -157,10 +157,12 @@ package or a fixed version; if the user insists, stop and ask them.",
     }
 }
 
-/// `left-pad@1.3.0`, `@scope/x@2`, `requests==2.31.0`, `mod@v1.2.3`.
+/// `left-pad@1.3.0`, `@scope/x@2`, `requests==2.31.0`, `mod@v1.2.3`,
+/// `vendor/pkg:7.4.0`.
 pub fn pinned_version(eco: Ecosystem, spec: &str) -> Option<&str> {
     let v = match eco {
         Ecosystem::PyPI => spec.split_once("==")?.1,
+        Ecosystem::Packagist => spec.split_once(':')?.1,
         _ => {
             let (name, v) = spec.rsplit_once('@')?;
             if name.is_empty() {
@@ -210,6 +212,14 @@ mod tests {
         assert_eq!(
             pinned_version(Ecosystem::Go, "github.com/a/b@v1.2.3"),
             Some("v1.2.3")
+        );
+        assert_eq!(
+            pinned_version(Ecosystem::Packagist, "guzzlehttp/guzzle:7.4.0"),
+            Some("7.4.0")
+        );
+        assert_eq!(
+            pinned_version(Ecosystem::Packagist, "guzzlehttp/guzzle:^7"),
+            None
         );
     }
 }

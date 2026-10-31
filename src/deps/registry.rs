@@ -1,7 +1,10 @@
-//! Publish dates from deps.dev — one API for npm, PyPI, crates.io and Go —
-//! cached on disk, since the date a version was published never changes.
+//! Publish dates from deps.dev — one API for npm, PyPI, crates.io, Go,
+//! RubyGems, NuGet and Maven — and Packagist's own API for Composer; cached on
+//! disk, since the date a version was published never changes.
 
-use super::ecosystem::Pinned;
+mod packagist;
+
+use super::ecosystem::{Ecosystem, Pinned};
 use anyhow::{Result, bail};
 use jiff::Timestamp;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
@@ -101,6 +104,16 @@ impl Registry {
     }
 
     fn version(&self, p: &Pinned) -> Result<Option<Version>> {
+        if p.eco == Ecosystem::Packagist {
+            let found = packagist::versions(&self.agent, &p.name)?.and_then(|all| {
+                all.into_iter()
+                    .find(|(v, _)| packagist::same(v, &p.version))
+            });
+            return Ok(found.map(|(_, t)| Version {
+                published_at: Some(t),
+                advisory_keys: Vec::new(),
+            }));
+        }
         let url = format!(
             "{}/systems/{}/packages/{}/versions/{}",
             self.api,
@@ -117,18 +130,24 @@ impl Registry {
     /// Newest stable release in the same major line as `p`, published by `cutoff`:
     /// a concrete version an agent can pin instead.
     pub fn newest_before(&self, p: &Pinned, cutoff: Timestamp) -> Option<(String, Timestamp)> {
-        let url = format!(
-            "{}/systems/{}/packages/{}",
-            self.api,
-            p.eco.deps_dev(),
-            enc(&p.name)
-        );
-        let package: Package = serde_json::from_str(&self.get(&url).ok()??).ok()?;
+        let all: Vec<(String, Timestamp)> = if p.eco == Ecosystem::Packagist {
+            packagist::versions(&self.agent, &p.name).ok()??
+        } else {
+            let url = format!(
+                "{}/systems/{}/packages/{}",
+                self.api,
+                p.eco.deps_dev(),
+                enc(&p.name)
+            );
+            let package: Package = serde_json::from_str(&self.get(&url).ok()??).ok()?;
+            package
+                .versions
+                .into_iter()
+                .filter_map(|v| Some((v.version_key.version, v.published_at?)))
+                .collect()
+        };
         let line = major_line(&p.version);
-        package
-            .versions
-            .into_iter()
-            .filter_map(|v| Some((v.version_key.version, v.published_at?)))
+        all.into_iter()
             .filter(|(v, t)| *t <= cutoff && is_stable(v) && major_line(v) == line)
             .max_by_key(|(_, t)| *t)
     }

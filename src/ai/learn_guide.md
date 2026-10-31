@@ -19,8 +19,10 @@ Answer with a JSON array only, no prose. One object per rule:
   }
 ]
 
-A rule that targets JavaScript-family code should usually be emitted once per language the
-repository uses (TypeScript, Tsx, JavaScript) with the same id; that is allowed.
+For several grammars, give `"languages": ["TypeScript", "Tsx", "JavaScript"]` instead of
+`"language"`: one id, one rule, and the examples must hold in every listed language (so keep
+them free of syntax only one of them accepts, such as type annotations). Never propose the
+same id twice.
 Optional "fix": a rewrite template using the pattern's metavariables, e.g. "yaml.safe_load($DATA)".
 
 ## ast-grep rule syntax (the "rule" object)

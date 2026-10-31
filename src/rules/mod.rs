@@ -5,6 +5,8 @@ mod complexity;
 mod linters;
 mod max_lines;
 pub mod metrics;
+pub mod secrets;
+mod taint;
 pub mod testing;
 
 pub use max_lines::ID as MAX_LINES_ID;
@@ -66,6 +68,8 @@ pub struct RuleInfo {
 pub struct Engine {
     max_lines: Option<max_lines::MaxLines>,
     metrics: Option<metrics::Metrics>,
+    secrets: Option<(secrets::Secrets, globset::GlobSet)>,
+    taint: Vec<taint::TaintRule>,
     ast: ast::AstRules,
     linters: Vec<linters::Linter>,
     deps: Option<crate::deps::Deps>,
@@ -89,9 +93,23 @@ impl Engine {
             .as_ref()
             .map(metrics::Metrics::new)
             .transpose()?;
+        let secrets = match &cfg.secrets {
+            Some(s) if !cfg.disabled.contains(secrets::ID) => {
+                Some((secrets::Secrets::new()?, crate::files::globset(&s.exclude)?))
+            }
+            _ => None,
+        };
+        let taint = cfg
+            .taint
+            .iter()
+            .filter(|t| !cfg.disabled.contains(&t.id))
+            .map(taint::TaintRule::new)
+            .collect::<Result<_>>()?;
         Ok(Self {
             max_lines,
             metrics,
+            secrets,
+            taint,
             ast,
             linters,
             deps: crate::deps::Deps::new(cfg)?,
@@ -101,6 +119,8 @@ impl Engine {
     pub fn is_empty(&self) -> bool {
         self.max_lines.is_none()
             && self.metrics.is_none()
+            && self.secrets.is_none()
+            && self.taint.is_empty()
             && self.ast.is_empty()
             && self.linters.is_empty()
             && self.deps.is_none()
@@ -117,6 +137,8 @@ impl Engine {
                 let mut v = self.ast.check(file);
                 v.extend(self.max_lines.as_ref().and_then(|m| m.check(file)));
                 v.extend(self.metrics.iter().flat_map(|m| m.check(file)));
+                v.extend(self.secrets(file));
+                v.extend(self.taint.iter().flat_map(|t| t.check(file)));
                 v
             })
             .collect();
@@ -132,8 +154,17 @@ impl Engine {
         let mut v = self.ast.check(file);
         v.extend(self.max_lines.as_ref().and_then(|m| m.check(file)));
         v.extend(self.metrics.iter().flat_map(|m| m.check(file)));
+        v.extend(self.secrets(file));
+        v.extend(self.taint.iter().flat_map(|t| t.check(file)));
         sort(&mut v);
         v
+    }
+
+    fn secrets(&self, file: &SourceFile) -> Vec<Violation> {
+        match &self.secrets {
+            Some((s, exclude)) if !exclude.is_match(&file.rel) => s.check(&file.rel, &file.content),
+            _ => Vec::new(),
+        }
     }
 
     /// Auto-fixes from ast-grep rules: `(file, new content, fixes applied)`.
@@ -148,6 +179,8 @@ impl Engine {
     pub fn rules_for(&self, rel: &str) -> Vec<RuleInfo> {
         let mut out: Vec<RuleInfo> = self.max_lines.iter().map(|m| m.info()).collect();
         out.extend(self.metrics.iter().flat_map(|m| m.infos()));
+        out.extend(self.secrets.iter().map(|_| secrets::Secrets::info()));
+        out.extend(self.taint.iter().map(|t| t.info()));
         out.extend(self.ast.infos_for(rel));
         out.extend(self.linters.iter().map(|l| l.info()));
         out
@@ -156,6 +189,8 @@ impl Engine {
     pub fn rules(&self) -> Vec<RuleInfo> {
         let mut out: Vec<RuleInfo> = self.max_lines.iter().map(|m| m.info()).collect();
         out.extend(self.metrics.iter().flat_map(|m| m.infos()));
+        out.extend(self.secrets.iter().map(|_| secrets::Secrets::info()));
+        out.extend(self.taint.iter().map(|t| t.info()));
         out.extend(self.ast.infos().iter().cloned());
         out.extend(self.linters.iter().map(|l| l.info()));
         out.extend(self.deps.iter().flat_map(|d| d.rules()));

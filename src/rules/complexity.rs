@@ -66,7 +66,7 @@ const BRANCHES: [&str; 26] = [
 ];
 
 /// Named nodes only: keyword tokens share some kinds (`function`, `when`).
-fn is_function<D: Doc>(node: &Node<D>) -> bool {
+pub(super) fn is_function<D: Doc>(node: &Node<D>) -> bool {
     node.is_named() && FUNCTIONS.contains(&node.kind().as_ref())
 }
 

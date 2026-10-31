@@ -106,6 +106,56 @@ Phiên bản không có trên deps.dev hoặc không tra được vì lỗi mạ
 
 Cả hai rule được lock trong standards mẫu. Một rule đã lock chỉ được *siết thêm*: tăng số ngày hoặc thêm `approved` thì được; giảm số ngày, tắt `require_approval` hoặc thêm `exempt` thì bị từ chối.
 
+## Bảo mật (thay Semgrep/Snyk)
+
+Bốn lớp, xếp theo mức chắc chắn. Lớp đầu tất định 100%, các lớp sau bắt phần còn lại.
+
+**1. Quy ước cú pháp (bộ `recommended`).** Không đi truy vết lỗi mà cấm luôn cách viết dẫn tới lỗi: SQL chỉ qua tham số, lệnh shell chỉ qua mảng tham số, dữ liệu request chỉ được dùng sau khi qua schema (`validate-request-input`: `req.body`, `req.query`, `req.params`, `request.json()` phải nằm trong `X.parse(…)`/`safeParse`/`validate`…). Khi đó lỗi không viết ra được ngay từ đầu, và ast-grep bắt đúng 100%, cùng một kết quả ở mọi lần chạy.
+
+**2. Taint trong phạm vi một hàm** (cùng phạm vi với Semgrep OSS). Theo dữ liệu từ `sources` tới đối số của `sinks` qua các phép gán trong cùng hàm, theo thứ tự dòng code; đi qua `sanitizers` thì sạch, gán lại giá trị sạch thì hết taint, destructuring cũng được theo. Pattern viết bằng cú pháp ast-grep:
+
+```yaml
+taint:
+  - id: taint-sql
+    languages: [TypeScript, Tsx, JavaScript]
+    message: Request data reaches a SQL query.
+    sources: ["req.query", "req.body", "req.params"]
+    sinks: ["$DB.query($SQL)", "$DB.query($SQL, $$$REST)"]
+    sink_arg: SQL                 # chỉ đối số này phải sạch
+    sanitizers: ["Number($X)", "$S.parse($X)"]
+```
+
+Bộ `recommended` có sẵn `taint-sql`, `taint-shell` (JS/TS: Express, Next.js) và `py-taint-sql` (Flask, Django, FastAPI). Lớp 1 bắt `db.query(\`…${id}\`)` ngay tại chỗ gọi; lớp 2 bắt trường hợp lớp 1 không thấy, khi chuỗi SQL được dựng ở biến trước đó:
+
+```ts
+const name = req.query.name as string;
+const sql = "SELECT * FROM users WHERE name = '" + name + "'";
+res.json(await db.query(sql));          // taint-sql
+```
+
+Không theo vào hàm khác hay file khác. Hướng đi về sau: hỏi language server của dự án (tsserver, pyright, gopls, rust-analyzer) về kiểu và định nghĩa, thay vì tự viết type checker.
+
+**3. Secrets.** `secrets: {}` bật 222 detector của [gitleaks](https://github.com/gitleaks/gitleaks) (MIT, nhúng nguyên `gitleaks.toml` vào binary, kèm license trong `assets/`): lọc theo keyword, regex, entropy, allowlist theo đúng ngữ nghĩa của gitleaks. Kết quả in ra đã che, chỉ giữ 4 ký tự đầu (`ghp_…[redacted]`). `exclude` để bỏ qua fixture có khoá giả; rule bị lock thì không thêm `exclude` được. Hook cũng chặn agent ghi secret vào file.
+
+**4. Lỗ hổng và mã độc trong dependency** (`dependency-vulnerability`, dữ liệu [OSV.dev](https://osv.dev): GitHub Advisory, RustSec, PyPA, Go, và nguồn mã độc của OpenSSF):
+
+```yaml
+dependencies:
+  vulnerabilities: high     # low | moderate | high | critical
+```
+
+- Package bị báo là **mã độc** (`MAL-…`) luôn bị chặn, ở mọi lockfile và trong mọi PR, kể cả PR không đụng tới lockfile: mã độc thường được phát hiện sau khi đã vào repo.
+- Lỗ hổng từ mức đã chọn trở lên chặn phiên bản *mà thay đổi này đưa vào*. `agentkit check` không giới hạn phạm vi thì kiểm toàn bộ. Thông báo nêu luôn phiên bản đã vá.
+- Hook chặn lệnh cài **trước khi chạy**: tên package dính mã độc (`npm i aaa-evil`), hoặc phiên bản pin dính lỗ hổng (`npm i lodash@4.17.15`).
+- Mức nghiêm trọng lấy theo đánh giá của advisory, nếu không có thì tính từ vector CVSS 3/4 (crate `cvss`).
+
+Đã chạy với dữ liệu thật (lockfile gồm `lodash@4.17.15`, `local-commander-agent@0.3.52`, `zod@3.23.8`):
+
+- `local-commander-agent` (MAL-2026-18425, được báo cáo trong ngày) bị chặn, kể cả khi chạy `--changed` mà thay đổi không đụng tới lockfile.
+- `lodash@4.17.15`: 3 advisory mức High (command injection, prototype pollution, code injection qua `_.template`), mỗi cái kèm bản vá (`4.17.19`, `4.17.21`, `4.18.0`).
+- `zod@3.23.8`: 1 advisory High (GHSA-mrhx-c7xc-m3w5).
+- Hook chặn `npm i local-commander-agent`, `npm i lodash@4.17.15` và `npm i zod@3.23.8`; cho qua `npm i lodash` (không pin, npm cài bản mới nhất).
+
 ## Lệnh
 
 ```sh
@@ -151,7 +201,7 @@ extends:
   - https://github.com/NoahDuongMaster/agentkit.git#v0.2.0//standards/recommended
 ```
 
-(`URL#tag//thư-mục` lấy một thư mục con của repo standards.) Bộ này có 20 rule, mỗi rule kèm fixture và `agentkit test standards/recommended --require-all` chạy trong `cargo test`:
+(`URL#tag//thư-mục` lấy một thư mục con của repo standards.) Bộ này có 21 rule ast-grep (cộng 3 rule taint, secrets và `dependency-vulnerability`), mỗi rule kèm fixture và `agentkit test standards/recommended --require-all` chạy trong `cargo test`:
 
 - **Biến lỗi bảo mật thành quy ước cú pháp** (không cần taint): SQL chỉ qua tham số (`no-sql-interpolation`, `py-no-sql-interpolation`, `go-no-sql-sprintf`), lệnh shell chỉ qua mảng tham số (`no-shell-interpolation`, `py-no-shell-true`), không `eval`/`new Function`/`exec`, không gán HTML từ biến vào `innerHTML`, không `dangerouslySetInnerHTML`, không tắt kiểm chứng chỉ TLS (`py-no-tls-verify-off`, `go-no-insecure-tls`), `yaml.safe_load` (có auto-fix).
 - **Không tắt kiểm tra**: `@ts-ignore`, `@ts-expect-error`, `eslint-disable`, `biome-ignore` là vi phạm; `any`, catch rỗng, `debugger` (có auto-fix).
@@ -296,9 +346,10 @@ Binary nặng 47 MB trên đĩa, nhưng chỉ khoảng **4 MB khi tải về** (
 
 ## Đã kiểm chứng
 
-`cargo test` có 47 test:
+`cargo test` có 75 test:
 
 - Unit: guard, tìm shell, path trong patch Codex; đọc lockfile thật của npm 11, pnpm 11, uv 0.11, cargo 1.98 (kèm yarn v1/Berry, Poetry, go.mod, và các entry registry riêng/git/workspace phải bị bỏ qua); manifest; nhận diện lệnh cài; thiết lập gate của 4 package manager.
+- Bảo mật: taint qua biến/destructuring/sanitizer/gán lại (TS, Python), secrets bị che khi in ra, OSV giả: mã độc luôn chặn, lỗ hổng chỉ chặn bản mới, theo ngưỡng, hook chặn lệnh cài.
 - Integration: check, locked, git extends theo tag, staged, `--changed`/`--since`, linter delegation, format github, chống né rule, hook của 4 agent, sync idempotent, phát hiện drift, CRLF, pre-commit thật; dependency: tuổi phiên bản (qua cache và qua một server deps.dev giả), merge-base của PR, ngoại lệ bản vá bảo mật, gate package manager, duyệt dependency mới (cả monorepo), hook chặn lệnh cài, lock chỉ được siết thêm.
 
 Trên GitHub thật (repo private `NoahDuongMaster/agentkit`):

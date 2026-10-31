@@ -1,0 +1,14 @@
+id: validate-request-input
+valid:
+  - "const input = CreateUser.parse(req.body)"
+  - "const q = Query.safeParse(req.query)"
+  - "const body = await Schema.parseAsync(await request.json())"
+  - "const { id } = Params.parse(req.params)"
+  - "const p = await schema.validate(req.body)"
+  - "res.json(user)"
+invalid:
+  - "const name = req.body.name"
+  - "const { id } = req.params"
+  - "db.find(req.query.q)"
+  - "const data = JSON.parse(req.body)"
+  - "const body = await request.json()"

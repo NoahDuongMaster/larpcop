@@ -3,7 +3,9 @@
 //! - `dependency-release-age`: no version younger than N days enters a lockfile
 //!   (compromised releases are usually caught and pulled within days), and the
 //!   package manager's own age gate stays on, so dev machines are covered at
-//!   install time, before install scripts run.
+//!   install time, before install scripts run;
+//! - `dependency-vulnerability`: no known-malicious package anywhere, and no new
+//!   version with a known vulnerability from a severity up (OSV.dev).
 
 mod age;
 mod approval;
@@ -11,8 +13,12 @@ mod ecosystem;
 mod install;
 mod lockfile;
 mod manifest;
+mod osv;
 mod pm_config;
 mod registry;
+mod vulns;
+
+pub use osv::Severity;
 
 use crate::config::Config;
 use crate::files::{self, Scope};
@@ -25,10 +31,13 @@ use std::path::Path;
 
 pub const AGE_ID: &str = "dependency-release-age";
 pub const APPROVAL_ID: &str = "dependency-approval";
+pub const VULN_ID: &str = "dependency-vulnerability";
 
 pub struct Deps {
     min_days: Option<u32>,
     approval: bool,
+    /// Lowest severity of a known vulnerability that blocks; malware always does.
+    vulns: Option<Severity>,
     approved: Patterns,
     exempt: Patterns,
     exclude: GlobSet,
@@ -63,12 +72,16 @@ impl Deps {
             .min_release_age
             .filter(|d| *d > 0 && !cfg.disabled.contains(AGE_ID));
         let approval = p.require_approval && !cfg.disabled.contains(APPROVAL_ID);
-        if min_days.is_none() && !approval {
+        let vulns = p
+            .vulnerabilities
+            .filter(|_| !cfg.disabled.contains(VULN_ID));
+        if min_days.is_none() && !approval && vulns.is_none() {
             return Ok(None);
         }
         Ok(Some(Self {
             min_days,
             approval,
+            vulns,
             approved: Patterns::new(&p.approved)?,
             exempt: Patterns::new(&p.exempt)?,
             exclude: files::globset(&cfg.exclude)?,
@@ -90,6 +103,18 @@ least {days} days ago."
                     "Keep the package manager's own minimum-release-age setting on; never override it."
                         .into(),
                 ),
+            });
+        }
+        if let Some(min) = self.vulns {
+            out.push(RuleInfo {
+                id: VULN_ID.into(),
+                level: Level::Error,
+                scope: "lockfiles, installs".into(),
+                message: format!(
+                    "No known-malicious package, and no new dependency version with a known {min:?} \
+or worse vulnerability (OSV.dev)."
+                ),
+                note: Some("Pick a fixed version or another package; never install one an advisory names as malicious.".into()),
             });
         }
         if self.approval {
@@ -118,6 +143,8 @@ least {days} days ago."
         let mut fresh = Vec::new();
         let mut gated_dirs = BTreeSet::new();
         let mut known = None;
+        let mut locked = Vec::new();
+        let audit = matches!(scope, Scope::All | Scope::Paths(_));
         for rel in files::list(root, scope)? {
             if self.exclude.is_match(&rel) {
                 continue;
@@ -133,6 +160,16 @@ least {days} days ago."
                     gated_dirs.insert(dir_of(&rel).to_string());
                 }
             }
+        }
+        if let Some(min) = self.vulns {
+            // Every lockfile, not only changed ones: a package reported as malware
+            // today must block even a pull request that does not touch it.
+            for rel in files::list(root, &Scope::All)? {
+                if !self.exclude.is_match(&rel) {
+                    locked.extend(self.locked(&rel, file_name(&rel), &view, audit));
+                }
+            }
+            out.extend(self.vulnerable(min, &locked));
         }
         if let Some(days) = self.min_days {
             out.extend(age::too_new(days, &fresh)?);
@@ -162,11 +199,17 @@ sets it for everyone."
                     .into(),
             );
         }
-        if !self.approval {
-            return None;
-        }
         let requests = install::requests(command);
         if requests.is_empty() {
+            return None;
+        }
+        if let Some(reason) = self
+            .vulns
+            .and_then(|min| self.gate_vulnerable(min, &requests))
+        {
+            return Some(reason);
+        }
+        if !self.approval {
             return None;
         }
         let known = approval::known_now(root, cwd);

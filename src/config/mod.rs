@@ -6,6 +6,7 @@ mod model;
 pub use fetch::cache_root;
 pub use model::{
     DependenciesConfig, ExtendSpec, LinterConfig, MaxLinesConfig, MetricsConfig, RawConfig,
+    SecretsConfig, TaintConfig,
 };
 
 use anyhow::{Context, Result, bail};
@@ -32,6 +33,8 @@ pub struct Config {
     /// Agents to generate files for; `None` = all.
     pub agents: Option<Vec<String>>,
     pub metrics: Option<MetricsConfig>,
+    pub secrets: Option<SecretsConfig>,
+    pub taint: Vec<TaintConfig>,
     /// Layers in application order, for traceability.
     pub sources: Vec<String>,
 }
@@ -43,6 +46,7 @@ pub struct DepsPolicy {
     pub require_approval: bool,
     pub approved: Vec<String>,
     pub exempt: Vec<String>,
+    pub vulnerabilities: Option<crate::deps::Severity>,
 }
 
 /// `forced` standards (from `--extends` / `AGENTKIT_EXTENDS`) apply first, so a repo
@@ -186,6 +190,21 @@ impl Config {
             }
             self.metrics = Some(m);
         }
+        for rule in raw.taint {
+            if self.taint.iter().any(|t| t.id == rule.id) {
+                self.ensure_unlocked(&rule.id, source, "override")?;
+            }
+            self.taint.retain(|t| t.id != rule.id);
+            self.taint.push(rule);
+        }
+        // Exclusions only accumulate; a locked `secrets` rule takes none.
+        if let Some(s) = raw.secrets {
+            if !s.exclude.is_empty() {
+                self.ensure_unlocked(crate::rules::secrets::ID, source, "add exclusions to")?;
+            }
+            let cur = self.secrets.get_or_insert_with(SecretsConfig::default);
+            cur.exclude.extend(s.exclude);
+        }
         for id in raw.locked {
             self.locked.entry(id).or_insert_with(|| source.to_string());
         }
@@ -209,6 +228,21 @@ impl Config {
         if d.require_approval == Some(false) && p.require_approval {
             self.ensure_unlocked(APPROVAL_ID, source, "turn off")?;
         }
+        let vulns = d
+            .vulnerabilities
+            .as_deref()
+            .map(|s| {
+                crate::deps::Severity::parse(s).with_context(|| {
+                    format!("{source}: `vulnerabilities` must be low, moderate, high or critical, not `{s}`")
+                })
+            })
+            .transpose()?;
+        // A locked threshold can only go down (block more).
+        if let (Some(new), Some(cur)) = (vulns, p.vulnerabilities)
+            && new > cur
+        {
+            self.ensure_unlocked(crate::deps::VULN_ID, source, "raise the threshold of")?;
+        }
         let p = &mut self.deps;
         if d.min_release_age.is_some() {
             p.min_release_age = d.min_release_age;
@@ -218,6 +252,9 @@ impl Config {
         }
         p.approved.extend(d.approved);
         p.exempt.extend(d.exempt);
+        if vulns.is_some() {
+            p.vulnerabilities = vulns;
+        }
         Ok(())
     }
 

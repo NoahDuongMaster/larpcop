@@ -32,6 +32,39 @@ pub struct RawConfig {
     pub agents: Option<Vec<String>>,
     /// Function-level limits (`complexity`, `function-length` rules).
     pub metrics: Option<MetricsConfig>,
+    /// Secret scanning (`secrets` rule, gitleaks' detectors).
+    pub secrets: Option<SecretsConfig>,
+    /// Intraprocedural taint rules: sources must not reach sinks unsanitized.
+    #[serde(default)]
+    pub taint: Vec<TaintConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TaintConfig {
+    pub id: String,
+    /// ast-grep language names, e.g. [TypeScript, Tsx, JavaScript].
+    pub languages: Vec<String>,
+    pub severity: Option<Level>,
+    pub message: String,
+    pub note: Option<String>,
+    /// ast-grep patterns of untrusted data, e.g. `req.query`.
+    pub sources: Vec<String>,
+    /// ast-grep patterns of dangerous calls, e.g. `$DB.query($SQL, $$$REST)`.
+    pub sinks: Vec<String>,
+    /// Metavariable of the sink argument that must stay clean (default: the whole call).
+    pub sink_arg: Option<String>,
+    /// ast-grep patterns that make data safe, e.g. `Number($X)`.
+    #[serde(default)]
+    pub sanitizers: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SecretsConfig {
+    /// Globs never scanned (e.g. test fixtures with fake keys).
+    #[serde(default)]
+    pub exclude: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -59,6 +92,9 @@ pub struct DependenciesConfig {
     /// Packages with no public publish date (private registries): age is not checked.
     #[serde(default)]
     pub exempt: Vec<String>,
+    /// Block known vulnerabilities from this severity up (low, moderate, high,
+    /// critical); known-malicious packages are always blocked once this is set.
+    pub vulnerabilities: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

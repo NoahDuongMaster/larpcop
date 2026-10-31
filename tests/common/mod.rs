@@ -116,8 +116,15 @@ impl Repo {
     }
 
     pub fn run_stdin(&self, args: &[&str], stdin: &str) -> Run {
-        let mut child = self
-            .command(BIN)
+        self.run_stdin_env(args, stdin, &[])
+    }
+
+    pub fn run_stdin_env(&self, args: &[&str], stdin: &str, env: &[(&str, &str)]) -> Run {
+        let mut cmd = self.command(BIN);
+        for (k, v) in env {
+            cmd.env(k, v);
+        }
+        let mut child = cmd
             .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

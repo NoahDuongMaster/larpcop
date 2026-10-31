@@ -13,3 +13,35 @@ metrics:
   max_function_lines: 80
   exclude: ["**/*.test.*", "**/*_test.*", "**/tests/**"]
 exclude: ["**/node_modules/**", "**/dist/**", "**/build/**", "**/vendor/**", "**/*.min.js"]
+# Leaked credentials: gitleaks' 222 detectors, findings redacted.
+secrets: {}
+dependencies:
+  # Known malware always blocks; known vulnerabilities from `high` up block
+  # new versions (OSV.dev).
+  vulnerabilities: high
+# Request data must not reach SQL or a shell inside one function, even through
+# variables (the syntactic rules above catch it at the call site).
+taint:
+  - id: taint-sql
+    languages: [TypeScript, Tsx, JavaScript]
+    message: Request data reaches a SQL query.
+    note: Pass it as a query parameter, or validate it into a number/enum first (Number(), parseInt(), a schema).
+    sources: ["req.query", "req.body", "req.params", "req.headers", "req.cookies", "request.nextUrl.searchParams", "await request.json()", "await request.formData()"]
+    sinks: ["$DB.query($SQL, $$$REST)", "$DB.query($SQL)", "$DB.execute($SQL, $$$REST)", "$DB.execute($SQL)", "$DB.raw($SQL, $$$REST)", "$DB.raw($SQL)", "$DB.$queryRawUnsafe($SQL, $$$REST)", "$DB.$queryRawUnsafe($SQL)"]
+    sink_arg: SQL
+    sanitizers: ["Number($X)", "parseInt($$$X)", "parseFloat($X)", "$S.parse($X)"]
+  - id: taint-shell
+    languages: [TypeScript, Tsx, JavaScript]
+    message: Request data reaches a shell command.
+    note: Use execFile/spawn with an argument array and an allowlist of values.
+    sources: ["req.query", "req.body", "req.params", "req.headers", "await request.json()"]
+    sinks: ["exec($CMD, $$$REST)", "exec($CMD)", "execSync($CMD, $$$REST)", "execSync($CMD)", "$CP.exec($CMD, $$$REST)", "$CP.exec($CMD)", "$CP.execSync($CMD, $$$REST)", "$CP.execSync($CMD)"]
+    sink_arg: CMD
+  - id: py-taint-sql
+    languages: [Python]
+    message: Request data reaches a SQL query.
+    note: Pass it as a query parameter (cursor.execute(sql, params)) or convert it first (int(), a form/serializer).
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.GET", "request.POST", "request.query_params"]
+    sinks: ["$C.execute($SQL)", "$C.execute($SQL, $$$P)", "$C.executemany($SQL, $$$P)", "$C.raw($SQL)", "$C.raw($SQL, $$$P)"]
+    sink_arg: SQL
+    sanitizers: ["int($X)", "float($X)", "uuid.UUID($X)"]

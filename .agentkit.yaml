@@ -3,10 +3,16 @@
 extends:
   - examples/standards
 exclude: ["examples/**", "target/**"]
+secrets:
+  # gitleaks' own config is full of sample patterns.
+  exclude: ["assets/gitleaks.toml"]
 dependencies:
+  vulnerabilities: high
   # Approved for the dependency rules (deps.dev client, lockfile parsing).
   approved:
     - cargo:base64
+    - cargo:cvss
+    - cargo:entropy
     - cargo:jiff
     - cargo:lsp-server
     - cargo:lsp-types

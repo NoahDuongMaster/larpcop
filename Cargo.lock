@@ -18,8 +18,10 @@ dependencies = [
  "ast-grep-language",
  "base64",
  "clap",
+ "cvss",
  "dirs",
  "dunce",
+ "entropy",
  "globset",
  "ignore",
  "jiff",
@@ -425,6 +427,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
 
 [[package]]
+name = "cvss"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11147ff68f855ef1b74c07e9b64489d0967baf41047e82505e13f0a96cf41360"
+
+[[package]]
 name = "darling"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -550,6 +558,12 @@ checksum = "fba3fe847045ecff794b9c138293a80db914678c453ad63fbf0c6a9eb6e00b22"
 dependencies = [
  "encoding_rs",
 ]
+
+[[package]]
+name = "entropy"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aaddcf1b2c2d0a2c4fe3cf7fbbd7172d07e3fedc61dda7405a0560084d1a483e"
 
 [[package]]
 name = "equivalent"

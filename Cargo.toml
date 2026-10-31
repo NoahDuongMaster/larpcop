@@ -14,8 +14,10 @@ ast-grep-core = "0.51"
 ast-grep-language = "0.51"
 base64 = "0.23"
 clap = { version = "4", features = ["derive", "env"] }
+cvss = "3"
 dirs = "7.0.0"
 dunce = "1.0.5"
+entropy = "0.4"
 globset = "0.4.21"
 ignore = "0.4.34"
 jiff = { version = "0.2.38", default-features = false, features = ["std", "serde"] }

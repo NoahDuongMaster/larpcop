@@ -1,4 +1,4 @@
-//! On-disk schema of `.agentkit.yaml` (repo) and `agentkit.yaml` (standards).
+//! On-disk schema of `.larpcop.yaml` (repo) and `larpcop.yaml` (standards).
 
 use crate::rules::Level;
 use serde::Deserialize;
@@ -28,7 +28,7 @@ pub struct RawConfig {
     /// Markdown file inlined into AGENTS.md, relative to this config file.
     pub guidelines: Option<String>,
     pub dependencies: Option<DependenciesConfig>,
-    /// Agents `sync` generates files for (default: all). Ids as in `agentkit hook`.
+    /// Agents `sync` generates files for (default: all). Ids as in `larpcop hook`.
     pub agents: Option<Vec<String>>,
     /// Function-level limits (`complexity`, `function-length` rules).
     pub metrics: Option<MetricsConfig>,
@@ -37,7 +37,7 @@ pub struct RawConfig {
     /// Intraprocedural taint rules: sources must not reach sinks unsanitized.
     #[serde(default)]
     pub taint: Vec<TaintConfig>,
-    /// Rules in plain language, judged by a model (`agentkit review`).
+    /// Rules in plain language, judged by a model (`larpcop review`).
     pub llm: Option<LlmConfig>,
     /// Language server commands by language (typescript, python, go, rust),
     /// for rules that ask about types.

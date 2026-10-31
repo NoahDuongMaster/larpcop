@@ -35,7 +35,7 @@ fn is_requirements(name: &str) -> bool {
     name.starts_with("requirements") && name.ends_with(".txt")
 }
 
-/// `None` when `file_name` is not a manifest agentkit reads.
+/// `None` when `file_name` is not a manifest larpcop reads.
 pub fn parse(file_name: &str, content: &str) -> Option<Result<Direct>> {
     let parsed = match file_name {
         "package.json" => package_json(content),

@@ -1,5 +1,5 @@
 //! Per-agent files: each agent gets its instruction file wired to AGENTS.md and
-//! hooks that call `agentkit hook <agent>`. Event and tool names match each
+//! hooks that call `larpcop hook <agent>`. Event and tool names match each
 //! agent's hook protocol (see `hook::event` for the payload side).
 //!
 //! Renderers take the hook command so `sync --managed` can reuse them with an
@@ -20,7 +20,7 @@ pub fn claude_md(current: Option<&str>) -> String {
     }
 }
 
-/// `.mcp.json`-style registration of `agentkit mcp` (Claude Code, Cursor, Kiro).
+/// `.mcp.json`-style registration of `larpcop mcp` (Claude Code, Cursor, Kiro).
 pub fn mcp_json(current: Option<&str>, _cmd: &str) -> Result<String> {
     let mut doc = parse(current)?;
     let servers = doc
@@ -29,7 +29,7 @@ pub fn mcp_json(current: Option<&str>, _cmd: &str) -> Result<String> {
         .entry("mcpServers")
         .or_insert_with(|| json!({}));
     anyhow::ensure!(servers.is_object(), "`mcpServers` must be an object");
-    servers["agentkit"] = json!({ "command": "agentkit", "args": ["mcp"] });
+    servers["larpcop"] = json!({ "command": "larpcop", "args": ["mcp"] });
     render(&doc)
 }
 
@@ -58,7 +58,7 @@ pub fn codex_hooks(current: Option<&str>, cmd: &str) -> Result<String> {
         "type": "command",
         "command": cmd,
         "timeout": TIMEOUT_SECS,
-        "statusMessage": "agentkit: checking rules",
+        "statusMessage": "larpcop: checking rules",
     });
     merge_grouped(&mut doc, &CODEX_EVENTS, &handler)?;
     render(&doc)
@@ -85,7 +85,7 @@ pub fn gemini_settings(current: Option<&str>, cmd: &str) -> Result<String> {
     ];
     let handler = json!({
         "type": "command",
-        "name": "agentkit",
+        "name": "larpcop",
         "command": cmd,
         "timeout": TIMEOUT_SECS * 1000,
     });
@@ -93,7 +93,7 @@ pub fn gemini_settings(current: Option<&str>, cmd: &str) -> Result<String> {
     let obj = doc.as_object_mut().expect("parse() guarantees an object");
     let servers = obj.entry("mcpServers").or_insert_with(|| json!({}));
     if servers.is_object() {
-        servers["agentkit"] = json!({ "command": "agentkit", "args": ["mcp"] });
+        servers["larpcop"] = json!({ "command": "larpcop", "args": ["mcp"] });
     }
     let context = obj.entry("context").or_insert_with(|| json!({}));
     if let Some(ctx) = context.as_object_mut() {
@@ -134,7 +134,7 @@ pub fn cursor_hooks(current: Option<&str>, cmd: &str) -> Result<String> {
     render(&doc)
 }
 
-/// `.github/hooks/agentkit.json` for Copilot CLI (and the Copilot cloud agent).
+/// `.github/hooks/larpcop.json` for Copilot CLI (and the Copilot cloud agent).
 /// PascalCase events get Claude-format payloads; verdicts are JSON on stdout.
 pub fn copilot_hooks(_current: Option<&str>, cmd: &str) -> Result<String> {
     let entry = |matcher: Option<&str>| {
@@ -170,7 +170,7 @@ pub fn droid_hooks(current: Option<&str>, cmd: &str) -> Result<String> {
     render(&wrapper["hooks"])
 }
 
-/// `.kiro/hooks/agentkit.json` (Kiro IDE 1.0 / CLI V3 standalone hook file).
+/// `.kiro/hooks/larpcop.json` (Kiro IDE 1.0 / CLI V3 standalone hook file).
 pub fn kiro_hooks(_current: Option<&str>, cmd: &str) -> Result<String> {
     let hook = |name: &str, trigger: &str, matcher: Option<&str>| {
         let mut h = json!({
@@ -187,9 +187,9 @@ pub fn kiro_hooks(_current: Option<&str>, cmd: &str) -> Result<String> {
     let doc = json!({
         "version": "v1",
         "hooks": [
-            hook("agentkit-shell", "PreToolUse", Some("shell")),
-            hook("agentkit-write", "PreToolUse", Some("write")),
-            hook("agentkit-stop", "Stop", None),
+            hook("larpcop-shell", "PreToolUse", Some("shell")),
+            hook("larpcop-write", "PreToolUse", Some("write")),
+            hook("larpcop-stop", "Stop", None),
         ]
     });
     render(&doc)

@@ -28,7 +28,7 @@ fn fake_osv() -> String {
 #[test]
 fn malware_always_blocks_vulnerabilities_block_new_versions() {
     let osv = fake_osv();
-    let env = [("AGENTKIT_OSV_API", osv.as_str())];
+    let env = [("LARPCOP_OSV_API", osv.as_str())];
     let repo = repo("dependencies:\n  vulnerabilities: high\n");
     repo.write(
         "package-lock.json",
@@ -61,7 +61,7 @@ fn malware_always_blocks_vulnerabilities_block_new_versions() {
 
     // Above the threshold only malware is left.
     repo.write(
-        ".agentkit.yaml",
+        ".larpcop.yaml",
         "dependencies:\n  vulnerabilities: critical\n",
     );
     let crit = repo.run_env(&["check"], &env).stdout();
@@ -92,7 +92,7 @@ fn advisory_details_are_cached_until_osv_reports_an_edit() {
     let repo = repo("dependencies:\n  vulnerabilities: high\n");
     repo.write("package-lock.json", &npm_lock(&[("bbb-old", "1.0.0")]));
     let check = |osv: &str| {
-        repo.run_env(&["check"], &[("AGENTKIT_OSV_API", osv)])
+        repo.run_env(&["check"], &[("LARPCOP_OSV_API", osv)])
             .stdout()
     };
 
@@ -106,7 +106,7 @@ fn advisory_details_are_cached_until_osv_reports_an_edit() {
 #[test]
 fn installs_of_known_bad_packages_are_blocked_before_they_run() {
     let osv = fake_osv();
-    let env = [("AGENTKIT_OSV_API", osv.as_str())];
+    let env = [("LARPCOP_OSV_API", osv.as_str())];
     let repo = repo("dependencies:\n  vulnerabilities: high\n");
     let input = |cmd: &str| {
         hook_input(
@@ -129,7 +129,7 @@ fn installs_of_known_bad_packages_are_blocked_before_they_run() {
         run.stderr()
     );
     // Unreachable OSV: the install is not vetted, so it does not run.
-    let down = [("AGENTKIT_OSV_API", "http://127.0.0.1:9/v1")];
+    let down = [("LARPCOP_OSV_API", "http://127.0.0.1:9/v1")];
     let run = repo.run_stdin_env(&["hook", "claude-code"], &input("npm i zod"), &down);
     assert_eq!(run.code(), 2, "{}", run.stderr());
     assert!(

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 /// Enforces coding rules on any agent and any stack: one binary, used by
 /// git hooks, CI and (optionally) agent-specific hooks.
 #[derive(Parser)]
-#[command(name = "agentkit", version)]
+#[command(name = "larpcop", version)]
 pub struct Cli {
     #[command(flatten)]
     pub global: Global,
@@ -19,7 +19,7 @@ pub struct Cli {
 #[derive(Args)]
 pub struct Global {
     /// Standards enforced before the repo config (path or git URL[#ref]); a repo cannot opt out of them.
-    #[arg(long, global = true, env = "AGENTKIT_EXTENDS", value_delimiter = ',')]
+    #[arg(long, global = true, env = "LARPCOP_EXTENDS", value_delimiter = ',')]
     pub extends: Vec<String>,
     /// Re-fetch git-hosted standards instead of using the cache.
     #[arg(long, global = true)]
@@ -77,7 +77,7 @@ pub enum OrgCmd {
         /// Only these repositories (default: every non-archived, non-fork one).
         #[arg(long, value_delimiter = ',')]
         repos: Vec<String>,
-        /// Tag of agentkit's reusable enforce workflow.
+        /// Tag of larpcop's reusable enforce workflow.
         #[arg(long, default_value = concat!("v", env!("CARGO_PKG_VERSION")))]
         workflow_ref: String,
         #[arg(long)]
@@ -150,7 +150,7 @@ pub enum Cmd {
         /// Learn from the N latest pull request review comments (GitHub, via `gh`).
         #[arg(long, value_name = "N")]
         reviews: Option<usize>,
-        /// Where to write rules/ and rule-tests/ (default: the repo's first rule dir's parent, or `.agentkit`).
+        /// Where to write rules/ and rule-tests/ (default: the repo's first rule dir's parent, or `.larpcop`).
         #[arg(long)]
         out: Option<PathBuf>,
         /// Rounds of feedback on rules that fail their tests.
@@ -163,7 +163,7 @@ pub enum Cmd {
         /// Also list a GitHub user's or organization's repositories (via `gh`).
         #[arg(long, value_name = "OWNER")]
         org: Option<String>,
-        #[arg(long, default_value = "agentkit-dashboard.html")]
+        #[arg(long, default_value = "larpcop-dashboard.html")]
         out: PathBuf,
         /// Print the data as JSON instead.
         #[arg(long)]
@@ -185,13 +185,13 @@ pub enum Cmd {
         /// Target OS of the managed machines.
         #[arg(long, value_enum)]
         platform: Option<crate::sync::managed::Platform>,
-        /// Absolute path of agentkit on the managed machines.
-        #[arg(long, default_value = "/usr/local/bin/agentkit")]
+        /// Absolute path of larpcop on the managed machines.
+        #[arg(long, default_value = "/usr/local/bin/larpcop")]
         bin: String,
     },
     /// Install the git pre-commit hook.
     Install {
-        /// Overwrite an existing pre-commit hook not managed by agentkit.
+        /// Overwrite an existing pre-commit hook not managed by larpcop.
         #[arg(long)]
         force: bool,
     },

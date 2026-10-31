@@ -22,7 +22,7 @@ pub struct AstRules {
 /// Rule fixtures directory (ast-grep's convention), inside or next to a rule dir.
 pub const TESTS_DIR: &str = "rule-tests";
 
-/// Every rule defined in `dirs`, enabled or not (`agentkit test` checks them all).
+/// Every rule defined in `dirs`, enabled or not (`larpcop test` checks them all).
 pub fn load_all(dirs: &[PathBuf]) -> Result<Vec<RuleConfig<SupportLang>>> {
     let mut out = Vec::new();
     // One id may exist once per language (`no-eval` for TypeScript, Tsx and
@@ -98,7 +98,7 @@ impl AstRules {
             let note = match (&rule.note, rule.fixer.is_empty()) {
                 (note, true) => note.clone(),
                 (note, false) => Some(format!(
-                    "{}Auto-fixable: run `agentkit fix {}`.",
+                    "{}Auto-fixable: run `larpcop fix {}`.",
                     note.as_deref()
                         .map(|n| format!("{n}\n"))
                         .unwrap_or_default(),
@@ -193,7 +193,7 @@ fn collect_yaml(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
     entries.sort();
     for path in entries {
         if path.is_dir() {
-            // Fixtures for `agentkit test`, not rules.
+            // Fixtures for `larpcop test`, not rules.
             if path.file_name().is_some_and(|n| n == TESTS_DIR) {
                 continue;
             }

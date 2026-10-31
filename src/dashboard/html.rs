@@ -23,7 +23,7 @@ pub fn page(d: &Dashboard) -> String {
     let _ = write!(
         h,
         "<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content='width=device-width'>\
-    <title>agentkit · {repo}</title><style>{STYLE}</style><h1>agentkit · {repo}</h1>\
+    <title>larpcop · {repo}</title><style>{STYLE}</style><h1>larpcop · {repo}</h1>\
     <div class=muted>Generated {gen} · {files} files checked</div><div class=tiles>",
         repo = esc(&d.repo),
         gen = esc(&d.generated),

@@ -30,7 +30,7 @@ fn repo(server: Option<&str>) -> Repo {
         format!("language_servers:\n  typescript: [{s}]\n")
     });
     repo.write(
-        ".agentkit.yaml",
+        ".larpcop.yaml",
         &format!(
             "{servers}taint:\n  - id: taint-sql\n    languages: [TypeScript]\n    message: Request data reaches SQL.\n    \
              sources: [\"req.query\"]\n    sinks: [\"$DB.query($SQL)\"]\n    sink_arg: SQL\n    sink_types: {{ DB: \"\\\\bPool\\\\b\" }}\n"

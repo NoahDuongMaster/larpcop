@@ -4,8 +4,8 @@
     "PreToolUse": [
       {
         "type": "command",
-        "bash": "agentkit hook copilot",
-        "powershell": "agentkit hook copilot",
+        "bash": "larpcop hook copilot",
+        "powershell": "larpcop hook copilot",
         "timeoutSec": 120,
         "matcher": "Bash|Edit|Write"
       }
@@ -13,8 +13,8 @@
     "PostToolUse": [
       {
         "type": "command",
-        "bash": "agentkit hook copilot",
-        "powershell": "agentkit hook copilot",
+        "bash": "larpcop hook copilot",
+        "powershell": "larpcop hook copilot",
         "timeoutSec": 120,
         "matcher": "Edit|Write"
       }
@@ -22,8 +22,8 @@
     "Stop": [
       {
         "type": "command",
-        "bash": "agentkit hook copilot",
-        "powershell": "agentkit hook copilot",
+        "bash": "larpcop hook copilot",
+        "powershell": "larpcop hook copilot",
         "timeoutSec": 120
       }
     ]

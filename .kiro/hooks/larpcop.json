@@ -2,31 +2,31 @@
   "version": "v1",
   "hooks": [
     {
-      "name": "agentkit-shell",
+      "name": "larpcop-shell",
       "trigger": "PreToolUse",
       "action": {
         "type": "command",
-        "command": "agentkit hook kiro"
+        "command": "larpcop hook kiro"
       },
       "timeout": 120,
       "matcher": "shell"
     },
     {
-      "name": "agentkit-write",
+      "name": "larpcop-write",
       "trigger": "PreToolUse",
       "action": {
         "type": "command",
-        "command": "agentkit hook kiro"
+        "command": "larpcop hook kiro"
       },
       "timeout": 120,
       "matcher": "write"
     },
     {
-      "name": "agentkit-stop",
+      "name": "larpcop-stop",
       "trigger": "Stop",
       "action": {
         "type": "command",
-        "command": "agentkit hook kiro"
+        "command": "larpcop hook kiro"
       },
       "timeout": 120
     }

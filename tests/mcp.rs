@@ -1,4 +1,4 @@
-//! `agentkit mcp` spoken to over stdio, as an MCP client would.
+//! `larpcop mcp` spoken to over stdio, as an MCP client would.
 
 mod common;
 
@@ -18,7 +18,7 @@ impl Client {
         let mut child = Command::new(BIN)
             .args(["mcp"])
             .current_dir(repo.path())
-            .env("AGENTKIT_CACHE_DIR", repo.path().join(".cache-agentkit"))
+            .env("LARPCOP_CACHE_DIR", repo.path().join(".cache-larpcop"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -34,7 +34,7 @@ impl Client {
             json!({ "protocolVersion": "2025-06-18", "capabilities": {},
                     "clientInfo": { "name": "test", "version": "0" } }),
         );
-        assert_eq!(init["serverInfo"]["name"], "agentkit", "{init}");
+        assert_eq!(init["serverInfo"]["name"], "larpcop", "{init}");
         c.send(json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }));
         c
     }

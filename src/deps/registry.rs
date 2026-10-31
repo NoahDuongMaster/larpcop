@@ -56,10 +56,10 @@ impl Registry {
         let agent = ureq::Agent::config_builder()
             .timeout_global(Some(Duration::from_secs(20)))
             .http_status_as_error(false)
-            .user_agent(concat!("agentkit/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("larpcop/", env!("CARGO_PKG_VERSION")))
             .build()
             .into();
-        let api = env::var("AGENTKIT_DEPS_API").unwrap_or_else(|_| DEFAULT_API.to_string());
+        let api = env::var("LARPCOP_DEPS_API").unwrap_or_else(|_| DEFAULT_API.to_string());
         Self {
             agent,
             api: api.trim_end_matches('/').to_string(),

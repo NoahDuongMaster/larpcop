@@ -11,7 +11,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
-/// `None` when `file_name` is not a lockfile agentkit reads.
+/// `None` when `file_name` is not a lockfile larpcop reads.
 pub fn parse(file_name: &str, content: &str) -> Option<Result<Vec<Pinned>>> {
     let parsed = match file_name {
         "package-lock.json" | "npm-shrinkwrap.json" => js::npm(content),

@@ -18,7 +18,7 @@ fn crlf_checkouts_are_not_drift() {
 
     let repo = Repo::new();
     repo.write(
-        ".agentkit.yaml",
+        ".larpcop.yaml",
         &extends_yaml(&standards.path().display().to_string()),
     );
     assert_eq!(repo.run(&["sync"]).code(), 0);
@@ -67,7 +67,7 @@ fn sync_generates_agent_files_and_detects_drift() {
     assert_eq!(stop.len(), 2, "user hook kept, ours added: {stop:?}");
     assert_eq!(
         settings["hooks"]["PostToolUse"][0]["hooks"][0]["command"],
-        "agentkit hook claude-code"
+        "larpcop hook claude-code"
     );
 
     let again = repo.run(&["sync", "--check"]);
@@ -117,6 +117,6 @@ fn install_refuses_to_clobber_foreign_hooks() {
     repo.write(".git/hooks/pre-commit", "#!/bin/sh\nnpm run lint\n");
     let run = repo.run(&["install"]);
     assert_eq!(run.code(), 3);
-    assert!(run.stderr().contains("not managed by agentkit"));
+    assert!(run.stderr().contains("not managed by larpcop"));
     assert_eq!(repo.run(&["install", "--force"]).code(), 0);
 }

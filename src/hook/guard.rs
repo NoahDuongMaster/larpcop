@@ -2,7 +2,7 @@
 //! Adapters for any agent that exposes pre-tool hooks reuse these checks.
 //!
 //! Shell commands go through tree-sitter-bash (`shell_ast`): `cat cfg 2>/dev/null`
-//! stays allowed while `bash -c 'rm .agentkit.yaml'` or `--no-ver""ify` do not.
+//! stays allowed while `bash -c 'rm .larpcop.yaml'` or `--no-ver""ify` do not.
 
 use crate::shell_ast::{self, Command};
 use std::path::{Path, PathBuf};
@@ -27,8 +27,8 @@ fn protected(path: &str) -> Option<&'static str> {
     if p.contains(".git/hooks") {
         return Some("modifying git hooks is not allowed.");
     }
-    if name == ".agentkit.yaml" {
-        return Some("changing .agentkit.yaml is reserved for humans.");
+    if name == ".larpcop.yaml" {
+        return Some("changing .larpcop.yaml is reserved for humans.");
     }
     if name == crate::baseline::FILE {
         return Some("changing the baseline is reserved for humans: fix the violations instead.");
@@ -37,7 +37,7 @@ fn protected(path: &str) -> Option<&'static str> {
         .then_some("changing agent hook settings is reserved for humans.")
 }
 
-/// Hook configs `agentkit sync` generates: removing them would switch enforcement off.
+/// Hook configs `larpcop sync` generates: removing them would switch enforcement off.
 fn is_agent_config(path: &str, name: &str) -> bool {
     let json = name.ends_with(".json");
     (path.contains("/.claude/") && name.starts_with("settings") && json)
@@ -77,7 +77,7 @@ fn command_bypass(cmd: &Command) -> Option<&'static str> {
     let name = name.rsplit('/').next().unwrap_or(name);
     match name {
         "git" => git_bypass(args),
-        "agentkit"
+        "larpcop"
             if args.first().is_some_and(|a| a == "baseline")
                 && !args.iter().any(|a| a == "--prune") =>
         {
@@ -197,23 +197,23 @@ mod tests {
             "export HUSKY=0 && git commit -m x",
             "SKIP=lint git commit -m x",
             "rm .git/hooks/pre-commit",
-            "sed -i 's/error/off/' .agentkit.yaml",
-            "echo 'disable: [max-lines]' >> .agentkit.yaml",
-            "cat x > ./.agentkit.yaml",
+            "sed -i 's/error/off/' .larpcop.yaml",
+            "echo 'disable: [max-lines]' >> .larpcop.yaml",
+            "cat x > ./.larpcop.yaml",
             "echo '{}' > .claude/settings.local.json",
             "mv /tmp/x .claude/settings.json",
             "rm .cursor/hooks.json",
             "echo '{}' > .codex/hooks.json",
-            "sed -i 's/agentkit/true/' .gemini/settings.json",
-            "cp /tmp/empty.json .github/hooks/agentkit.json",
+            "sed -i 's/larpcop/true/' .gemini/settings.json",
+            "cp /tmp/empty.json .github/hooks/larpcop.json",
             // Structural cases the old regexes missed:
-            "bash -c 'rm -f .agentkit.yaml'",
+            "bash -c 'rm -f .larpcop.yaml'",
             "sudo env SKIP=all git commit -m x",
             "git commit -m x --no-ver\"\"ify",
             "git push --no-veri",
             "echo x | tee -a .git/hooks/pre-push",
-            "agentkit baseline",
-            "echo '[]' > .agentkit-baseline.json",
+            "larpcop baseline",
+            "echo '[]' > .larpcop-baseline.json",
         ] {
             assert!(bash_bypass(cmd).is_some(), "should block: {cmd}");
         }
@@ -224,20 +224,20 @@ mod tests {
         for cmd in [
             "git commit -m 'add new feature'",
             "git commit --amend -m x",
-            "cat .agentkit.yaml",
+            "cat .larpcop.yaml",
             // regression: stderr redirect next to a config read was blocked
-            "git ls-files && cat .agentkit.yaml 2>/dev/null; ls -la src 2>/dev/null",
+            "git ls-files && cat .larpcop.yaml 2>/dev/null; ls -la src 2>/dev/null",
             "cat .claude/settings.json > /tmp/backup.json",
             "ls .git/hooks",
-            "agentkit check --changed",
+            "larpcop check --changed",
             "npm test",
             // Precision the parser adds over the old regexes:
             "git config --get core.hooksPath",
-            "cp .agentkit.yaml /tmp/agentkit.yaml.bak",
-            "echo 'never rm .agentkit.yaml' > notes.txt",
+            "cp .larpcop.yaml /tmp/larpcop.yaml.bak",
+            "echo 'never rm .larpcop.yaml' > notes.txt",
             "git commit -m 'run npm install'",
             "grep -rn HUSKY=0 docs/",
-            "agentkit baseline --prune",
+            "larpcop baseline --prune",
         ] {
             assert!(bash_bypass(cmd).is_none(), "should allow: {cmd}");
         }

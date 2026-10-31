@@ -1,4 +1,4 @@
-//! `agentkit dashboard`: per-rule counts, baseline debt trend, hotspots.
+//! `larpcop dashboard`: per-rule counts, baseline debt trend, hotspots.
 
 mod common;
 

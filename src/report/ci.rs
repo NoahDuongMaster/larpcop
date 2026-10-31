@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
-const INFO_URI: &str = "https://github.com/NoahDuongMaster/agentkit";
+const INFO_URI: &str = "https://github.com/NoahDuongMaster/larpcop";
 
 fn sarif_level(level: Level) -> &'static str {
     match level {
@@ -58,7 +58,7 @@ pub fn sarif(outcome: &Outcome) -> String {
                 "message": { "text": v.message },
                 "locations": [location(v)],
                 // Stable across line moves, like the baseline.
-                "partialFingerprints": { "agentkit/v1": fingerprint(v) },
+                "partialFingerprints": { "larpcop/v1": fingerprint(v) },
             })
         })
         .collect();
@@ -67,7 +67,7 @@ pub fn sarif(outcome: &Outcome) -> String {
         "version": "2.1.0",
         "runs": [{
             "tool": { "driver": {
-                "name": "agentkit",
+                "name": "larpcop",
                 "version": env!("CARGO_PKG_VERSION"),
                 "informationUri": INFO_URI,
                 "rules": descriptors,
@@ -118,7 +118,7 @@ pub fn gitlab(outcome: &Outcome) -> String {
 
 /// Sticky PR comment: counts per rule, then each finding with its fix.
 pub fn markdown(outcome: &Outcome) -> String {
-    let mut out = String::from("<!-- agentkit-report -->\n### agentkit\n\n");
+    let mut out = String::from("<!-- larpcop-report -->\n### larpcop\n\n");
     if outcome.violations.is_empty() {
         let _ = writeln!(
             out,

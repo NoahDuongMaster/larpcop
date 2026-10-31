@@ -46,7 +46,7 @@ fn review_reports_changed_lines_as_warnings_and_caches_answers() {
 ```"#;
     let repo = Repo::new();
     repo.write(
-        ".agentkit.yaml",
+        ".larpcop.yaml",
         &format!(
             "llm:\n  command: {}\n  rules:\n    - id: thin-controllers\n      files: [\"src/controllers/**\"]\n      \
              prompt: Controllers call services, never the database.\n",
@@ -62,7 +62,7 @@ fn review_reports_changed_lines_as_warnings_and_caches_answers() {
     );
     repo.write("src/db.ts", "export const db = { x: 1 };\n");
 
-    let env = [("AGENTKIT_CACHE_DIR", cache.path().to_str().unwrap())];
+    let env = [("LARPCOP_CACHE_DIR", cache.path().to_str().unwrap())];
     let run = repo.run_env(&["review", "--changed"], &env);
     let out = run.stdout();
     assert_eq!(run.code(), 0, "{out}{}", run.stderr());
@@ -111,7 +111,7 @@ fn learn_keeps_only_rules_that_pass_their_tests_after_feedback() {
     let cache = tempfile::tempdir().unwrap();
     let repo = Repo::new();
     repo.write(
-        ".agentkit.yaml",
+        ".larpcop.yaml",
         &format!(
             "llm:\n  command: {}\n",
             yaml_str(&fake_model(model.path(), &[BAD, GOOD]))
@@ -121,7 +121,7 @@ fn learn_keeps_only_rules_that_pass_their_tests_after_feedback() {
         "src/a.ts",
         "const _ = require('lodash');\nexport const f = _.map;\n",
     );
-    let env = [("AGENTKIT_CACHE_DIR", cache.path().to_str().unwrap())];
+    let env = [("LARPCOP_CACHE_DIR", cache.path().to_str().unwrap())];
     let run = repo.run_env(&["learn", "never use lodash"], &env);
     let out = run.stdout();
     assert_eq!(run.code(), 0, "{out}{}", run.stderr());
@@ -142,14 +142,14 @@ fn learn_keeps_only_rules_that_pass_their_tests_after_feedback() {
 
     // The written rule works as a normal rule of the repository.
     assert!(
-        repo.read(".agentkit/rule-tests/no-lodash-test.yml")
+        repo.read(".larpcop/rule-tests/no-lodash-test.yml")
             .contains("remeda")
     );
     // One id, one document per language.
-    let rule = repo.read(".agentkit/rules/no-lodash.yml");
+    let rule = repo.read(".larpcop/rules/no-lodash.yml");
     assert_eq!(rule.matches("id: no-lodash").count(), 2, "{rule}");
     repo.write("src/b.js", "const _ = require('lodash');\n");
-    repo.write(".agentkit.yaml", "rule_dirs: [.agentkit/rules]\n");
+    repo.write(".larpcop.yaml", "rule_dirs: [.larpcop/rules]\n");
     assert_eq!(repo.run(&["test", "--require-all"]).code(), 0);
     let check = repo.run(&["check"]).stdout();
     assert!(

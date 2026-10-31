@@ -1,4 +1,4 @@
-//! `agentkit lsp`: the same rules as diagnostics while typing, in any editor
+//! `larpcop lsp`: the same rules as diagnostics while typing, in any editor
 //! with LSP support, plus a code action that applies the rules' fixes.
 
 use crate::context::Ctx;
@@ -166,7 +166,7 @@ impl Server {
         let edit = TextEdit::new(Range::new(Position::new(0, 0), end), fixed);
         let changes = HashMap::from([(Uri::from_str(&uri)?, vec![edit])]);
         Ok(vec![CodeActionOrCommand::CodeAction(CodeAction {
-            title: "agentkit: apply rule fixes".into(),
+            title: "larpcop: apply rule fixes".into(),
             kind: Some(CodeActionKind::QUICKFIX),
             edit: Some(WorkspaceEdit {
                 changes: Some(changes),
@@ -212,7 +212,7 @@ fn diagnostic(v: &Violation, text: &str) -> Diagnostic {
         ),
         severity: Some(severity),
         code: Some(NumberOrString::String(v.rule.clone())),
-        source: Some("agentkit".into()),
+        source: Some("larpcop".into()),
         message,
         ..Default::default()
     }

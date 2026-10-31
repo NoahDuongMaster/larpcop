@@ -1,5 +1,5 @@
 //! AI review and rule learning. The model is whatever CLI the team already
-//! uses (`claude -p`, `codex exec -`, `gemini`, `ollama run …`): agentkit sends
+//! uses (`claude -p`, `codex exec -`, `gemini`, `ollama run …`): larpcop sends
 //! a prompt on stdin and reads stdout, so it holds no API key and no vendor SDK.
 
 pub mod learn;
@@ -27,7 +27,7 @@ impl Llm {
             let sh = crate::shell::posix_shell().to_string_lossy().into_owned();
             vec![sh, "-c".to_string(), s.to_string()]
         };
-        let argv: Vec<String> = match (&cfg.command, std::env::var("AGENTKIT_LLM")) {
+        let argv: Vec<String> = match (&cfg.command, std::env::var("LARPCOP_LLM")) {
             (_, Ok(env)) if !env.trim().is_empty() => shell(&env),
             (Some(LlmCommand::Shell(s)), _) => shell(s),
             (Some(LlmCommand::Argv(a)), _) if !a.is_empty() => a.clone(),
@@ -36,12 +36,12 @@ impl Llm {
                 .find(|c| on_path(c[0]))
                 .map(|c| c.iter().map(|s| s.to_string()).collect())
                 .context(
-                    "no model CLI found: set `llm.command` (e.g. [claude, -p]) or AGENTKIT_LLM",
+                    "no model CLI found: set `llm.command` (e.g. [claude, -p]) or LARPCOP_LLM",
                 )?,
         };
-        let cache = std::env::var_os("AGENTKIT_CACHE_DIR")
+        let cache = std::env::var_os("LARPCOP_CACHE_DIR")
             .map(PathBuf::from)
-            .or_else(|| dirs::cache_dir().map(|d| d.join("agentkit")))
+            .or_else(|| dirs::cache_dir().map(|d| d.join("larpcop")))
             .map(|d| d.join("llm"));
         Ok(Self { argv, cache })
     }
@@ -63,8 +63,8 @@ impl Llm {
             return Ok(hit);
         }
         // Outside the repository: the model's CLI must not pick up the project's
-        // hooks (agentkit's own) or edit files.
-        let cwd = std::env::temp_dir().join("agentkit-llm");
+        // hooks (larpcop's own) or edit files.
+        let cwd = std::env::temp_dir().join("larpcop-llm");
         std::fs::create_dir_all(&cwd)?;
         let mut child = Command::new(&self.argv[0])
             .args(&self.argv[1..])

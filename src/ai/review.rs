@@ -1,4 +1,4 @@
-//! `agentkit review`: plain-language rules judged by a model, file by file.
+//! `larpcop review`: plain-language rules judged by a model, file by file.
 //! Findings are warnings, never errors: a model is not deterministic, and a
 //! gate must be. On a diff, only lines the diff touches are reported.
 

@@ -1,4 +1,4 @@
-//! `agentkit learn`: turn a standard written in words (an instruction, or the
+//! `larpcop learn`: turn a standard written in words (an instruction, or the
 //! team's recurring review comments) into deterministic ast-grep rules.
 //! The model only proposes; a rule is kept only if it parses and passes the
 //! valid/invalid examples the model wrote for it. Failures go back to the
@@ -169,7 +169,7 @@ fn write(dir: &Path, p: &Value) -> Result<()> {
         ),
     ] {
         std::fs::create_dir_all(dir.join(sub))?;
-        let yaml = format!("# Learned by `agentkit learn`; review before merging.\n{body}");
+        let yaml = format!("# Learned by `larpcop learn`; review before merging.\n{body}");
         std::fs::write(dir.join(sub).join(name), yaml)?;
     }
     Ok(())
@@ -223,7 +223,7 @@ pub fn run(
                 .iter()
                 .find(|d| d.starts_with(&cfg.root))
                 .and_then(|d| d.parent().map(Path::to_path_buf))
-                .unwrap_or_else(|| cfg.root.join(".agentkit"))
+                .unwrap_or_else(|| cfg.root.join(".larpcop"))
         },
         |o| cfg.root.join(o),
     );
@@ -239,7 +239,7 @@ pub fn run(
         println!("✗ {id}: {}", why.lines().next().unwrap_or(""));
     }
     if result.kept.is_empty() {
-        println!("agentkit: no rule passed its tests.");
+        println!("larpcop: no rule passed its tests.");
         return Ok(1);
     }
     let dir = result
@@ -249,7 +249,7 @@ pub fn run(
         .display()
         .to_string();
     println!(
-        "agentkit: wrote {} rule(s) to {dir}/rules. Review them, then make sure `.agentkit.yaml` lists `rule_dirs: [{dir}/rules]`.",
+        "larpcop: wrote {} rule(s) to {dir}/rules. Review them, then make sure `.larpcop.yaml` lists `rule_dirs: [{dir}/rules]`.",
         result.kept.len()
     );
     Ok(0)

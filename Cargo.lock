@@ -9,40 +9,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
-name = "agentkit"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ast-grep-config",
- "ast-grep-core",
- "ast-grep-language",
- "base64",
- "clap",
- "cvss",
- "dirs",
- "dunce",
- "globset",
- "ignore",
- "jiff",
- "jsonc-parser",
- "lsp-server",
- "lsp-types",
- "percent-encoding",
- "rayon",
- "regex",
- "rmcp",
- "roxmltree",
- "serde",
- "serde-saphyr",
- "serde_json",
- "tempfile",
- "tokio",
- "toml",
- "ureq",
- "yarn-lock-parser",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -900,6 +866,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ecded084f9b9a718d39668a42657c32253663d1f6afb3fbb9134f0305f73f48"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "larpcop"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "ast-grep-config",
+ "ast-grep-core",
+ "ast-grep-language",
+ "base64",
+ "clap",
+ "cvss",
+ "dirs",
+ "dunce",
+ "globset",
+ "ignore",
+ "jiff",
+ "jsonc-parser",
+ "lsp-server",
+ "lsp-types",
+ "percent-encoding",
+ "rayon",
+ "regex",
+ "rmcp",
+ "roxmltree",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "toml",
+ "ureq",
+ "yarn-lock-parser",
 ]
 
 [[package]]

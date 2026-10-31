@@ -29,7 +29,7 @@ fn codex_guards_feeds_back_and_blocks_stop_once() {
     let bash = json!({ "hook_event_name": "PreToolUse", "tool_name": "Bash",
                        "tool_input": { "command": "git commit -n -m x" } });
     assert_eq!(repo.run_stdin(&hook, &payload(&repo, bash)).code(), 2);
-    let cfg = codex_patch("PreToolUse", ".agentkit.yaml");
+    let cfg = codex_patch("PreToolUse", ".larpcop.yaml");
     assert_eq!(repo.run_stdin(&hook, &payload(&repo, cfg)).code(), 2);
 
     repo.write("src/a.ts", BAD_TS);
@@ -167,7 +167,7 @@ fn sync_wires_every_agent() {
     );
     assert_eq!(
         codex["hooks"]["Stop"][0]["hooks"][0]["command"],
-        "agentkit hook codex"
+        "larpcop hook codex"
     );
 
     let gemini = read(".gemini/settings.json");

@@ -7,7 +7,7 @@ data/static/codefixes/). Other targets: a truth file (`--truth x.json`) fixed
 before any tool ran on them. A tool finds a line when one of its findings spans
 it, give or take WINDOW lines.
 
-Usage: score.py REPO_DIR AGENTKIT_JSON SEMGREP_JSON [GITLEAKS_JSON] [--truth TRUTH_JSON]
+Usage: score.py REPO_DIR LARPCOP_JSON SEMGREP_JSON [GITLEAKS_JSON] [--truth TRUTH_JSON]
 """
 import collections
 import json
@@ -18,7 +18,7 @@ import sys
 WINDOW = 3
 MARK = re.compile(r"vuln-code-snippet vuln-line ([\w ]+)")
 SKIP = ("test/", "data/static/codefixes/", "lib/codingChallenges", "node_modules/")
-# agentkit rules that are about security (the rest of `recommended` is code quality).
+# larpcop rules that are about security (the rest of `recommended` is code quality).
 SECURITY = {
     "no-sql-interpolation", "py-no-sql-interpolation", "go-no-sql-sprintf", "taint-sql", "py-taint-sql",
     "taint-shell", "taint-redirect", "no-shell-interpolation", "py-no-shell-true", "no-eval", "py-no-eval",
@@ -51,7 +51,7 @@ def load(ak, sg):
     a = json.load(open(ak))["violations"]
     s = json.load(open(sg))["results"]
     return {
-        "agentkit": [(v["file"], v["line"], v["line"], v["rule"]) for v in a if v["rule"] in SECURITY],
+        "larpcop": [(v["file"], v["line"], v["line"], v["rule"]) for v in a if v["rule"] in SECURITY],
         "Semgrep OSS": [(r["path"], r["start"]["line"], r["end"]["line"], r["check_id"].split(".")[-1]) for r in s],
     }
 
@@ -67,11 +67,11 @@ def secrets_parity(ak, gl):
         for v in json.load(open(ak))["violations"]
         if v["rule"] == "secrets" and (m := re.search(r"rule `([^`]+)`", v["message"])))
     out(f"\nSecrets vs gitleaks: {sum((g & a).values())} identical findings; "
-        f"{sum((g - a).values())} only in gitleaks, {sum((a - g).values())} only in agentkit.")
+        f"{sum((g - a).values())} only in gitleaks, {sum((a - g).values())} only in larpcop.")
     for k in sorted(g - a):
         out(f"- only gitleaks: `{k[0]}:{k[1]}` ({k[2]})")
     for k in sorted(a - g):
-        out(f"- only agentkit: `{k[0]}:{k[1]}` ({k[2]})")
+        out(f"- only larpcop: `{k[0]}:{k[1]}` ({k[2]})")
 
 
 def truth(path):

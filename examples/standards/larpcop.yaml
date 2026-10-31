@@ -10,7 +10,7 @@ exclude: ["**/node_modules/**", "**/dist/**", "**/vendor/**", "**/*.min.js"]
 dependencies:
   # Compromised releases are usually caught and pulled within days.
   min_release_age: 14
-  # New direct dependencies are approved by a human, in the repo's .agentkit.yaml.
+  # New direct dependencies are approved by a human, in the repo's .larpcop.yaml.
   require_approval: true
 locked:
   - max-lines

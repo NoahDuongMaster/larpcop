@@ -1,15 +1,15 @@
 //! Locates a POSIX shell so `run:` commands behave the same on every OS.
 //!
 //! Windows has no `sh` on PATH by default, but Git for Windows ships one
-//! (the same one git uses to run hooks) and agentkit already requires git.
+//! (the same one git uses to run hooks) and larpcop already requires git.
 
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// `AGENTKIT_SHELL` → (Windows) Git's bundled `sh.exe` → `sh` on PATH.
+/// `LARPCOP_SHELL` → (Windows) Git's bundled `sh.exe` → `sh` on PATH.
 pub fn posix_shell() -> PathBuf {
-    if let Some(sh) = env::var_os("AGENTKIT_SHELL") {
+    if let Some(sh) = env::var_os("LARPCOP_SHELL") {
         return PathBuf::from(sh);
     }
     if cfg!(windows)

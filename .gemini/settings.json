@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "name": "agentkit",
-            "command": "agentkit hook gemini",
+            "name": "larpcop",
+            "command": "larpcop hook gemini",
             "timeout": 120000
           }
         ]
@@ -19,8 +19,8 @@
         "hooks": [
           {
             "type": "command",
-            "name": "agentkit",
-            "command": "agentkit hook gemini",
+            "name": "larpcop",
+            "command": "larpcop hook gemini",
             "timeout": 120000
           }
         ]
@@ -31,8 +31,8 @@
         "hooks": [
           {
             "type": "command",
-            "name": "agentkit",
-            "command": "agentkit hook gemini",
+            "name": "larpcop",
+            "command": "larpcop hook gemini",
             "timeout": 120000
           }
         ]
@@ -46,8 +46,8 @@
     ]
   },
   "mcpServers": {
-    "agentkit": {
-      "command": "agentkit",
+    "larpcop": {
+      "command": "larpcop",
       "args": [
         "mcp"
       ]

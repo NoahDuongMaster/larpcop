@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="t">
+  <title id="t">Jimothy, larpcop's mascot: a round, short-necked raccoon in a police cap</title>
+  <!-- Short ringed tail, peeking out behind the body -->
+  <g transform="rotate(-20 425 395) translate(15 0)">
+    <ellipse cx="410" cy="395" rx="46" ry="28" fill="#7b8089"/>
+    <path d="M388 369 q8 26 0 52 h14 q8 -26 0 -52 z" fill="#2b2d31"/>
+    <path d="M418 368 q8 27 0 54 h13 q7 -27 0 -54 z" fill="#2b2d31"/>
+  </g>
+  <!-- Round body: Jimothy is famously short and nearly spherical -->
+  <ellipse cx="256" cy="335" rx="155" ry="132" fill="#8a8f98"/>
+  <ellipse cx="256" cy="365" rx="92" ry="82" fill="#c9ccd1"/>
+  <!-- Ears -->
+  <path d="M112 178 L122 96 L176 132 Z" fill="#4a4e55" stroke="#4a4e55" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M127 162 L132 118 L158 136 Z" fill="#d9d2cc"/>
+  <path d="M400 178 L390 96 L336 132 Z" fill="#4a4e55" stroke="#4a4e55" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M385 162 L380 118 L354 136 Z" fill="#d9d2cc"/>
+  <!-- Head, merged into the body (no neck to speak of) -->
+  <ellipse cx="256" cy="222" rx="128" ry="104" fill="#8a8f98"/>
+  <!-- White muzzle -->
+  <ellipse cx="256" cy="262" rx="70" ry="48" fill="#f2f2f2"/>
+  <!-- Bandit mask -->
+  <path d="M146 214 Q196 182 256 212 Q316 182 366 214 Q358 262 304 262 Q272 260 256 240 Q240 260 208 262 Q154 262 146 214 Z" fill="#2b2d31"/>
+  <!-- Eyes -->
+  <circle cx="212" cy="226" r="17" fill="#fff"/>
+  <circle cx="215" cy="228" r="10" fill="#111"/>
+  <circle cx="219" cy="223" r="3.5" fill="#fff"/>
+  <circle cx="300" cy="226" r="17" fill="#fff"/>
+  <circle cx="303" cy="228" r="10" fill="#111"/>
+  <circle cx="307" cy="223" r="3.5" fill="#fff"/>
+  <!-- Nose, mouth, cheeks -->
+  <ellipse cx="256" cy="258" rx="16" ry="11" fill="#1d1e21"/>
+  <path d="M256 269 v10 M240 284 q16 12 32 0" fill="none" stroke="#1d1e21" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="186" cy="276" r="11" fill="#e98a9a" opacity=".55"/>
+  <circle cx="326" cy="276" r="11" fill="#e98a9a" opacity=".55"/>
+  <!-- Police cap -->
+  <path d="M150 166 Q150 92 256 84 Q362 92 362 166 Z" fill="#1f3a68"/>
+  <rect x="160" y="150" width="192" height="28" rx="8" fill="#16294a"/>
+  <rect x="160" y="160" width="192" height="6" fill="#f2c230"/>
+  <path d="M168 178 Q256 214 344 178 Q256 196 168 178 Z" fill="#0f1115"/>
+  <!-- Badge -->
+  <path d="M256 100 l7.6 15.4 17 2.5 -12.3 12 2.9 16.9 -15.2 -8 -15.2 8 2.9 -16.9 -12.3 -12 17 -2.5 z" fill="#f2c230" stroke="#b8860b" stroke-width="3" stroke-linejoin="round"/>
+  <!-- Front paws -->
+  <ellipse cx="196" cy="446" rx="34" ry="20" fill="#2b2d31"/>
+  <ellipse cx="316" cy="446" rx="34" ry="20" fill="#2b2d31"/>
+</svg>

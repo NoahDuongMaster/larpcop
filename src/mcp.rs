@@ -1,4 +1,4 @@
-//! `agentkit mcp`: an MCP server (stdio) so agents can ask for the rules that
+//! `larpcop mcp`: an MCP server (stdio) so agents can ask for the rules that
 //! apply to the file they are about to touch, validate code before writing it,
 //! and run fixes — instead of loading every rule of every stack into context.
 
@@ -146,7 +146,7 @@ impl Server {
 impl ServerHandler for Server {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("agentkit", env!("CARGO_PKG_VERSION")))
+            .with_server_info(Implementation::new("larpcop", env!("CARGO_PKG_VERSION")))
             .with_instructions(
                 "Coding rules enforced on this repository by pre-commit and CI. Call rules_for before \
 editing a file and check_content before writing it; violating code cannot be committed.",

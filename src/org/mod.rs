@@ -1,4 +1,4 @@
-//! `agentkit org`: roll the standards out to every repository of a GitHub user or
+//! `larpcop org`: roll the standards out to every repository of a GitHub user or
 //! organization, and see which ones are actually enforced.
 
 mod gh;
@@ -11,13 +11,13 @@ use rayon::prelude::*;
 use serde::Serialize;
 use std::fmt::Write;
 
-pub const BRANCH: &str = "agentkit/setup";
-pub const WORKFLOW: &str = ".github/workflows/agentkit.yml";
+pub const BRANCH: &str = "larpcop/setup";
+pub const WORKFLOW: &str = ".github/workflows/larpcop.yml";
 
 #[derive(Serialize)]
 pub struct Status {
     pub repo: String,
-    /// `.agentkit.yaml` on the default branch.
+    /// `.larpcop.yaml` on the default branch.
     pub config: bool,
     /// `extends` entries of that config.
     pub standards: Vec<String>,
@@ -25,7 +25,7 @@ pub struct Status {
     pub gate: Option<String>,
     /// Conclusion of the gate's latest run.
     pub last_run: Option<String>,
-    /// Open `agentkit org setup` pull request.
+    /// Open `larpcop org setup` pull request.
     pub setup_pr: Option<String>,
 }
 
@@ -42,7 +42,7 @@ pub fn status(owner: &str) -> Result<Vec<Status>> {
 
 fn repo_status(repo: &gh::Repo) -> Status {
     let (full, branch) = (repo.full.as_str(), repo.default_branch.as_str());
-    let config = gh::file(full, ".agentkit.yaml", branch);
+    let config = gh::file(full, ".larpcop.yaml", branch);
     let standards = config
         .as_deref()
         .and_then(|c| serde_saphyr::from_str::<crate::config::RawConfig>(c).ok())
@@ -54,10 +54,10 @@ fn repo_status(repo: &gh::Repo) -> Status {
         .find(|n| {
             // The caller, not a reusable definition that mentions itself.
             gh::file(full, &format!(".github/workflows/{n}"), branch).is_some_and(|w| {
-                let calls = w.contains("agentkit/.github/workflows/enforce.yml")
-                    || (full.ends_with("/agentkit")
+                let calls = w.contains("larpcop/.github/workflows/enforce.yml")
+                    || (full.ends_with("/larpcop")
                         && w.contains("./.github/workflows/enforce.yml"))
-                    || w.contains("agentkit check");
+                    || w.contains("larpcop check");
                 calls && !w.contains("workflow_call:")
             })
         });
@@ -142,7 +142,7 @@ pub fn render(rows: &[Status], expected: Option<&str>) -> String {
     let enforced = rows.iter().filter(|r| r.enforced()).count();
     let _ = writeln!(
         out,
-        "\n{enforced}/{} repositories run the agentkit gate in CI.",
+        "\n{enforced}/{} repositories run the larpcop gate in CI.",
         rows.len()
     );
     out

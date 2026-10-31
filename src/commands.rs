@@ -43,7 +43,7 @@ pub fn run(cli: Cli) -> Result<u8> {
             };
             next.write(&cfg.root)?;
             println!(
-                "agentkit: {} now holds {} known violation(s).",
+                "larpcop: {} now holds {} known violation(s).",
                 baseline::FILE,
                 next.len()
             );
@@ -64,7 +64,7 @@ pub fn run(cli: Cli) -> Result<u8> {
             }
             let failed = report.failures > 0 || (require_all && !report.untested.is_empty());
             println!(
-                "agentkit: {}",
+                "larpcop: {}",
                 if failed {
                     "✗ rule tests failed"
                 } else {
@@ -115,7 +115,7 @@ pub fn run(cli: Cli) -> Result<u8> {
             } else {
                 fs::write(&out, crate::dashboard::render(&d))
                     .with_context(|| format!("writing {}", out.display()))?;
-                println!("agentkit: wrote {}", out.display());
+                println!("larpcop: wrote {}", out.display());
             }
             Ok(0)
         }
@@ -143,7 +143,7 @@ pub fn run(cli: Cli) -> Result<u8> {
         },
         Cmd::Install { force } => {
             let path = crate::install::install(&ctx()?.root, force)?;
-            println!("agentkit: installed {}", path.display());
+            println!("larpcop: installed {}", path.display());
             Ok(0)
         }
         Cmd::Mcp => {
@@ -256,13 +256,11 @@ fn sync(ctx: &Ctx, check: bool) -> Result<u8> {
         println!("{verb} {}", path.display());
     }
     if check && !changed.is_empty() {
-        eprintln!(
-            "agentkit: generated files are stale; run `agentkit sync` and commit the result."
-        );
+        eprintln!("larpcop: generated files are stale; run `larpcop sync` and commit the result.");
         return Ok(1);
     }
     if changed.is_empty() {
-        println!("agentkit: generated files are up to date.");
+        println!("larpcop: generated files are up to date.");
     }
     Ok(0)
 }

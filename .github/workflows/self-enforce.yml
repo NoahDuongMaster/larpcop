@@ -1,4 +1,4 @@
-# Dogfood: agentkit's own pull requests go through the same gate consumers use,
+# Dogfood: larpcop's own pull requests go through the same gate consumers use,
 # with the example company standards forced on top of the repo config.
 name: self-enforce
 
@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  agentkit:
+  larpcop:
     uses: ./.github/workflows/enforce.yml
     with:
       standards: examples/standards

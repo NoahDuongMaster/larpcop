@@ -1,11 +1,11 @@
-//! Merges agentkit's hook entries into agents' JSON config files, keeping
+//! Merges larpcop's hook entries into agents' JSON config files, keeping
 //! every user-defined setting and hook untouched.
 
 use anyhow::{Context, Result};
 use serde_json::{Map, Value, json};
 
-/// Every generated entry runs `agentkit hook <agent>`; that prefix identifies ours.
-const OURS: &str = "agentkit hook ";
+/// Every generated entry runs `larpcop hook <agent>`; that prefix identifies ours.
+const OURS: &str = "larpcop hook ";
 
 pub fn parse(current: Option<&str>) -> Result<Value> {
     let doc = match current {

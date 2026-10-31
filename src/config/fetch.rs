@@ -6,13 +6,13 @@ use std::process::Command;
 use std::{env, fs, process};
 
 pub fn cache_root() -> Result<PathBuf> {
-    if let Some(dir) = env::var_os("AGENTKIT_CACHE_DIR") {
+    if let Some(dir) = env::var_os("LARPCOP_CACHE_DIR") {
         return Ok(PathBuf::from(dir));
     }
     // XDG on Linux, ~/Library/Caches on macOS, %LOCALAPPDATA% on Windows.
     dirs::cache_dir()
-        .map(|d| d.join("agentkit"))
-        .context("no cache directory on this system; set AGENTKIT_CACHE_DIR")
+        .map(|d| d.join("larpcop"))
+        .context("no cache directory on this system; set LARPCOP_CACHE_DIR")
 }
 
 fn cache_key(url: &str, reference: Option<&str>) -> String {

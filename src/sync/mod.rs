@@ -1,4 +1,4 @@
-//! `agentkit sync`: generates the committed, agent-facing files from the resolved rules.
+//! `larpcop sync`: generates the committed, agent-facing files from the resolved rules.
 
 mod agents;
 mod agents_md;
@@ -23,7 +23,7 @@ fn read_opt(path: &Path) -> Result<Option<String>> {
 
 type Render = fn(Option<&str>, &str) -> Result<String>;
 
-/// Agent id (as in `agentkit hook <id>` and the `agents:` config) → repo file → renderer.
+/// Agent id (as in `larpcop hook <id>` and the `agents:` config) → repo file → renderer.
 pub const AGENT_FILES: [(&str, &str, Render); 11] = [
     ("claude-code", "CLAUDE.md", |c, _| Ok(agents::claude_md(c))),
     (
@@ -38,11 +38,11 @@ pub const AGENT_FILES: [(&str, &str, Render); 11] = [
     ("cursor", ".cursor/mcp.json", agents::mcp_json),
     (
         "copilot",
-        ".github/hooks/agentkit.json",
+        ".github/hooks/larpcop.json",
         agents::copilot_hooks,
     ),
     ("droid", ".factory/hooks.json", agents::droid_hooks),
-    ("kiro", ".kiro/hooks/agentkit.json", agents::kiro_hooks),
+    ("kiro", ".kiro/hooks/larpcop.json", agents::kiro_hooks),
     ("kiro", ".kiro/settings/mcp.json", agents::mcp_json),
 ];
 
@@ -73,7 +73,7 @@ fn plan(cfg: &Config, rules: &[RuleInfo]) -> Result<Vec<(PathBuf, String)>> {
     };
     for (agent, rel, render) in AGENT_FILES.iter().filter(|(a, ..)| wanted(a)) {
         let path = cfg.root.join(rel);
-        let cmd = format!("agentkit hook {agent}");
+        let cmd = format!("larpcop hook {agent}");
         let content = render(read_opt(&path)?.as_deref(), &cmd)
             .with_context(|| format!("updating {}", path.display()))?;
         out.push((path, content));

@@ -2,13 +2,13 @@
 # (or an org ruleset requires it), so no agent and no human can merge violations.
 #
 #   jobs:
-#     agentkit:
-#       uses: NoahDuongMaster/agentkit/.github/workflows/enforce.yml@v0.1.0
+#     larpcop:
+#       uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.2.0
 #       with:
 #         standards: https://github.com/<org>/standards.git#v1.0.0
 #       secrets:
-#         agentkit-token: ${{ secrets.AGENTKIT_TOKEN }}   # only while agentkit is private
-name: agentkit-enforce
+#         larpcop-token: ${{ secrets.LARPCOP_TOKEN }}   # only while larpcop is private
+name: larpcop-enforce
 
 on:
   workflow_call:
@@ -17,8 +17,8 @@ on:
         description: Company standards forced on the repo (path or git URL#tag). Empty = repo config only.
         type: string
         default: ""
-      agentkit-version:
-        description: agentkit release tag. Empty = latest release.
+      larpcop-version:
+        description: larpcop release tag. Empty = latest release.
         type: string
         default: ""
       comment:
@@ -30,7 +30,7 @@ on:
         type: boolean
         default: false
       review:
-        description: Run `agentkit review` (the repo's `llm` rules) and add its warnings to the PR comment. Never fails the job.
+        description: Run `larpcop review` (the repo's `llm` rules) and add its warnings to the PR comment. Never fails the job.
         type: boolean
         default: false
       review-setup:
@@ -42,8 +42,8 @@ on:
         type: string
         default: ""
     secrets:
-      agentkit-token:
-        description: Token able to read agentkit releases and private standards (needed while they are private).
+      larpcop-token:
+        description: Token able to read larpcop releases and private standards (needed while they are private).
         required: false
       anthropic-api-key:
         description: For `review` with Claude Code.
@@ -56,23 +56,23 @@ jobs:
   enforce:
     runs-on: ubuntu-latest
     env:
-      AGENTKIT_EXTENDS: ${{ inputs.standards }}
+      LARPCOP_EXTENDS: ${{ inputs.standards }}
       BASE_REF: ${{ github.base_ref }}
-      GH_TOKEN: ${{ secrets.agentkit-token || github.token }}
+      GH_TOKEN: ${{ secrets.larpcop-token || github.token }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Install agentkit
+      - name: Install larpcop
         env:
-          VERSION: ${{ inputs.agentkit-version }}
+          VERSION: ${{ inputs.larpcop-version }}
         run: |
-          gh release download ${VERSION:+"$VERSION"} --repo NoahDuongMaster/agentkit \
-            --pattern 'agentkit-x86_64-unknown-linux-gnu.tar.xz' --output agentkit.tar.xz
-          sudo tar -xJf agentkit.tar.xz --strip-components=1 -C /usr/local/bin
-          rm agentkit.tar.xz
-          agentkit --version
+          gh release download ${VERSION:+"$VERSION"} --repo NoahDuongMaster/larpcop \
+            --pattern 'larpcop-x86_64-unknown-linux-gnu.tar.xz' --output larpcop.tar.xz
+          sudo tar -xJf larpcop.tar.xz --strip-components=1 -C /usr/local/bin
+          rm larpcop.tar.xz
+          larpcop --version
 
       - name: Allow fetching private standards
         if: env.GH_TOKEN != github.token
@@ -82,8 +82,8 @@ jobs:
       - name: Rules
         id: rules
         run: >-
-          agentkit check --since "origin/${BASE_REF}" --format github
-          --output markdown=agentkit-report.md --output sarif=agentkit.sarif
+          larpcop check --since "origin/${BASE_REF}" --format github
+          --output markdown=larpcop-report.md --output sarif=larpcop.sarif
 
       # Advisory only: a model is not deterministic, so its findings never gate.
       - name: AI review
@@ -92,40 +92,40 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.anthropic-api-key }}
           OPENAI_API_KEY: ${{ secrets.openai-api-key }}
-          AGENTKIT_LLM: ${{ inputs.review-command }}
+          LARPCOP_LLM: ${{ inputs.review-command }}
           SETUP: ${{ inputs.review-setup }}
         run: |
           if [ -n "$SETUP" ]; then sh -c "$SETUP"; fi
-          agentkit review --since "origin/${BASE_REF}" --format markdown > agentkit-review.md
-          if [ -f agentkit-report.md ]; then
-            sed -i '1{/^<!-- agentkit-report -->$/d}' agentkit-review.md
-            printf '\n' >> agentkit-report.md
+          larpcop review --since "origin/${BASE_REF}" --format markdown > larpcop-review.md
+          if [ -f larpcop-report.md ]; then
+            sed -i '1{/^<!-- larpcop-report -->$/d}' larpcop-review.md
+            printf '\n' >> larpcop-report.md
           fi
-          sed -i 's/^### agentkit$/### agentkit · AI review (advisory)/' agentkit-review.md
-          cat agentkit-review.md >> agentkit-report.md
+          sed -i 's/^### larpcop$/### larpcop · AI review (advisory)/' larpcop-review.md
+          cat larpcop-review.md >> larpcop-report.md
 
       # One comment per PR, edited on every push (never a pile of bot comments).
       - name: Pull request comment
-        if: always() && inputs.comment && github.event_name == 'pull_request' && hashFiles('agentkit-report.md') != ''
+        if: always() && inputs.comment && github.event_name == 'pull_request' && hashFiles('larpcop-report.md') != ''
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
         run: |
           id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
-            --jq '.[] | select(.body | startswith("<!-- agentkit-report -->")) | .id' | head -n 1)
+            --jq '.[] | select(.body | startswith("<!-- larpcop-report -->")) | .id' | head -n 1)
           if [ -n "$id" ]; then
-            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@agentkit-report.md >/dev/null
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@larpcop-report.md >/dev/null
           else
-            gh pr comment "$PR" --body-file agentkit-report.md
+            gh pr comment "$PR" --body-file larpcop-report.md
           fi
 
       - name: Code scanning
-        if: always() && inputs.sarif && hashFiles('agentkit.sarif') != ''
+        if: always() && inputs.sarif && hashFiles('larpcop.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: agentkit.sarif
-          category: agentkit
+          sarif_file: larpcop.sarif
+          category: larpcop
 
       - name: Generated agent files are current
-        run: agentkit sync --check
+        run: larpcop sync --check

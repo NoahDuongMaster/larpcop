@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agentkit hook claude-code",
+            "command": "larpcop hook claude-code",
             "timeout": 120
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agentkit hook claude-code",
+            "command": "larpcop hook claude-code",
             "timeout": 120
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agentkit hook claude-code",
+            "command": "larpcop hook claude-code",
             "timeout": 120
           }
         ]
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agentkit hook claude-code",
+            "command": "larpcop hook claude-code",
             "timeout": 120
           }
         ]

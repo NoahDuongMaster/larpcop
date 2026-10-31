@@ -1,4 +1,4 @@
-# agentkit dogfoods itself: the example company standards (300-line limit and
+# larpcop dogfoods itself: the example company standards (300-line limit and
 # all) apply to this repo exactly as they would to any consumer repo.
 extends:
   - examples/standards

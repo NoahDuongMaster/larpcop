@@ -79,10 +79,10 @@ impl Osv {
         let agent = ureq::Agent::config_builder()
             .timeout_global(Some(Duration::from_secs(30)))
             .http_status_as_error(false)
-            .user_agent(concat!("agentkit/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("larpcop/", env!("CARGO_PKG_VERSION")))
             .build()
             .into();
-        let api = std::env::var("AGENTKIT_OSV_API").unwrap_or_else(|_| DEFAULT_API.into());
+        let api = std::env::var("LARPCOP_OSV_API").unwrap_or_else(|_| DEFAULT_API.into());
         Self { agent, api }
     }
 

@@ -225,7 +225,7 @@ sets it for everyone."
             format!(
                 "installing {} needs a human's approval first: a new dependency is reviewed \
 before any of its code runs here. Solve the task without it, or stop and ask the user to approve \
-it (they add it to `dependencies.approved` in .agentkit.yaml).",
+it (they add it to `dependencies.approved` in .larpcop.yaml).",
                 blocked.join(", ")
             )
         })

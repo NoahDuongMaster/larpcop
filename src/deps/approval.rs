@@ -44,7 +44,7 @@ fn new_dependency(rel: &str, content: &str, eco: Ecosystem, dep: &str) -> Violat
         message: format!("New dependency `{dep}` ({eco}) has not been approved."),
         note: Some(format!(
             "A new dependency needs a human's approval. Solve the task without it, or stop and \
-ask the user to approve it: they add `{eco}:{dep}` to `dependencies.approved` in .agentkit.yaml."
+ask the user to approve it: they add `{eco}:{dep}` to `dependencies.approved` in .larpcop.yaml."
         )),
         snippet: None,
     }

@@ -9,7 +9,7 @@ pub mod secrets;
 mod taint;
 pub mod testing;
 
-/// ast-grep rules defined in `dirs` (for `agentkit learn`).
+/// ast-grep rules defined in `dirs` (for `larpcop learn`).
 pub fn ast_rules(
     dirs: &[std::path::PathBuf],
 ) -> Result<Vec<ast_grep_config::RuleConfig<ast_grep_language::SupportLang>>> {

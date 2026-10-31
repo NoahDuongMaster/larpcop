@@ -12,7 +12,7 @@ pub(super) fn versions(
     agent: &ureq::Agent,
     name: &str,
 ) -> Result<Option<Vec<(String, Timestamp)>>> {
-    let api = std::env::var("AGENTKIT_PACKAGIST_API").unwrap_or_else(|_| DEFAULT_API.into());
+    let api = std::env::var("LARPCOP_PACKAGIST_API").unwrap_or_else(|_| DEFAULT_API.into());
     let url = format!("{}/p2/{name}.json", api.trim_end_matches('/'));
     let mut resp = agent.get(&url).call()?;
     let body = match resp.status().as_u16() {

@@ -23,7 +23,7 @@ pub enum Format {
 pub const NO_BYPASS: &str = "These rules are enforced by the pre-commit hook and CI: violating code cannot be \
 committed or merged, whoever wrote it. Fix what the rule is about, not its wording: rewriting the same \
 construct in another form to dodge a check (aliases, computed property access, eval, indirection) is a \
-violation too. Do not add suppression comments, use `--no-verify`, or edit `.agentkit.yaml`; if a rule \
+violation too. Do not add suppression comments, use `--no-verify`, or edit `.larpcop.yaml`; if a rule \
 looks wrong, stop and ask a human.";
 
 pub fn render(outcome: &Outcome, format: Format) -> String {
@@ -50,16 +50,16 @@ pub(crate) fn summary(outcome: &Outcome) -> String {
 
 pub fn text(outcome: &Outcome) -> String {
     if outcome.unconfigured {
-        return "agentkit: no rules configured (no .agentkit.yaml and no --extends); nothing enforced.\n".into();
+        return "larpcop: no rules configured (no .larpcop.yaml and no --extends); nothing enforced.\n".into();
     }
     if outcome.violations.is_empty() {
         return format!(
-            "agentkit: ✓ no violations in {} checked file(s){}\n",
+            "larpcop: ✓ no violations in {} checked file(s){}\n",
             outcome.files,
             hidden(outcome)
         );
     }
-    let mut out = format!("agentkit: ✗ {}{}\n", summary(outcome), hidden(outcome));
+    let mut out = format!("larpcop: ✗ {}{}\n", summary(outcome), hidden(outcome));
     let mut current: Option<&str> = None;
     for v in &outcome.violations {
         if current != Some(v.file.as_str()) {

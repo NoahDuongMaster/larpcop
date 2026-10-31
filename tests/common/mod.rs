@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use tempfile::TempDir;
 
-pub const BIN: &str = env!("CARGO_BIN_EXE_agentkit");
+pub const BIN: &str = env!("CARGO_BIN_EXE_larpcop");
 pub const STANDARDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/standards");
 
 pub const BAD_TS: &str = "export function f(x: any) {\n  console.log(x);\n}\n";
@@ -33,11 +33,11 @@ impl Repo {
     /// Repo whose config extends the example company standards.
     pub fn with_standards() -> Self {
         let repo = Self::new();
-        repo.write(".agentkit.yaml", &extends_yaml(STANDARDS));
+        repo.write(".larpcop.yaml", &extends_yaml(STANDARDS));
         repo
     }
 
-    /// Canonical without Windows `\\?\` prefix, matching what agentkit reports.
+    /// Canonical without Windows `\\?\` prefix, matching what larpcop reports.
     pub fn path(&self) -> PathBuf {
         dunce::canonicalize(self.tmp.path()).unwrap()
     }
@@ -74,13 +74,10 @@ impl Repo {
                 .unwrap();
         cmd.current_dir(self.tmp.path())
             .env("PATH", path)
-            .env(
-                "AGENTKIT_CACHE_DIR",
-                self.tmp.path().join(".cache-agentkit"),
-            )
+            .env("LARPCOP_CACHE_DIR", self.tmp.path().join(".cache-larpcop"))
             // Tests never reach deps.dev: publish dates come from `seed_published`.
-            .env("AGENTKIT_DEPS_API", "offline://deps.dev")
-            .env_remove("AGENTKIT_EXTENDS");
+            .env("LARPCOP_DEPS_API", "offline://deps.dev")
+            .env_remove("LARPCOP_EXTENDS");
         cmd
     }
 
@@ -98,7 +95,7 @@ impl Repo {
             })
             .collect();
         let at = jiff::Timestamp::now() - jiff::SignedDuration::from_hours(days_ago * 24);
-        let rel = format!(".cache-agentkit/published/{system}/{encoded}");
+        let rel = format!(".cache-larpcop/published/{system}/{encoded}");
         self.write(&rel, &at.to_string());
     }
 
@@ -140,7 +137,7 @@ impl Repo {
         Run(child.wait_with_output().unwrap())
     }
 
-    /// `git commit` with the repo's hooks active and agentkit on PATH.
+    /// `git commit` with the repo's hooks active and larpcop on PATH.
     pub fn git_commit(&self, msg: &str) -> Run {
         Run(self
             .command("git")

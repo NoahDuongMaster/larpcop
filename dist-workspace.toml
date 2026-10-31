@@ -14,8 +14,6 @@ targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-da
 # Path that installers should place binaries in: standard user bin dir, so
 # developers without a Rust toolchain get it on PATH.
 install-path = ["$XDG_BIN_HOME/", "$XDG_DATA_HOME/../bin", "~/.local/bin"]
-# npm `agentkit` is taken by an unrelated 0.0.0 package: scope ours.
-npm-scope = "@noahduongmaster"
 # Where to host releases
 hosting = "github"
 # Whether to install an updater program

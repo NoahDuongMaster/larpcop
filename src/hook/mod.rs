@@ -130,7 +130,7 @@ fn decide(event: &Event, cwd: &Path, extends: &[String], refresh: bool) -> Resul
             Ok(proposed(&ctx, path, content)?.unwrap_or(Verdict::Allow))
         }
         Event::AfterEdit(paths) => {
-            let header = "agentkit: the file you just edited breaks enforced rules. Fix them now.";
+            let header = "larpcop: the file you just edited breaks enforced rules. Fix them now.";
             check(
                 &ctx(start_dir(&paths[0], cwd))?,
                 Scope::Paths(paths.clone()),
@@ -142,7 +142,7 @@ fn decide(event: &Event, cwd: &Path, extends: &[String], refresh: bool) -> Resul
         // 8 identical blocks until max-turns. The commit/CI gates keep enforcing.
         Event::Stop { continued: true } => Ok(Verdict::Allow),
         Event::Stop { continued: false } => {
-            let header = "agentkit: you cannot finish yet: your uncommitted changes break enforced \
+            let header = "larpcop: you cannot finish yet: your uncommitted changes break enforced \
 rules. Fix every error below, then finish.";
             check(&ctx(cwd)?, Scope::Changed, header)
         }
@@ -159,7 +159,7 @@ fn proposed(ctx: &Ctx, path: &Path, content: &str) -> Result<Option<Verdict>> {
     if outcome.errors() == 0 {
         return Ok(None);
     }
-    let header = "agentkit: this write was not applied: the content breaks enforced rules. \
+    let header = "larpcop: this write was not applied: the content breaks enforced rules. \
 Write it again without these violations.";
     Ok(Some(Verdict::Block(format!(
         "{header}\n\n{}",
@@ -174,7 +174,7 @@ fn start_dir<'a>(file: &'a Path, cwd: &'a Path) -> &'a Path {
 fn blocked(reason: Option<String>) -> Verdict {
     match reason {
         Some(reason) => Verdict::Block(format!(
-            "agentkit: blocked: {reason}\n\n{}",
+            "larpcop: blocked: {reason}\n\n{}",
             report::NO_BYPASS
         )),
         None => Verdict::Allow,

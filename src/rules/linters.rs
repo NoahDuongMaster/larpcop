@@ -47,7 +47,7 @@ impl Linter {
             .output()
             .with_context(|| {
                 format!(
-                    "running linter `{}` with {} (install Git, or set AGENTKIT_SHELL to a POSIX sh)",
+                    "running linter `{}` with {} (install Git, or set LARPCOP_SHELL to a POSIX sh)",
                     self.cfg.id,
                     shell.display()
                 )

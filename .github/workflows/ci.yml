@@ -23,6 +23,6 @@ jobs:
       # A real language server, so the type-query test runs instead of skipping.
       - run: npm install -g typescript-language-server@4 typescript@5
       - run: cargo test
-      # agentkit enforces its own rules and keeps its generated agent files current
+      # larpcop enforces its own rules and keeps its generated agent files current
       - run: cargo run -- check
       - run: cargo run -- sync --check

@@ -1,4 +1,4 @@
-//! `complexity` and `function-length` rules plus the `agentkit metrics` report.
+//! `complexity` and `function-length` rules plus the `larpcop metrics` report.
 
 use super::complexity::{self, Function};
 use super::{Level, RuleInfo, Violation};

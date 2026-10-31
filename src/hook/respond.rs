@@ -56,7 +56,7 @@ fn cursor_response(event: &Event, hook_event: &str, verdict: &Verdict) -> serde_
         (Verdict::Block(msg), Event::Shell(_) | Event::BeforeEdit(_) | Event::Proposed(..)) => {
             json!({
                 "permission": "deny",
-                "user_message": "agentkit: blocked by enforced coding rules",
+                "user_message": "larpcop: blocked by enforced coding rules",
                 "agent_message": msg,
             })
         }

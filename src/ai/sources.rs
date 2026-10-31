@@ -1,4 +1,4 @@
-//! What `agentkit learn` reads: the team's review comments, the repo's languages.
+//! What `larpcop learn` reads: the team's review comments, the repo's languages.
 
 use crate::files::SourceFile;
 use anyhow::{Context, Result, bail};

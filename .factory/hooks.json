@@ -5,7 +5,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "agentkit hook droid",
+          "command": "larpcop hook droid",
           "timeout": 120
         }
       ]
@@ -17,7 +17,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "agentkit hook droid",
+          "command": "larpcop hook droid",
           "timeout": 120
         }
       ]
@@ -28,7 +28,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "agentkit hook droid",
+          "command": "larpcop hook droid",
           "timeout": 120
         }
       ]
@@ -39,7 +39,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "agentkit hook droid",
+          "command": "larpcop hook droid",
           "timeout": 120
         }
       ]

@@ -21,7 +21,7 @@ pub struct Outcome {
     pub violations: Vec<Violation>,
     /// No config and no forced standards: nothing is enforced here.
     pub unconfigured: bool,
-    /// Known violations hidden by `.agentkit-baseline.json`.
+    /// Known violations hidden by `.larpcop-baseline.json`.
     pub baselined: usize,
 }
 
@@ -152,7 +152,7 @@ impl Ctx {
     }
 }
 
-/// Nearest ancestor holding `.agentkit.yaml`, else the git top-level, else `start`.
+/// Nearest ancestor holding `.larpcop.yaml`, else the git top-level, else `start`.
 /// `dunce` avoids Windows `\\?\` verbatim paths, which break prefix matching and some tools.
 pub fn find_root(start: &Path) -> Result<PathBuf> {
     let start = dunce::canonicalize(start)

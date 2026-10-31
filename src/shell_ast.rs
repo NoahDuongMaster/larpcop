@@ -182,7 +182,7 @@ mod tests {
     #[test]
     fn resolves_quoting_lists_and_wrappers() {
         let s = parse(
-            r#"HUSKY=0 git -c core.hooksPath=/dev/null commit -nm "x y" 2>&1 > .agentkit.yaml && export SKIP=lint"#,
+            r#"HUSKY=0 git -c core.hooksPath=/dev/null commit -nm "x y" 2>&1 > .larpcop.yaml && export SKIP=lint"#,
         );
         assert_eq!(s.commands[0].env, [("HUSKY".into(), "0".into())]);
         assert_eq!(
@@ -196,7 +196,7 @@ mod tests {
                 "x y"
             ]
         );
-        assert_eq!(s.written, [".agentkit.yaml"]);
+        assert_eq!(s.written, [".larpcop.yaml"]);
         assert_eq!(s.exported, [("SKIP".into(), "lint".into())]);
         assert_eq!(
             words("sudo env A=1 git commit --no-ver\"\"ify"),
@@ -210,8 +210,8 @@ mod tests {
                 vec!["tee", "log"]
             ]
         );
-        let nested = words(r#"bash -c 'rm -f .agentkit.yaml' ; eval "git commit -n""#);
-        assert!(nested.contains(&vec!["rm".into(), "-f".into(), ".agentkit.yaml".into()]));
+        let nested = words(r#"bash -c 'rm -f .larpcop.yaml' ; eval "git commit -n""#);
+        assert!(nested.contains(&vec!["rm".into(), "-f".into(), ".larpcop.yaml".into()]));
         assert!(nested.contains(&vec!["git".into(), "commit".into(), "-n".into()]));
         assert!(parse("ls 2>/dev/null >&2").written == ["/dev/null"]);
     }

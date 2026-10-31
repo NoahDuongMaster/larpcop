@@ -1,4 +1,4 @@
-//! `agentkit dashboard`: one self-contained HTML page (or JSON) with what is
+//! `larpcop dashboard`: one self-contained HTML page (or JSON) with what is
 //! open per rule, the baseline debt and its trend, complexity hotspots, and,
 //! with `--org`, which repositories actually run the gate.
 
@@ -92,7 +92,7 @@ pub fn render(d: &Dashboard) -> String {
     html::page(d)
 }
 
-/// Size of `.agentkit-baseline.json` at the last 60 commits that changed it.
+/// Size of `.larpcop-baseline.json` at the last 60 commits that changed it.
 fn debt(root: &std::path::Path) -> Vec<DebtPoint> {
     let out = Command::new("git")
         .args(["log", "-n", "60", "--format=%H %cs", "--", baseline::FILE])

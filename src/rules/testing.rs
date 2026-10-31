@@ -1,4 +1,4 @@
-//! `agentkit test`: rule fixtures in ast-grep's format (`rule-tests/<id>-test.yml`
+//! `larpcop test`: rule fixtures in ast-grep's format (`rule-tests/<id>-test.yml`
 //! with `valid` / `invalid` snippets), plus `fixed` pairs for rules with a `fix:`.
 //! A rule that only ever matched what its author imagined is how a standard rots.
 

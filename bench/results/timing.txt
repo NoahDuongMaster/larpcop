@@ -1,7 +1,7 @@
-agentkit 0.1.0 | semgrep 1.183.0 | gitleaks 8.30.1 | Darwin arm64 8 cpus
-juice-shop agentkit_seconds 3.58
+larpcop 0.1.0 | semgrep 1.183.0 | gitleaks 8.30.1 | Darwin arm64 8 cpus
+juice-shop larpcop_seconds 3.58
 juice-shop semgrep_seconds 34.91
 juice-shop gitleaks_seconds 5.37
-NodeGoat agentkit_seconds 3.26
+NodeGoat larpcop_seconds 3.26
 NodeGoat semgrep_seconds 10.06
 NodeGoat gitleaks_seconds 0.23

@@ -43,7 +43,7 @@ fn clean_code_passes() {
 fn locked_rule_cannot_be_disabled() {
     let repo = Repo::new();
     repo.write(
-        ".agentkit.yaml",
+        ".larpcop.yaml",
         &format!("{}disable: [no-explicit-any]\n", extends_yaml(STANDARDS)),
     );
     let run = repo.run(&["check"]);
@@ -60,7 +60,7 @@ fn locked_rule_cannot_be_disabled() {
 fn unlocked_rule_can_be_disabled() {
     let repo = Repo::new();
     repo.write(
-        ".agentkit.yaml",
+        ".larpcop.yaml",
         &format!("{}disable: [no-console]\n", extends_yaml(STANDARDS)),
     );
     repo.write("a.ts", "console.log(1);\n");
@@ -90,7 +90,7 @@ fn standards_from_git_at_a_pinned_tag() {
 
     let repo = Repo::new();
     let url = format!("{}#v1.0.0", file_url(&standards.path()));
-    repo.write(".agentkit.yaml", &extends_yaml(&url));
+    repo.write(".larpcop.yaml", &extends_yaml(&url));
     repo.write("a.ts", BAD_TS);
     let run = repo.run(&["check"]);
     assert_eq!(run.code(), 1, "{}{}", run.stdout(), run.stderr());
@@ -114,7 +114,7 @@ fn recommended_standards_from_a_git_subdirectory() {
         "{}#v2.0.0//standards/recommended",
         file_url(&upstream.path())
     );
-    repo.write(".agentkit.yaml", &extends_yaml(&url));
+    repo.write(".larpcop.yaml", &extends_yaml(&url));
     repo.write(
         "db.ts",
         "export const q = (id: string) => db.query(`select * from u where id = ${id}`);\n",
@@ -164,7 +164,7 @@ fn changed_and_since_only_cover_modified_files() {
 fn delegated_linter_failure_is_a_violation() {
     let repo = Repo::new();
     let cfg = "linters:\n  - id: no-todo\n    run: \"! grep -n TODO {files}\"\n    include: ['**/*.ts']\n";
-    repo.write(".agentkit.yaml", cfg);
+    repo.write(".larpcop.yaml", cfg);
     repo.write("a.ts", "// TODO: later\n");
     let run = repo.run(&["check"]);
     assert_eq!(run.code(), 1);

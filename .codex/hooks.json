@@ -6,9 +6,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agentkit hook codex",
+            "command": "larpcop hook codex",
             "timeout": 120,
-            "statusMessage": "agentkit: checking rules"
+            "statusMessage": "larpcop: checking rules"
           }
         ]
       }
@@ -19,9 +19,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agentkit hook codex",
+            "command": "larpcop hook codex",
             "timeout": 120,
-            "statusMessage": "agentkit: checking rules"
+            "statusMessage": "larpcop: checking rules"
           }
         ]
       }
@@ -31,9 +31,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agentkit hook codex",
+            "command": "larpcop hook codex",
             "timeout": 120,
-            "statusMessage": "agentkit: checking rules"
+            "statusMessage": "larpcop: checking rules"
           }
         ]
       }
@@ -43,9 +43,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agentkit hook codex",
+            "command": "larpcop hook codex",
             "timeout": 120,
-            "statusMessage": "agentkit: checking rules"
+            "statusMessage": "larpcop: checking rules"
           }
         ]
       }

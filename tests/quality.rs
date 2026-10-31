@@ -34,7 +34,7 @@ fn ci_formats_carry_every_finding() {
     assert_ne!(gitlab[0]["fingerprint"], gitlab[1]["fingerprint"]);
     let md = repo.read("pr.md");
     assert!(
-        md.starts_with("<!-- agentkit-report -->") && md.contains("| `no-console` | 1 |"),
+        md.starts_with("<!-- larpcop-report -->") && md.contains("| `no-console` | 1 |"),
         "{md}"
     );
 }
@@ -43,7 +43,7 @@ fn ci_formats_carry_every_finding() {
 fn metrics_rules_limit_complexity_and_length() {
     let repo = Repo::new();
     repo.write(
-        ".agentkit.yaml",
+        ".larpcop.yaml",
         "metrics:\n  max_complexity: 3\n  max_function_lines: 5\n",
     );
     repo.write(
@@ -106,7 +106,7 @@ fn wait(out: &mut impl BufRead, pred: impl Fn(&Value) -> bool) -> Value {
 #[test]
 fn lsp_publishes_diagnostics_and_offers_fixes() {
     let repo = Repo::new();
-    repo.write(".agentkit.yaml", "rule_dirs: [rules]\n");
+    repo.write(".larpcop.yaml", "rule_dirs: [rules]\n");
     repo.write(
         "rules/no-var.yml",
         "id: no-var\nlanguage: TypeScript\nseverity: error\nmessage: no var\nrule:\n  pattern: var $N = $V\nfix: let $N = $V;\n",
@@ -144,7 +144,7 @@ fn lsp_publishes_diagnostics_and_offers_fixes() {
     let d = &diag["params"]["diagnostics"][0];
     assert_eq!(
         (d["code"].as_str(), d["source"].as_str()),
-        (Some("no-var"), Some("agentkit"))
+        (Some("no-var"), Some("larpcop"))
     );
     assert_eq!(d["range"]["start"], json!({ "line": 0, "character": 0 }));
 

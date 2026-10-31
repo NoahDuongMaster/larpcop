@@ -32,12 +32,12 @@ fn pre_tool_use_protects_config_and_rule_files() {
     let repo = Repo::with_standards();
     repo.write("team-rules/r.yml", "");
     repo.write(
-        ".agentkit.yaml",
-        &format!("{}rule_dirs: [team-rules]\n", repo.read(".agentkit.yaml")),
+        ".larpcop.yaml",
+        &format!("{}rule_dirs: [team-rules]\n", repo.read(".larpcop.yaml")),
     );
     let root = repo.path();
     for (path, blocked) in [
-        (root.join(".agentkit.yaml"), true),
+        (root.join(".larpcop.yaml"), true),
         (root.join("team-rules/r.yml"), true),
         (root.join("team-rules/new.yml"), true),
         (root.join(".claude/settings.local.json"), true),
@@ -96,7 +96,7 @@ fn stop_refuses_to_finish_with_violations() {
 #[test]
 fn broken_config_does_not_block_the_agent() {
     let repo = Repo::new();
-    repo.write(".agentkit.yaml", "extends: [./missing]\n");
+    repo.write(".larpcop.yaml", "extends: [./missing]\n");
     repo.write("a.ts", BAD_TS);
     let input = hook_input(
         "PostToolUse",

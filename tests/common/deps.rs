@@ -7,11 +7,11 @@ use std::io::{BufRead, BufReader, Write};
 pub const AGE: &str = "dependencies:\n  min_release_age: 14\n";
 pub const APPROVAL: &str = "dependencies:\n  require_approval: true\n";
 
-/// Repo with `config` as its .agentkit.yaml and the publish-date cache ignored.
+/// Repo with `config` as its .larpcop.yaml and the publish-date cache ignored.
 pub fn repo(config: &str) -> Repo {
     let repo = Repo::new();
-    repo.write(".gitignore", ".cache-agentkit/\n");
-    repo.write(".agentkit.yaml", config);
+    repo.write(".gitignore", ".cache-larpcop/\n");
+    repo.write(".larpcop.yaml", config);
     repo
 }
 

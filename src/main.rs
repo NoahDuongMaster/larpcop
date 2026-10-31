@@ -31,7 +31,7 @@ fn main() -> ExitCode {
     match result {
         Ok(code) => ExitCode::from(code),
         Err(err) => {
-            eprintln!("agentkit: error: {err:#}");
+            eprintln!("larpcop: error: {err:#}");
             ExitCode::from(3)
         }
     }

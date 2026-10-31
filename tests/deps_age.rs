@@ -37,7 +37,7 @@ fn versions_younger_than_the_minimum_age_are_rejected() {
         "{out}"
     );
 
-    repo.write(".agentkit.yaml", &format!("{AGE}  exempt: ['npm:ghost']\n"));
+    repo.write(".larpcop.yaml", &format!("{AGE}  exempt: ['npm:ghost']\n"));
     let run = repo.run(&["check", "--changed"]);
     assert!(!run.stdout().contains("ghost"), "{}", run.stdout());
     assert!(run.stdout().contains("evil-pkg"));
@@ -113,7 +113,7 @@ fn security_fixes_may_be_younger_than_the_minimum_age() {
              [[package]]\nname = \"webpki-roots\"\nversion = \"1.0.11\"\n{registry}\n"
         ),
     );
-    let run = repo.run_env(&["check", "--changed"], &[("AGENTKIT_DEPS_API", &api)]);
+    let run = repo.run_env(&["check", "--changed"], &[("LARPCOP_DEPS_API", &api)]);
     let out = run.stdout();
     assert_eq!(run.code(), 1, "{out}");
     assert!(out.contains("1 error(s), 1 warning(s)"), "{out}");

@@ -1,5 +1,5 @@
 //! Thin wrapper over the GitHub CLI: it already handles auth, SSO and enterprise
-//! hosts, so agentkit never stores a token.
+//! hosts, so larpcop never stores a token.
 
 use anyhow::{Context, Result, bail};
 use base64::Engine;

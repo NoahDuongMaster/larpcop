@@ -14,8 +14,8 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub const REPO_CONFIG: &str = ".agentkit.yaml";
-const STANDARDS_CONFIG: [&str; 2] = ["agentkit.yaml", ".agentkit.yaml"];
+pub const REPO_CONFIG: &str = ".larpcop.yaml";
+const STANDARDS_CONFIG: [&str; 2] = ["larpcop.yaml", ".larpcop.yaml"];
 
 /// Effective configuration after merging every layer.
 #[derive(Debug, Default)]
@@ -51,7 +51,7 @@ pub struct DepsPolicy {
     pub vulnerabilities: Option<crate::deps::Severity>,
 }
 
-/// `forced` standards (from `--extends` / `AGENTKIT_EXTENDS`) apply first, so a repo
+/// `forced` standards (from `--extends` / `LARPCOP_EXTENDS`) apply first, so a repo
 /// cannot opt out of them by editing or deleting its own config.
 pub fn resolve(root: &Path, forced: &[String], refresh: bool) -> Result<Config> {
     let mut cfg = Config {
@@ -65,7 +65,7 @@ pub fn resolve(root: &Path, forced: &[String], refresh: bool) -> Result<Config> 
         RawConfig::default()
     };
     let mut seen = HashSet::new();
-    // An empty AGENTKIT_EXTENDS (e.g. an unset CI input) means "nothing forced".
+    // An empty LARPCOP_EXTENDS (e.g. an unset CI input) means "nothing forced".
     let forced = forced
         .iter()
         .filter(|s| !s.trim().is_empty())
@@ -77,13 +77,13 @@ pub fn resolve(root: &Path, forced: &[String], refresh: bool) -> Result<Config> 
     Ok(cfg)
 }
 
-/// Rule directories declared by one standards directory (for `agentkit test DIR`).
+/// Rule directories declared by one standards directory (for `larpcop test DIR`).
 pub fn rule_dirs_of(dir: &Path) -> Result<Vec<PathBuf>> {
     let file = STANDARDS_CONFIG
         .iter()
         .map(|name| dir.join(name))
         .find(|p| p.is_file())
-        .with_context(|| format!("no agentkit.yaml in {}", dir.display()))?;
+        .with_context(|| format!("no larpcop.yaml in {}", dir.display()))?;
     Ok(read_raw(&file)?
         .rule_dirs
         .iter()
@@ -139,7 +139,7 @@ fn apply_extend(
         .iter()
         .map(|name| dir.join(name))
         .find(|p| p.is_file())
-        .with_context(|| format!("standards `{label}`: no agentkit.yaml in {}", dir.display()))?;
+        .with_context(|| format!("standards `{label}`: no larpcop.yaml in {}", dir.display()))?;
     let raw = read_raw(&file)?;
     for parent in &raw.extends {
         apply_extend(cfg, parent, &dir, refresh, seen)?;

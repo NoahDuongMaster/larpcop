@@ -1,40 +1,44 @@
-# agentkit
+<p align="center"><img src="assets/jimothy.svg" width="180" alt="Jimothy, linh vật của larpcop: chú gấu mèo tròn đội mũ cảnh sát"></p>
+
+# larpcop
+
+> *larp* (slang 2026): làm màu, giả vờ. Agent hay báo "đã tuân thủ rule, đã chạy test" khi chưa hề làm; larpcop là cổng kiểm tra không tin lời báo cáo. Linh vật là **Jimothy**, chú gấu mèo tròn vo ở Seattle nổi tiếng tháng 7/2026, ở đây được vẽ lại và đội mũ cảnh sát ([`assets/jimothy.svg`](assets/jimothy.svg)).
 
 Ép mọi coding agent (Claude Code, Codex, Gemini CLI, Cursor…) và cả người tuân theo cùng một bộ rule, trên mọi stack.
 Một binary Rust duy nhất, rule engine là [ast-grep](https://ast-grep.github.io) (tree-sitter, 25+ ngôn ngữ).
 
 ## Mô hình thực thi
 
-Prompt chỉ *gợi ý*. Chỉ có cổng kiểm tra tất định mới *ép* được, nên agentkit chặn ở những điểm mà mọi agent bắt buộc phải đi qua:
+Prompt chỉ *gợi ý*. Chỉ có cổng kiểm tra tất định mới *ép* được, nên larpcop chặn ở những điểm mà mọi agent bắt buộc phải đi qua:
 
 | Tầng | Cơ chế | Agent nào cũng phải qua? | Bypass được? |
 |---|---|---|---|
-| CI ([`enforce.yml`](.github/workflows/enforce.yml) + org ruleset) | `agentkit check --since origin/<base>` | ✅ | ❌ |
-| Git pre-commit (`agentkit install`) | `agentkit check --staged` (kiểm nội dung staged, không phải working tree) | ✅ | `--no-verify` → CI bắt lại |
-| Hook của agent (`agentkit hook <agent>`) | Chặn bypass, phản hồi lỗi ngay sau mỗi lần sửa file, chặn kết thúc khi còn lỗi | Agent có hook | — |
-| `AGENTS.md` (`agentkit sync`) | Hướng dẫn + bảng rule sinh tự động | Mọi agent đều đọc | Chỉ là gợi ý |
+| CI ([`enforce.yml`](.github/workflows/enforce.yml) + org ruleset) | `larpcop check --since origin/<base>` | ✅ | ❌ |
+| Git pre-commit (`larpcop install`) | `larpcop check --staged` (kiểm nội dung staged, không phải working tree) | ✅ | `--no-verify` → CI bắt lại |
+| Hook của agent (`larpcop hook <agent>`) | Chặn bypass, phản hồi lỗi ngay sau mỗi lần sửa file, chặn kết thúc khi còn lỗi | Agent có hook | — |
+| `AGENTS.md` (`larpcop sync`) | Hướng dẫn + bảng rule sinh tự động | Mọi agent đều đọc | Chỉ là gợi ý |
 
 Hook của agent chỉ để rút ngắn vòng phản hồi. Agent không có hook vẫn bị chặn ở git và CI.
 
 ## Cài đặt
 
-Mỗi release có binary cho macOS (arm64, x64), Linux (arm64, x64) và Windows (x64), dạng nén khoảng 4 MB. Có installer shell, PowerShell, công thức Homebrew và package npm `@noahduongmaster/agentkit`. Binary được cài vào `~/.local/bin`.
+Mỗi release có binary cho macOS (arm64, x64), Linux (arm64, x64) và Windows (x64), dạng nén khoảng 4 MB. Có installer shell, PowerShell, công thức Homebrew và package npm `larpcop`. Binary được cài vào `~/.local/bin`.
 
 Repo hiện **private**, nên dùng GitHub CLI (`gh`, cần đăng nhập và có quyền đọc repo) để tải installer cùng các bản build về một thư mục, rồi trỏ installer vào thư mục đó. Lệnh sau đã chạy thật trên macOS:
 
 ```sh
 d=$(mktemp -d)
-gh release download --repo NoahDuongMaster/agentkit --dir "$d" \
-  --pattern 'agentkit-installer.sh' --pattern '*.tar.xz' --pattern '*.tar.xz.sha256'
-AGENTKIT_DOWNLOAD_URL="file://$d" sh "$d/agentkit-installer.sh"
+gh release download --repo NoahDuongMaster/larpcop --dir "$d" \
+  --pattern 'larpcop-installer.sh' --pattern '*.tar.xz' --pattern '*.tar.xz.sha256'
+LARPCOP_DOWNLOAD_URL="file://$d" sh "$d/larpcop-installer.sh"
 ```
 
-Trên Windows: `gh release download --repo NoahDuongMaster/agentkit --pattern '*windows-msvc.zip'`, giải nén rồi đặt `agentkit.exe` vào một thư mục có trong PATH.
+Trên Windows: `gh release download --repo NoahDuongMaster/larpcop --pattern '*windows-msvc.zip'`, giải nén rồi đặt `larpcop.exe` vào một thư mục có trong PATH.
 
-`AGENTKIT_GITHUB_TOKEN` của installer **không** dùng được cho repo private, vì GitHub không cho tải asset private qua URL `releases/download` (đã thử). Khi repo chuyển sang public thì chỉ cần:
+`LARPCOP_GITHUB_TOKEN` của installer **không** dùng được cho repo private, vì GitHub không cho tải asset private qua URL `releases/download` (đã thử). Khi repo chuyển sang public thì chỉ cần:
 
 ```sh
-curl -LsSf https://github.com/NoahDuongMaster/agentkit/releases/latest/download/agentkit-installer.sh | sh
+curl -LsSf https://github.com/NoahDuongMaster/larpcop/releases/latest/download/larpcop-installer.sh | sh
 ```
 
 ## Cấu hình
@@ -42,7 +46,7 @@ curl -LsSf https://github.com/NoahDuongMaster/agentkit/releases/latest/download/
 Standards của công ty (một repo riêng, gắn tag phiên bản), ví dụ [examples/standards](examples/standards):
 
 ```yaml
-# agentkit.yaml
+# larpcop.yaml
 max_lines: { max: 300, exclude: ["**/*.test.*"] }
 rule_dirs: [rules]              # rule ast-grep YAML, mọi ngôn ngữ
 guidelines: guidelines.md       # văn xuôi, được inline vào AGENTS.md
@@ -55,14 +59,14 @@ locked: [max-lines, no-explicit-any]   # repo không được disable/override
 Repo, ví dụ [examples/demo-app](examples/demo-app):
 
 ```yaml
-# .agentkit.yaml
+# .larpcop.yaml
 extends:
   - https://github.com/<org>/standards.git#v1.0.0   # hoặc đường dẫn local
 rule_dirs: [team-rules]
 disable: [py-no-print]          # chỉ được disable rule không bị lock
 ```
 
-Thứ tự áp dụng: `--extends` / `AGENTKIT_EXTENDS` (CI ép vào) → chuỗi `extends` → `.agentkit.yaml`. Vì CI luôn truyền `--extends`, xoá config trong repo cũng không thoát được standards. Cùng một URL standards chỉ áp dụng một lần, và phiên bản CI pin sẽ thắng.
+Thứ tự áp dụng: `--extends` / `LARPCOP_EXTENDS` (CI ép vào) → chuỗi `extends` → `.larpcop.yaml`. Vì CI luôn truyền `--extends`, xoá config trong repo cũng không thoát được standards. Cùng một URL standards chỉ áp dụng một lần, và phiên bản CI pin sẽ thắng.
 
 Có hai điểm cố ý khác với ast-grep CLI:
 
@@ -85,7 +89,7 @@ dependencies:
   exempt: ["npm:@acme/*"]    # package ở registry riêng: không có ngày phát hành công khai
 ```
 
-**`dependency-approval`**: dependency trực tiếp mới phải nằm trong `approved`. "Mới" nghĩa là chưa có trong bất kỳ manifest nào ở commit gốc, nên thêm `react` vào một package mới trong monorepo đã dùng `react` thì không tính. Agent không sửa được `.agentkit.yaml`, nên một dòng `approved` là một lần người duyệt và hiện rõ khi review. Đọc được `package.json`, `Cargo.toml`, `pyproject.toml` (PEP 621, dependency-groups, Poetry), `requirements*.txt`, `go.mod`, `Gemfile`, `composer.json`, `*.csproj`/`*.fsproj`, `pom.xml`, `build.gradle(.kts)` và `gradle/libs.versions.toml`.
+**`dependency-approval`**: dependency trực tiếp mới phải nằm trong `approved`. "Mới" nghĩa là chưa có trong bất kỳ manifest nào ở commit gốc, nên thêm `react` vào một package mới trong monorepo đã dùng `react` thì không tính. Agent không sửa được `.larpcop.yaml`, nên một dòng `approved` là một lần người duyệt và hiện rõ khi review. Đọc được `package.json`, `Cargo.toml`, `pyproject.toml` (PEP 621, dependency-groups, Poetry), `requirements*.txt`, `go.mod`, `Gemfile`, `composer.json`, `*.csproj`/`*.fsproj`, `pom.xml`, `build.gradle(.kts)` và `gradle/libs.versions.toml`.
 
 **`dependency-release-age`** chạy ở ba chỗ:
 
@@ -103,7 +107,7 @@ dependencies:
    Đã chạy thật: npm 11.19 với `min-release-age=14`, khi được yêu cầu `typescript@next` thì tự chọn `7.0.2`. pnpm 11.2 chọn bản dev `20261017`, đúng 14 ngày tuổi.
 3. **Hook của agent**: chặn mọi lệnh ghi đè gate (`--min-release-age=0`, `npm config set min-release-age …`, `npm_config_min_release_age=…`, `uv … --exclude-newer`, `UV_EXCLUDE_NEWER=…`).
 
-Phiên bản không có trên deps.dev hoặc không tra được vì lỗi mạng đều bị chặn (fail closed). **Ngoại lệ là bản vá bảo mật**: một bản quá mới vẫn được cho qua, ở mức warning, nếu bản đủ tuổi mới nhất cùng dòng có advisory còn bản mới thì không, theo trường `advisoryKeys` của deps.dev. Không có ngoại lệ này thì rule sẽ ép hạ về bản có lỗ hổng: chính repo agentkit gặp trường hợp này với `rustls-webpki` 0.103.16 và `webpki-roots` 1.0.11, vì bản đủ tuổi trước đó dính RUSTSEC-2026-0382 và RUSTSEC-2026-0381.
+Phiên bản không có trên deps.dev hoặc không tra được vì lỗi mạng đều bị chặn (fail closed). **Ngoại lệ là bản vá bảo mật**: một bản quá mới vẫn được cho qua, ở mức warning, nếu bản đủ tuổi mới nhất cùng dòng có advisory còn bản mới thì không, theo trường `advisoryKeys` của deps.dev. Không có ngoại lệ này thì rule sẽ ép hạ về bản có lỗ hổng: chính repo larpcop gặp trường hợp này với `rustls-webpki` 0.103.16 và `webpki-roots` 1.0.11, vì bản đủ tuổi trước đó dính RUSTSEC-2026-0382 và RUSTSEC-2026-0381.
 
 Cả hai rule được lock trong standards mẫu. Một rule đã lock chỉ được *siết thêm*: tăng số ngày hoặc thêm `approved` thì được; giảm số ngày, tắt `require_approval` hoặc thêm `exempt` thì bị từ chối.
 
@@ -154,7 +158,7 @@ dependencies:
 ```
 
 - Package bị báo là **mã độc** (`MAL-…`) luôn bị chặn, ở mọi lockfile và trong mọi PR, kể cả PR không đụng tới lockfile: mã độc thường được phát hiện sau khi đã vào repo.
-- Lỗ hổng từ mức đã chọn trở lên chặn phiên bản *mà thay đổi này đưa vào*. `agentkit check` không giới hạn phạm vi thì kiểm toàn bộ. Thông báo nêu luôn phiên bản đã vá.
+- Lỗ hổng từ mức đã chọn trở lên chặn phiên bản *mà thay đổi này đưa vào*. `larpcop check` không giới hạn phạm vi thì kiểm toàn bộ. Thông báo nêu luôn phiên bản đã vá.
 - Hook chặn lệnh cài **trước khi chạy**: tên package dính mã độc (`npm i aaa-evil`), hoặc phiên bản pin dính lỗ hổng (`npm i lodash@4.17.15`). Không gọi được OSV thì lệnh cài cũng bị chặn (fail closed), giống phần lockfile.
 - Mức nghiêm trọng lấy theo đánh giá của advisory, nếu không có thì tính từ vector CVSS 3/4 (crate `cvss`).
 
@@ -167,7 +171,7 @@ dependencies:
 
 ## AI review và học rule (thay CodeRabbit/Bugbot, Packmind)
 
-Model là CLI mà team đang dùng (`claude -p`, `codex exec -`, `gemini`, `ollama run …`). agentkit gửi prompt qua stdin và đọc stdout, nên không giữ API key và không phụ thuộc SDK của hãng nào. Không khai `llm.command` thì tự dùng `claude -p`, nếu không có thì `codex exec -`. Có thể đổi bằng biến `AGENTKIT_LLM`.
+Model là CLI mà team đang dùng (`claude -p`, `codex exec -`, `gemini`, `ollama run …`). larpcop gửi prompt qua stdin và đọc stdout, nên không giữ API key và không phụ thuộc SDK của hãng nào. Không khai `llm.command` thì tự dùng `claude -p`, nếu không có thì `codex exec -`. Có thể đổi bằng biến `LARPCOP_LLM`.
 
 ```yaml
 llm:
@@ -178,21 +182,21 @@ llm:
       prompt: Controllers only parse the request, call one service function and map the result. They never touch the database directly.
 ```
 
-**`agentkit review [--staged | --changed | --since REF]`** chấm các rule `llm`, mỗi file một lần gọi (chạy song song 4 file), chỉ gửi những file mà rule áp dụng. Trên một diff, các dòng đã đổi được đánh dấu và chỉ những dòng đó được báo. Kết quả **luôn là warning**: model không tất định, còn cổng chặn thì phải tất định. Câu trả lời được cache theo nội dung prompt, nên chạy lại trên code không đổi sẽ ra cùng kết quả và không tốn tiền (`--no-cache` để hỏi lại). Có đủ các format như `check` (`--format markdown` cho comment PR, `sarif`…).
+**`larpcop review [--staged | --changed | --since REF]`** chấm các rule `llm`, mỗi file một lần gọi (chạy song song 4 file), chỉ gửi những file mà rule áp dụng. Trên một diff, các dòng đã đổi được đánh dấu và chỉ những dòng đó được báo. Kết quả **luôn là warning**: model không tất định, còn cổng chặn thì phải tất định. Câu trả lời được cache theo nội dung prompt, nên chạy lại trên code không đổi sẽ ra cùng kết quả và không tốn tiền (`--no-cache` để hỏi lại). Có đủ các format như `check` (`--format markdown` cho comment PR, `sarif`…).
 
-**`agentkit learn "<chuẩn viết bằng lời>"`** hoặc **`agentkit learn --reviews 50`** (lấy từ review comment của các PR gần đây, qua `gh`) biến chuẩn thành rule ast-grep tất định. Model chỉ đề xuất; một rule được giữ lại khi parse được và pass các ví dụ valid/invalid do chính model viết. Rule fail được gửi lại cho model kèm lỗi chính xác (mặc định 3 vòng). Rule đạt được ghi vào `.agentkit/rules/` cùng fixture trong `.agentkit/rule-tests/`, kèm số chỗ trong repo đang vi phạm để quyết định sửa hay baseline. Đây là cách chuyển dần các rule "mềm" của AI review thành rule cứng.
+**`larpcop learn "<chuẩn viết bằng lời>"`** hoặc **`larpcop learn --reviews 50`** (lấy từ review comment của các PR gần đây, qua `gh`) biến chuẩn thành rule ast-grep tất định. Model chỉ đề xuất; một rule được giữ lại khi parse được và pass các ví dụ valid/invalid do chính model viết. Rule fail được gửi lại cho model kèm lỗi chính xác (mặc định 3 vòng). Rule đạt được ghi vào `.larpcop/rules/` cùng fixture trong `.larpcop/rule-tests/`, kèm số chỗ trong repo đang vi phạm để quyết định sửa hay baseline. Đây là cách chuyển dần các rule "mềm" của AI review thành rule cứng.
 
 Đã chạy thật với `claude -p --model sonnet` trên một repo Express demo:
 
 - `review --changed`: một hàm controller mới gọi `db.user.findUnique` bị báo đúng dòng 9, kèm gợi ý chuyển sang service (8,6 giây).
-- `learn "Never import moment; use date-fns. No default exports, only named exports. Never await inside a loop; collect the promises and use Promise.all."` cho ra 3 rule đều pass ngay vòng đầu (22 giây). Có 7–8 ví dụ mỗi rule, gồm cả trường hợp gần giống mà phải hợp lệ: `await` trong arrow function nằm trong vòng lặp thì không bị tính. Gắn 3 rule vào repo thì `agentkit check` bắt đúng 3 chỗ vi phạm có sẵn.
+- `learn "Never import moment; use date-fns. No default exports, only named exports. Never await inside a loop; collect the promises and use Promise.all."` cho ra 3 rule đều pass ngay vòng đầu (22 giây). Có 7–8 ví dụ mỗi rule, gồm cả trường hợp gần giống mà phải hợp lệ: `await` trong arrow function nằm trong vòng lặp thì không bị tính. Gắn 3 rule vào repo thì `larpcop check` bắt đúng 3 chỗ vi phạm có sẵn.
 
 ## Dashboard và benchmark
 
-**`agentkit dashboard [--org OWNER] [--out FILE] [--json]`** tạo một file HTML duy nhất, không có script và không tải tài nguyên ngoài, nên có thể đính vào artifact của CI, đưa lên GitHub Pages hoặc mở thẳng từ đĩa. Trang gồm:
+**`larpcop dashboard [--org OWNER] [--out FILE] [--json]`** tạo một file HTML duy nhất, không có script và không tải tài nguyên ngoài, nên có thể đính vào artifact của CI, đưa lên GitHub Pages hoặc mở thẳng từ đĩa. Trang gồm:
 
 - số vi phạm còn mở và số đã baseline theo từng rule;
-- nợ baseline theo thời gian, tính từ lịch sử git của `.agentkit-baseline.json`;
+- nợ baseline theo thời gian, tính từ lịch sử git của `.larpcop-baseline.json`;
 - các hàm phức tạp nhất;
 - với `--org`: repo nào có config, repo nào đã chạy cổng CI, và lần chạy gần nhất.
 
@@ -200,64 +204,64 @@ llm:
 
 **Benchmark công khai**: [`bench/`](bench) (chạy lại bằng `bench/run.sh`). Đối tượng là OWASP Juice Shop, đáp án là 27 dòng mà chính nhóm Juice Shop đánh dấu là có lỗ hổng:
 
-| | agentkit | Semgrep OSS (`p/default`) | gitleaks |
+| | larpcop | Semgrep OSS (`p/default`) | gitleaks |
 |---|---|---|---|
 | Juice Shop: thời gian | **3,58 s** | 34,91 s | 5,37 s |
 | Juice Shop: dòng lỗ hổng tìm thấy | **11/27** (8 nếu không tính quy ước validate) | 6/27 | – |
 | NodeGoat (bộ kiểm chứng, đáp án viết trước khi chạy): dòng tìm thấy | **8/14** (6 nếu không tính quy ước validate) | 4/14 | – |
 | Secrets | trùng khớp hoàn toàn với gitleaks | – | 69 + 3 |
 
-Chi tiết từng dòng, khác biệt phạm vi và các rule được thêm sau lần chạy Juice Shop đầu tiên (lần đầu agentkit chỉ được 5/27) nằm trong [bench/README.md](bench/README.md).
+Chi tiết từng dòng, khác biệt phạm vi và các rule được thêm sau lần chạy Juice Shop đầu tiên (lần đầu larpcop chỉ được 5/27) nằm trong [bench/README.md](bench/README.md).
 
 ## Lệnh
 
 ```sh
-agentkit check [paths…] [--staged | --changed | --since REF] [--format text|json|github|sarif|gitlab|markdown] [--output FORMAT=FILE]
-agentkit fix [paths…] [--changed | --since REF] [--dry-run]   # áp `fix:` của rule rồi check lại
-agentkit baseline [--prune]    # ghi nhận vi phạm cũ; --prune chỉ xoá entry đã sửa
-agentkit test [STANDARDS_DIR] [--require-all]  # chạy fixture trong rule-tests/ (valid, invalid, fixed)
-agentkit metrics [paths…] [--top N] [--json]    # độ phức tạp, kích thước hàm
-agentkit review [--changed | --since REF]       # rule `llm`, chấm bằng model (warning)
-agentkit learn "<chuẩn>" | --reviews N          # sinh rule ast-grep + test từ lời / review comment
-agentkit dashboard [--org OWNER] [--json]       # trang HTML: vi phạm, nợ baseline, hotspot, repo có gate
-agentkit lsp | agentkit mcp    # language server / MCP server (stdio)
-agentkit org status|setup …    # trạng thái và triển khai trên GitHub
-agentkit rules                 # rule hiệu lực, nguồn, rule nào bị lock
-agentkit sync [--check]        # AGENTS.md + file hook cho mọi agent (xem bảng dưới)
-agentkit install [--force]     # git pre-commit hook (tôn trọng core.hooksPath, monorepo)
-agentkit hook <claude-code|codex|gemini|cursor>   # entrypoint cho hook của agent (đọc stdin)
+larpcop check [paths…] [--staged | --changed | --since REF] [--format text|json|github|sarif|gitlab|markdown] [--output FORMAT=FILE]
+larpcop fix [paths…] [--changed | --since REF] [--dry-run]   # áp `fix:` của rule rồi check lại
+larpcop baseline [--prune]    # ghi nhận vi phạm cũ; --prune chỉ xoá entry đã sửa
+larpcop test [STANDARDS_DIR] [--require-all]  # chạy fixture trong rule-tests/ (valid, invalid, fixed)
+larpcop metrics [paths…] [--top N] [--json]    # độ phức tạp, kích thước hàm
+larpcop review [--changed | --since REF]       # rule `llm`, chấm bằng model (warning)
+larpcop learn "<chuẩn>" | --reviews N          # sinh rule ast-grep + test từ lời / review comment
+larpcop dashboard [--org OWNER] [--json]       # trang HTML: vi phạm, nợ baseline, hotspot, repo có gate
+larpcop lsp | larpcop mcp    # language server / MCP server (stdio)
+larpcop org status|setup …    # trạng thái và triển khai trên GitHub
+larpcop rules                 # rule hiệu lực, nguồn, rule nào bị lock
+larpcop sync [--check]        # AGENTS.md + file hook cho mọi agent (xem bảng dưới)
+larpcop install [--force]     # git pre-commit hook (tôn trọng core.hooksPath, monorepo)
+larpcop hook <claude-code|codex|gemini|cursor>   # entrypoint cho hook của agent (đọc stdin)
 ```
 
 Exit code: `0` sạch, `1` có vi phạm mức error, `3` lỗi nội bộ/config. Không dùng `2`, vì giao thức hook của agent dành nó cho nghĩa "chặn và báo cho model". Nhờ vậy config hỏng không bao giờ chặn agent.
 
 ### Baseline
 
-Để áp rule mới lên codebase cũ mà không phải sửa hết ngay: người chạy `agentkit baseline`, commit `.agentkit-baseline.json`. `check` ẩn đúng các vi phạm đã ghi nhận và vẫn báo mọi vi phạm mới.
+Để áp rule mới lên codebase cũ mà không phải sửa hết ngay: người chạy `larpcop baseline`, commit `.larpcop-baseline.json`. `check` ẩn đúng các vi phạm đã ghi nhận và vẫn báo mọi vi phạm mới.
 
 - Entry khớp theo rule, file và **nội dung dòng**, không theo số dòng: sửa chỗ khác trong file không làm vi phạm cũ hiện lại, còn viết thêm một vi phạm giống hệt thì vẫn bị bắt (đếm theo số lần).
-- Agent không chạy được `agentkit baseline` và không sửa được file baseline (hook chặn). `agentkit baseline --prune` thì được, vì nó chỉ xoá entry đã sửa.
+- Agent không chạy được `larpcop baseline` và không sửa được file baseline (hook chặn). `larpcop baseline --prune` thì được, vì nó chỉ xoá entry đã sửa.
 - Với rule bị lock, baseline của repo không được phình ra: ở `--changed`/`--staged`/`--since`, số entry của rule lock tăng so với base là lỗi. Lần ghi nhận đầu tiên (rule chưa có entry nào) vẫn được phép, để org triển khai rule mới.
 
 ### Fix và test rule
 
-Rule ast-grep có `fix:` thì vi phạm kèm gợi ý `agentkit fix <file>`. Fix lặp tối đa 5 lượt, bỏ qua các sửa đè lên nhau trong cùng lượt.
+Rule ast-grep có `fix:` thì vi phạm kèm gợi ý `larpcop fix <file>`. Fix lặp tối đa 5 lượt, bỏ qua các sửa đè lên nhau trong cùng lượt.
 
-`agentkit test` đọc fixture theo định dạng của ast-grep (`rule-tests/<id>-test.yml` với `valid`/`invalid`), thêm `fixed: [{before, after}]` để kiểm `fix:`. `--require-all` làm CI fail khi có rule chưa có fixture.
+`larpcop test` đọc fixture theo định dạng của ast-grep (`rule-tests/<id>-test.yml` với `valid`/`invalid`), thêm `fixed: [{before, after}]` để kiểm `fix:`. `--require-all` làm CI fail khi có rule chưa có fixture.
 
 ### Guard đọc lệnh shell bằng parser
 
-Hook phân tích lệnh bằng tree-sitter-bash: quote, pipe, `&&`/`;`/`&`, redirect, `bash -c '…'`, `eval`, `sudo`/`env` đều được giải theo cấu trúc. Nhờ vậy `bash -c 'rm .agentkit.yaml'`, `--no-ver""ify`, `git push --no-veri`, `sudo env SKIP=all git commit` bị chặn, còn `cp .agentkit.yaml /tmp/bak`, `git config --get core.hooksPath` hay `echo 'never rm .agentkit.yaml' > notes.txt` thì không.
+Hook phân tích lệnh bằng tree-sitter-bash: quote, pipe, `&&`/`;`/`&`, redirect, `bash -c '…'`, `eval`, `sudo`/`env` đều được giải theo cấu trúc. Nhờ vậy `bash -c 'rm .larpcop.yaml'`, `--no-ver""ify`, `git push --no-veri`, `sudo env SKIP=all git commit` bị chặn, còn `cp .larpcop.yaml /tmp/bak`, `git config --get core.hooksPath` hay `echo 'never rm .larpcop.yaml' > notes.txt` thì không.
 
 ## Bộ rule chính thức `recommended`
 
-[`standards/recommended`](standards/recommended) là bộ rule do agentkit duy trì, version theo tag của repo:
+[`standards/recommended`](standards/recommended) là bộ rule do larpcop duy trì, version theo tag của repo:
 
 ```yaml
 extends:
-  - https://github.com/NoahDuongMaster/agentkit.git#v0.2.0//standards/recommended
+  - https://github.com/NoahDuongMaster/larpcop.git#v0.2.0//standards/recommended
 ```
 
-(`URL#tag//thư-mục` lấy một thư mục con của repo standards.) Bộ này có 26 rule ast-grep (cộng 4 rule taint, secrets và `dependency-vulnerability`), mỗi rule kèm fixture và `agentkit test standards/recommended --require-all` chạy trong `cargo test`:
+(`URL#tag//thư-mục` lấy một thư mục con của repo standards.) Bộ này có 26 rule ast-grep (cộng 4 rule taint, secrets và `dependency-vulnerability`), mỗi rule kèm fixture và `larpcop test standards/recommended --require-all` chạy trong `cargo test`:
 
 - **Biến lỗi bảo mật thành quy ước cú pháp** (không cần taint): SQL chỉ qua tham số (`no-sql-interpolation`, `py-no-sql-interpolation`, `go-no-sql-sprintf`), lệnh shell chỉ qua mảng tham số (`no-shell-interpolation`, `py-no-shell-true`), không `eval`/`new Function`/`exec`, không gán HTML từ biến vào `innerHTML`, không `dangerouslySetInnerHTML` hay `bypassSecurityTrust*` (Angular), không `serve-index`, không MD5/SHA-1, không `$where` của MongoDB, input của request phải qua schema (`validate-request-input`), không tắt kiểm chứng chỉ TLS (`py-no-tls-verify-off`, `go-no-insecure-tls`), `yaml.safe_load` (có auto-fix).
 - **Không tắt kiểm tra**: `@ts-ignore`, `@ts-expect-error`, `eslint-disable`, `biome-ignore` là vi phạm; `any`, catch rỗng, `debugger` (có auto-fix).
@@ -267,21 +271,21 @@ Rule cho JavaScript/TypeScript được sinh cho cả TypeScript, Tsx và JavaSc
 
 ## Chất lượng code (thay Sonar/Codacy)
 
-- **Metric** — `agentkit metrics [--top N] [--json]`: số dòng, số hàm, độ phức tạp vòng của từng hàm (đếm trên cây tree-sitter, mọi ngôn ngữ ast-grep đọc được; hàm lồng nhau tính riêng). Trên chính repo này: 60 file, 813 hàm, trung bình 1,91. Ép bằng config:
+- **Metric** — `larpcop metrics [--top N] [--json]`: số dòng, số hàm, độ phức tạp vòng của từng hàm (đếm trên cây tree-sitter, mọi ngôn ngữ ast-grep đọc được; hàm lồng nhau tính riêng). Trên chính repo này: 60 file, 813 hàm, trung bình 1,91. Ép bằng config:
   ```yaml
   metrics:
     max_complexity: 15        # rule `complexity`
     max_function_lines: 80    # rule `function-length`
   ```
 - **Báo cáo cho CI** — `--format sarif|gitlab|markdown`, hoặc ghi nhiều định dạng cùng lúc bằng `--output FORMAT=FILE`. SARIF đã kiểm với schema SARIF 2.1.0 chính thức (0 lỗi); có `partialFingerprints` ổn định khi code dịch dòng. GitLab Code Quality có fingerprint riêng cho từng issue.
-- **Comment PR** — workflow `enforce.yml` ghi `agentkit-report.md` và giữ **một** comment trên PR, sửa lại sau mỗi lần push (`comment: true`, mặc định). `sarif: true` đẩy kết quả lên GitHub code scanning.
-- **LSP** — `agentkit lsp`: diagnostic ngay khi gõ (kể cả buffer chưa lưu), và code action "apply rule fixes". Đã chạy trong Neovim 0.12 thật: hiện đúng `no-sql-interpolation` và `no-debugger`, có code action. Lần chạy đó lộ bug: request sai định dạng làm server thoát; nay trả lỗi `InvalidParams` và chạy tiếp (có test hồi quy).
+- **Comment PR** — workflow `enforce.yml` ghi `larpcop-report.md` và giữ **một** comment trên PR, sửa lại sau mỗi lần push (`comment: true`, mặc định). `sarif: true` đẩy kết quả lên GitHub code scanning.
+- **LSP** — `larpcop lsp`: diagnostic ngay khi gõ (kể cả buffer chưa lưu), và code action "apply rule fixes". Đã chạy trong Neovim 0.12 thật: hiện đúng `no-sql-interpolation` và `no-debugger`, có code action. Lần chạy đó lộ bug: request sai định dạng làm server thoát; nay trả lỗi `InvalidParams` và chạy tiếp (có test hồi quy).
 
 ## Adapter agent
 
-`agentkit sync` sinh ra tất cả các file dưới đây. Mọi adapter dùng chung một lõi quyết định; mỗi agent chỉ khác ở cách parse payload và cách trả lời.
+`larpcop sync` sinh ra tất cả các file dưới đây. Mọi adapter dùng chung một lõi quyết định; mỗi agent chỉ khác ở cách parse payload và cách trả lời.
 
-Mặc định sinh cho mọi agent; `agents: [claude-code, kiro]` trong `.agentkit.yaml` giới hạn lại. `sync` cũng đăng ký MCP server `agentkit mcp` cho Claude Code (`.mcp.json`), Cursor (`.cursor/mcp.json`), Kiro (`.kiro/settings/mcp.json`) và Gemini (`mcpServers`).
+Mặc định sinh cho mọi agent; `agents: [claude-code, kiro]` trong `.larpcop.yaml` giới hạn lại. `sync` cũng đăng ký MCP server `larpcop mcp` cho Claude Code (`.mcp.json`), Cursor (`.cursor/mcp.json`), Kiro (`.kiro/settings/mcp.json`) và Gemini (`mcpServers`).
 
 | Agent | File sinh ra | Đọc rule từ | Trước khi chạy tool | Sau khi sửa file | Khi kết thúc lượt |
 |---|---|---|---|---|---|
@@ -289,13 +293,13 @@ Mặc định sinh cho mọi agent; `agents: [claude-code, kiro]` trong `.agentk
 | Codex | `.codex/hooks.json` | AGENTS.md (native) | `PreToolUse` Bash/`apply_patch` | `PostToolUse` `apply_patch` (path lấy từ header của patch) | `Stop` |
 | Gemini CLI | `.gemini/settings.json` (thêm `context.fileName: AGENTS.md`) | AGENTS.md | `BeforeTool` `run_shell_command`/`write_file`/`replace` | `AfterTool` | `AfterAgent` |
 | Cursor | `.cursor/hooks.json` (JSON native, `loop_limit: 1`) | AGENTS.md (native) | `preToolUse` Shell/Write/Delete | `postToolUse` → `additional_context` | `stop` → `followup_message` |
-| Copilot CLI | `.github/hooks/agentkit.json` (event PascalCase → payload kiểu Claude) | AGENTS.md (native) | `PreToolUse` → `permissionDecision: deny` | `PostToolUse` → `additionalContext` | `Stop` → `decision: block` |
+| Copilot CLI | `.github/hooks/larpcop.json` (event PascalCase → payload kiểu Claude) | AGENTS.md (native) | `PreToolUse` → `permissionDecision: deny` | `PostToolUse` → `additionalContext` | `Stop` → `decision: block` |
 | Factory Droid | `.factory/hooks.json` | AGENTS.md (native) | `PreToolUse` Execute/Create/Edit/ApplyPatch | `PostToolUse` | `Stop` |
-| Kiro (CLI V3, IDE 1.0) | `.kiro/hooks/agentkit.json` | AGENTS.md | `PreToolUse` `shell` + **nội dung sắp ghi** của `write` | (Kiro không đưa output PostToolUse cho model) | `Stop` → `decision: block` |
+| Kiro (CLI V3, IDE 1.0) | `.kiro/hooks/larpcop.json` | AGENTS.md | `PreToolUse` `shell` + **nội dung sắp ghi** của `write` | (Kiro không đưa output PostToolUse cho model) | `Stop` → `decision: block` |
 
 Các hook làm những việc sau:
 
-- **Trước tool** chặn: `--no-verify`, `git commit -n`, `core.hooksPath`, `HUSKY=0`, `LEFTHOOK=0`, `SKIP=`; ghi vào `.git/hooks`, `.agentkit.yaml`, file rule, hoặc file hook của bất kỳ agent nào. Lệnh cài package chưa được duyệt (`npm i`, `pnpm add`, `yarn add`, `bun add`, `pip install`, `uv add`, `poetry add`, `cargo add`, `go get`) bị chặn trước khi chạy, tức là trước khi install script của package kịp chạy. Xem [Dependency](#dependency).
+- **Trước tool** chặn: `--no-verify`, `git commit -n`, `core.hooksPath`, `HUSKY=0`, `LEFTHOOK=0`, `SKIP=`; ghi vào `.git/hooks`, `.larpcop.yaml`, file rule, hoặc file hook của bất kỳ agent nào. Lệnh cài package chưa được duyệt (`npm i`, `pnpm add`, `yarn add`, `bun add`, `pip install`, `uv add`, `poetry add`, `cargo add`, `go get`) bị chặn trước khi chạy, tức là trước khi install script của package kịp chạy. Xem [Dependency](#dependency).
 - **Sau khi sửa** kiểm đúng các file vừa sửa và trả lỗi về cho model.
 - **Kết thúc lượt** kiểm mọi thay đổi chưa commit và chặn **một lần**. Nếu agent vẫn dừng (ví dụ để hỏi người khi lệnh của user mâu thuẫn với rule) thì cho dừng; code vi phạm vẫn không commit hay merge được. Chặn lần hai trở đi chỉ gây loop: khi chạy Claude Code thật đã thấy 8 lần chặn y hệt nhau cho tới khi hết max-turns. Nếu user bấm dừng (Cursor `status: aborted`) thì không bao giờ chặn.
 
@@ -319,7 +323,7 @@ Nguồn của schema payload:
 
 ### MCP server
 
-`agentkit mcp` (stdio, SDK chính thức `rmcp`) cho agent 5 tool:
+`larpcop mcp` (stdio, SDK chính thức `rmcp`) cho agent 5 tool:
 
 | Tool | Làm gì |
 |---|---|
@@ -333,7 +337,7 @@ Chạy thật với Claude Code (`claude -p`, $0.25): agent tự gọi `rules_fo
 
 ## Triển khai toàn công ty
 
-**Managed policy trên máy dev.** `agentkit sync --managed --extends <URL#tag> --out <DIR>` sinh file policy cấp máy cho 5 agent, gọi `agentkit` bằng đường dẫn tuyệt đối và ép standards của công ty lên *mọi* repo, kể cả repo chưa có `.agentkit.yaml`. User không tắt được.
+**Managed policy trên máy dev.** `larpcop sync --managed --extends <URL#tag> --out <DIR>` sinh file policy cấp máy cho 5 agent, gọi `larpcop` bằng đường dẫn tuyệt đối và ép standards của công ty lên *mọi* repo, kể cả repo chưa có `.larpcop.yaml`. User không tắt được.
 
 | Agent | macOS | Linux | Windows |
 |---|---|---|---|
@@ -341,19 +345,19 @@ Chạy thật với Claude Code (`claude -p`, $0.25): agent tự gọi `rules_fo
 | Codex | `/etc/codex/requirements.toml` (`[features] hooks = true`, `managed_dir`) | như macOS | `C:\ProgramData\OpenAI\Codex\requirements.toml` |
 | Gemini CLI | `/Library/Application Support/GeminiCli/settings.json` | `/etc/gemini-cli/settings.json` | `C:\ProgramData\gemini-cli\settings.json` |
 | Cursor | `/Library/Application Support/Cursor/hooks.json` | `/etc/cursor/hooks.json` | `C:\ProgramData\Cursor\hooks.json` |
-| Copilot CLI | `/etc/github-copilot/policy.d/agentkit.json` | như macOS | `C:\ProgramData\GitHub\Copilot\policy.d\agentkit.json` |
+| Copilot CLI | `/etc/github-copilot/policy.d/larpcop.json` | như macOS | `C:\ProgramData\GitHub\Copilot\policy.d\larpcop.json` |
 
 `--out /` cài thẳng (cần root); `--out pkgroot` tạo cây thư mục để đóng gói cho MDM. Kiro và Factory Droid không có file cấp máy (dashboard / theo user). Đường dẫn lấy từ docs managed settings của từng hãng; chưa cài thử lên máy thật vì cần quyền root.
 
 **Repo trên GitHub.**
 
 ```sh
-agentkit org status <owner> [--standards URL#tag] [--json]
-agentkit org setup  <owner> --standards URL#tag [--repos a,b] [--workflow-ref vX] [--dry-run]
+larpcop org status <owner> [--standards URL#tag] [--json]
+larpcop org setup  <owner> --standards URL#tag [--repos a,b] [--workflow-ref vX] [--dry-run]
 ```
 
-- `status` liệt kê từng repo (không archived, không fork): có `.agentkit.yaml` không, extends standards nào và pin tag nào, có workflow gọi gate không, lần chạy gần nhất ra sao, có PR setup đang mở không. Exit 1 nếu còn repo chưa có gate. Đo trên tài khoản thật: 57 repo trong khoảng 22 giây.
-- `setup` mở **một PR mỗi repo** gồm `.agentkit.yaml`, workflow `.github/workflows/agentkit.yml` và mọi file agent mà `sync` sinh ra từ nội dung hiện có của repo, nên PR qua được `sync --check` ngay. Chạy lại thì bỏ qua repo đã có gate hoặc đã có PR, và dùng lại nhánh nếu lần trước dừng giữa chừng.
+- `status` liệt kê từng repo (không archived, không fork): có `.larpcop.yaml` không, extends standards nào và pin tag nào, có workflow gọi gate không, lần chạy gần nhất ra sao, có PR setup đang mở không. Exit 1 nếu còn repo chưa có gate. Đo trên tài khoản thật: 57 repo trong khoảng 22 giây.
+- `setup` mở **một PR mỗi repo** gồm `.larpcop.yaml`, workflow `.github/workflows/larpcop.yml` và mọi file agent mà `sync` sinh ra từ nội dung hiện có của repo, nên PR qua được `sync --check` ngay. Chạy lại thì bỏ qua repo đã có gate hoặc đã có PR, và dùng lại nhánh nếu lần trước dừng giữa chừng.
 - Ghi file trong `.github/workflows` cần token có scope `workflow`. Thiếu scope thì PR vẫn được mở, và nội dung workflow nằm trong mô tả PR để thêm tay (`gh auth refresh -s workflow` để lần sau tự thêm).
 - Đã chạy thật trên hai repo sandbox private (standards + app): PR mở được, nhánh PR qua `sync --check` và `check`, chạy lại không tạo PR trùng. Hai repo sandbox đã xoá sau khi thử.
 - Dùng `gh` CLI nên không lưu token, chạy được với SSO và GitHub Enterprise.
@@ -364,12 +368,12 @@ agentkit org setup  <owner> --standards URL#tag [--repos a,b] [--workflow-ref vX
 
 ```yaml
 jobs:
-  agentkit:
-    uses: NoahDuongMaster/agentkit/.github/workflows/enforce.yml@v0.1.0
+  larpcop:
+    uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.2.0
     with:
       standards: https://github.com/<org>/standards.git#v1.0.0
     secrets:
-      agentkit-token: ${{ secrets.AGENTKIT_TOKEN }}   # chỉ cần khi agentkit/standards private
+      larpcop-token: ${{ secrets.LARPCOP_TOKEN }}   # chỉ cần khi larpcop/standards private
 ```
 
 Workflow này chỉ kiểm các file mà PR thay đổi, nên nợ kỹ thuật cũ không chặn PR, còn nợ mới không lọt vào được. Nó cũng chạy `sync --check` để đảm bảo các file agent sinh ra luôn khớp với rule. Repo này tự dùng chính workflow đó qua [`self-enforce.yml`](.github/workflows/self-enforce.yml).
@@ -381,7 +385,7 @@ Pipeline release dùng [`dist`](https://opensource.axo.dev/cargo-dist/) ([releas
 Installer shell/PowerShell, Homebrew và npm đều tải binary từ GitHub Releases, nên **chỉ chạy được cho mọi người khi repo public**. Khi repo còn private:
 
 - Dev và CI dùng `gh release download` (cần đăng nhập `gh` và có quyền đọc repo).
-- Công thức Homebrew (`agentkit.rb`) và tarball npm được đính kèm trong release nhưng **chưa publish**.
+- Công thức Homebrew (`larpcop.rb`) và tarball npm được đính kèm trong release nhưng **chưa publish**.
 
 Khi chọn được nơi công khai (public repo, tap `homebrew-tap`, npm scope), chỉ cần thêm `publish-jobs = ["homebrew", "npm"]` cùng hai secret `HOMEBREW_TAP_TOKEN` và `NPM_TOKEN`.
 
@@ -394,8 +398,8 @@ Binary nặng 47 MB trên đĩa, nhưng chỉ khoảng **4 MB khi tải về** (
 
 ## Windows
 
-- Lệnh `run:` của linter luôn chạy bằng shell POSIX, nên một config dùng được trên mọi OS. Thứ tự tìm shell: biến `AGENTKIT_SHELL`, rồi `sh.exe` đi kèm Git for Windows (tìm qua `git --exec-path`), rồi `sh` trong PATH.
-- Cache standards dùng thư mục chuẩn của từng OS: `%LOCALAPPDATA%` trên Windows, `~/Library/Caches` trên macOS, XDG trên Linux. Có thể ghi đè bằng `AGENTKIT_CACHE_DIR`.
+- Lệnh `run:` của linter luôn chạy bằng shell POSIX, nên một config dùng được trên mọi OS. Thứ tự tìm shell: biến `LARPCOP_SHELL`, rồi `sh.exe` đi kèm Git for Windows (tìm qua `git --exec-path`), rồi `sh` trong PATH.
+- Cache standards dùng thư mục chuẩn của từng OS: `%LOCALAPPDATA%` trên Windows, `~/Library/Caches` trên macOS, XDG trên Linux. Có thể ghi đè bằng `LARPCOP_CACHE_DIR`.
 - Path được chuẩn hoá bằng `dunce`, không bị dạng `\\?\C:\...`.
 - File CRLF do `autocrlf` không bị tính là drift, và AGENTS.md sinh ra luôn dùng LF.
 - [`ci.yml`](.github/workflows/ci.yml) chạy fmt, clippy và toàn bộ test trên ubuntu, macOS và Windows.
@@ -410,10 +414,10 @@ Binary nặng 47 MB trên đĩa, nhưng chỉ khoảng **4 MB khi tải về** (
 - Bảo mật: taint qua biến/destructuring/sanitizer/gán lại (TS, Python), `sink_types` qua typescript-language-server thật (xuyên file), secrets bị che khi in ra, OSV giả: mã độc luôn chặn, lỗ hổng chỉ chặn bản mới, theo ngưỡng, hook chặn lệnh cài.
 - Integration: check, locked, git extends theo tag, staged, `--changed`/`--since`, linter delegation, format github, chống né rule, hook của 4 agent, sync idempotent, phát hiện drift, CRLF, pre-commit thật; dependency: tuổi phiên bản (qua cache và qua một server deps.dev giả), merge-base của PR, ngoại lệ bản vá bảo mật, gate package manager, duyệt dependency mới (cả monorepo), hook chặn lệnh cài, lock chỉ được siết thêm.
 
-Trên GitHub thật (repo private `NoahDuongMaster/agentkit`):
+Trên GitHub thật (repo private `NoahDuongMaster/larpcop`):
 
 - [`ci.yml`](.github/workflows/ci.yml) xanh trên ubuntu, macOS và **Windows**: fmt, clippy `-D warnings`, 29/29 test. Trên Windows có cả linter chạy qua `sh.exe` của Git, extends từ `file:///C:/…`, CRLF và pre-commit thật.
-- Release `v0.1.0`: [release.yml](.github/workflows/release.yml) build 5 target. Installer đã được cài thật vào `~/.local/bin` theo cách ở mục [Cài đặt](#cài-đặt).
+- Release `v0.2.0`: [release.yml](.github/workflows/release.yml) build 5 target. Installer đã được cài thật vào `~/.local/bin` theo cách ở mục [Cài đặt](#cài-đặt).
 - Cổng CI, thử bằng PR #1 (đã đóng, không merge):
   - Commit vi phạm bị pre-commit chặn ở máy local; được đẩy lên bằng `--no-verify`.
   - `enforce` tải binary từ release, **fail** và gắn annotation `no-explicit-any` / `no-console` vào đúng dòng trong PR.
@@ -434,18 +438,17 @@ Ngoài ra đã chạy agent thật trong repo demo:
   - Lần chạy này lộ ra bug: `2>&1` trong `npm install slugify 2>&1 | tail -5` bị đọc thành tên package. Đã sửa, kèm test hồi quy.
 - **Dependency với dữ liệu thật**:
   - `typescript@next` (phát hành cách đó 2 giờ) bị chặn cùng 7 binary nền tảng của nó. Mỗi lỗi kèm gợi ý `7.0.2`; 8 lần tra deps.dev hết 0,58 giây.
-  - Chính `Cargo.lock` của agentkit bị chặn 3 crate mới 9–13 ngày tuổi; đã hạ theo đúng phiên bản được gợi ý. 2 crate khác được cho qua vì là bản vá RUSTSEC.
+  - Chính `Cargo.lock` của larpcop bị chặn 3 crate mới 9–13 ngày tuổi; đã hạ theo đúng phiên bản được gợi ý. 2 crate khác được cho qua vì là bản vá RUSTSEC.
 
 ## Giới hạn
 
 - **Taint**: dữ liệu không được theo qua lời gọi hàm hay sang file khác; chỉ kiểu là hỏi được xuyên file (`sink_types`). Dự án phải cài đủ dependency thì language server mới trả lời đúng.
 - **Cursor và Gemini chưa chạy agent thật.** Cursor cần đăng nhập `cursor-agent login` (qua trình duyệt); Gemini CLI chưa được cài hay đăng nhập trên máy dev. Adapter được test bằng đúng schema payload ở trên.
 - **File agent ghi bằng shell**: `cat > f <<EOF`, `cat <<EOF >> f`, `tee f <<EOF` và `echo … > f` được hook đọc bằng tree-sitter-bash và kiểm nội dung *trước khi* lệnh chạy, kể cả sau `cd dir &&`. Các cách khác (`sed -i`, `cp`, script tự viết) thì không thấy trước được; chúng vẫn bị bắt ở hook kết thúc lượt, ở pre-commit và ở CI.
-- **Repo private** khiến installer `curl | sh`, Homebrew và npm chưa dùng được cho người ngoài (xem [Phân phối khi repo private](#phân-phối-khi-repo-private)). Repo khác muốn gọi `enforce.yml` thì cần quyền truy cập Actions; mục này đã được bật sẵn cho các repo cùng owner `NoahDuongMaster` (`access_level: user`). Repo gọi vẫn phải truyền secret `agentkit-token` để tải binary.
+- **Repo private** khiến installer `curl | sh`, Homebrew và npm chưa dùng được cho người ngoài (xem [Phân phối khi repo private](#phân-phối-khi-repo-private)). Repo khác muốn gọi `enforce.yml` thì cần quyền truy cập Actions; mục này đã được bật sẵn cho các repo cùng owner `NoahDuongMaster` (`access_level: user`). Repo gọi vẫn phải truyền secret `larpcop-token` để tải binary.
 - **Chi phí CI**: GitHub Actions của repo private tính phút chạy, với runner macOS nhân 10 và Windows nhân 2. Repo public thì miễn phí.
 - **Dependency**:
   - Rule tuổi phiên bản cần mạng tới deps.dev và fail closed khi không tra được. Package ở registry riêng phải được khai trong `exempt`.
   - Poetry, Cargo và Go không có thiết lập tuổi tối thiểu (uv thì có, từ 0.9, và đã bị bắt buộc). Với các hệ sinh thái này, bản quá mới của một package *đã duyệt* vẫn cài được lên máy dev, rồi mới bị chặn ở lượt kết thúc, pre-commit và CI. Yarn 1 cũng không có gate.
   - Maven, Gradle, NuGet, RubyGems và Composer: lockfile của bundler được test bằng file do bundler thật sinh ra; NuGet, Gradle, Composer, pom.xml và csproj được test bằng file viết tay theo định dạng chính thức, vì máy dev không có dotnet, gradle hay composer. Các hệ sinh thái này cũng không có gate tuổi trong package manager.
   - Hook chỉ nhận ra lệnh cài gõ trực tiếp. Cài qua script hay Makefile thì không thấy trước, nhưng vẫn bị bắt ở lockfile và manifest.
-  - Bộ standards mẫu bật dependency rules từ bản sau `v0.1.0`. Workflow `self-enforce` tải binary bản release mới nhất, nên PR chỉ dùng được các khóa `dependencies` sau khi có release mới.

@@ -125,25 +125,25 @@ fn sync_generates_files_only_for_the_chosen_agents() {
     let repo = Repo::with_standards();
     assert_eq!(repo.run(&["sync"]).code(), 0);
     for f in [
-        ".github/hooks/agentkit.json",
+        ".github/hooks/larpcop.json",
         ".factory/hooks.json",
-        ".kiro/hooks/agentkit.json",
+        ".kiro/hooks/larpcop.json",
     ] {
         assert!(repo.path().join(f).is_file(), "{f}");
     }
-    let kiro: Value = serde_json::from_str(&repo.read(".kiro/hooks/agentkit.json")).unwrap();
-    assert_eq!(kiro["hooks"][0]["action"]["command"], "agentkit hook kiro");
+    let kiro: Value = serde_json::from_str(&repo.read(".kiro/hooks/larpcop.json")).unwrap();
+    assert_eq!(kiro["hooks"][0]["action"]["command"], "larpcop hook kiro");
 
     let only = Repo::new();
     only.write(
-        ".agentkit.yaml",
+        ".larpcop.yaml",
         &format!("{}agents: [kiro, codex]\n", extends_yaml(STANDARDS)),
     );
     assert_eq!(only.run(&["sync"]).code(), 0);
     assert!(only.path().join(".codex/hooks.json").is_file());
     assert!(!only.path().join(".claude/settings.json").exists());
 
-    only.write(".agentkit.yaml", "agents: [vscode]\n");
+    only.write(".larpcop.yaml", "agents: [vscode]\n");
     let bad = only.run(&["sync"]);
     assert_eq!(bad.code(), 3);
     assert!(bad.stderr().contains("unknown agent `vscode`"));
@@ -162,12 +162,12 @@ fn managed_policies_force_the_standards_with_an_absolute_binary() {
         "--platform",
         "linux",
         "--bin",
-        "/opt/agentkit/bin/agentkit",
+        "/opt/larpcop/bin/larpcop",
         "--extends",
         url,
     ]);
     assert_eq!(run.code(), 0, "{}", run.stderr());
-    let cmd = format!("\"/opt/agentkit/bin/agentkit\" hook claude-code --extends \"{url}\"");
+    let cmd = format!("\"/opt/larpcop/bin/larpcop\" hook claude-code --extends \"{url}\"");
     let claude: Value = serde_json::from_str(
         &std::fs::read_to_string(out.join("etc/claude-code/managed-settings.json")).unwrap(),
     )
@@ -180,7 +180,7 @@ fn managed_policies_force_the_standards_with_an_absolute_binary() {
     assert_eq!(codex["features"]["hooks"].as_bool(), Some(true));
     assert_eq!(
         codex["hooks"]["managed_dir"].as_str(),
-        Some("/opt/agentkit/bin")
+        Some("/opt/larpcop/bin")
     );
     assert!(
         codex["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
@@ -191,7 +191,7 @@ fn managed_policies_force_the_standards_with_an_absolute_binary() {
     for f in [
         "etc/gemini-cli/settings.json",
         "etc/cursor/hooks.json",
-        "etc/github-copilot/policy.d/agentkit.json",
+        "etc/github-copilot/policy.d/larpcop.json",
     ] {
         assert!(out.join(f).is_file(), "{f}");
     }

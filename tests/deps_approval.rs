@@ -43,7 +43,7 @@ fn new_direct_dependencies_need_approval() {
     );
 
     repo.write(
-        ".agentkit.yaml",
+        ".larpcop.yaml",
         &format!("{APPROVAL}  approved: [left-pad, 'npm:zod', 'cargo:serde']\n"),
     );
     let run = repo.run(&["check", "--changed"]);
@@ -85,7 +85,7 @@ fn hook_stops_unapproved_installs_before_they_run() {
     }
 
     repo.write(
-        ".agentkit.yaml",
+        ".larpcop.yaml",
         &format!("{APPROVAL}  min_release_age: 14\n  approved: [left-pad]\n"),
     );
     assert_eq!(hook("npm install left-pad").code(), 0);
@@ -95,7 +95,7 @@ fn hook_stops_unapproved_installs_before_they_run() {
 fn locked_dependency_rules_can_only_tighten() {
     let standards = tempfile::tempdir().unwrap();
     std::fs::write(
-        standards.path().join("agentkit.yaml"),
+        standards.path().join("larpcop.yaml"),
         "dependencies:\n  min_release_age: 14\n  require_approval: true\n\
          locked: [dependency-release-age, dependency-approval]\n",
     )
@@ -103,7 +103,7 @@ fn locked_dependency_rules_can_only_tighten() {
     let base = extends_yaml(&standards.path().display().to_string());
     let repo = repo(&base);
     let with = |extra: &str| {
-        repo.write(".agentkit.yaml", &format!("{base}dependencies:\n{extra}"));
+        repo.write(".larpcop.yaml", &format!("{base}dependencies:\n{extra}"));
         repo.run(&["rules"])
     };
 

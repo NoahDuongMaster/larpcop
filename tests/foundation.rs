@@ -16,7 +16,7 @@ fix: let $NAME = $VALUE;
 
 fn repo_with_rule() -> Repo {
     let repo = Repo::new();
-    repo.write(".agentkit.yaml", "rule_dirs: [rules]\n");
+    repo.write(".larpcop.yaml", "rule_dirs: [rules]\n");
     repo.write("rules/no-var.yml", VAR_RULE);
     repo
 }
@@ -29,7 +29,7 @@ fn fix_applies_rule_fixes_and_reports_what_is_left() {
     let check = repo.run(&["check"]);
     assert_eq!(check.code(), 1);
     assert!(
-        check.stdout().contains("agentkit fix src/a.ts"),
+        check.stdout().contains("larpcop fix src/a.ts"),
         "{}",
         check.stdout()
     );
@@ -78,7 +78,7 @@ fn baseline_hides_known_violations_only() {
         "let legacy = 1;\nvar fresh = 2;\nexport { legacy, fresh };\n",
     );
     assert_eq!(repo.run(&["baseline", "--prune"]).code(), 0);
-    assert!(!repo.read(".agentkit-baseline.json").contains("legacy"));
+    assert!(!repo.read(".larpcop-baseline.json").contains("legacy"));
     assert_eq!(repo.run(&["check"]).code(), 1);
 }
 
@@ -134,9 +134,9 @@ fn agents_cannot_rebaseline_or_edit_the_baseline() {
     let repo = repo_with_rule();
     let dir = repo.path();
     for cmd in [
-        "agentkit baseline",
-        "bash -c 'agentkit baseline'",
-        "echo '{}' > .agentkit-baseline.json",
+        "larpcop baseline",
+        "bash -c 'larpcop baseline'",
+        "echo '{}' > .larpcop-baseline.json",
     ] {
         let input = hook_input(
             "PreToolUse",
@@ -151,7 +151,7 @@ fn agents_cannot_rebaseline_or_edit_the_baseline() {
         "PreToolUse",
         "Write",
         &dir,
-        serde_json::json!({ "file_path": dir.join(".agentkit-baseline.json"), "content": "{}" }),
+        serde_json::json!({ "file_path": dir.join(".larpcop-baseline.json"), "content": "{}" }),
     );
     assert_eq!(repo.run_stdin(&["hook", "claude"], &input).code(), 2);
 }

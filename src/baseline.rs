@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-pub const FILE: &str = ".agentkit-baseline.json";
+pub const FILE: &str = ".larpcop-baseline.json";
 
 type Key = (String, String, String);
 

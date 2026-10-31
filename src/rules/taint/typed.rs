@@ -72,9 +72,6 @@ impl Typed {
                 &file.content,
                 at,
             );
-            if std::env::var_os("AGENTKIT_DEBUG_TYPES").is_some() {
-                eprintln!("types: {}:{at:?} {} -> {answer:?}", file.rel, node.text());
-            }
             answer.is_none_or(|text| self.constraints[*i].1.is_match(&text))
         })
     }

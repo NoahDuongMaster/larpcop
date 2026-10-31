@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "agentkit": {
-      "command": "agentkit",
+    "larpcop": {
+      "command": "larpcop",
       "args": [
         "mcp"
       ]

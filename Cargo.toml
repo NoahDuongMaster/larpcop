@@ -1,10 +1,10 @@
 [package]
-name = "agentkit"
-version = "0.1.0"
+name = "larpcop"
+version = "0.2.0"
 edition = "2024"
 description = "Agent-agnostic coding-rule enforcement: one binary, every agent, every stack."
-repository = "https://github.com/NoahDuongMaster/agentkit"
-homepage = "https://github.com/NoahDuongMaster/agentkit"
+repository = "https://github.com/NoahDuongMaster/larpcop"
+homepage = "https://github.com/NoahDuongMaster/larpcop"
 readme = "README.md"
 
 [dependencies]

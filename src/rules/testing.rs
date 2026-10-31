@@ -37,10 +37,10 @@ pub struct Report {
 }
 
 pub fn run(rule_dirs: &[PathBuf]) -> Result<Report> {
-    let rules: BTreeMap<String, RuleConfig<SupportLang>> = ast::load_all(rule_dirs)?
-        .into_iter()
-        .map(|r| (r.id.clone(), r))
-        .collect();
+    let mut rules: BTreeMap<String, Vec<RuleConfig<SupportLang>>> = BTreeMap::new();
+    for r in ast::load_all(rule_dirs)? {
+        rules.entry(r.id.clone()).or_default().push(r);
+    }
     let mut text = String::new();
     let mut failures = 0;
     let mut tested = Vec::new();
@@ -48,10 +48,19 @@ pub fn run(rule_dirs: &[PathBuf]) -> Result<Report> {
         let raw = fs::read_to_string(&path)?;
         let fixture: Fixture = serde_saphyr::from_str(&raw)
             .with_context(|| format!("invalid fixture {}", path.display()))?;
-        let rule = rules
+        let variants = rules
             .get(&fixture.id)
             .ok_or_else(|| anyhow!("{}: no rule with id `{}`", path.display(), fixture.id))?;
-        let errors = check(rule, &fixture);
+        // The fixture holds for every language variant of the rule.
+        let errors: Vec<String> = variants
+            .iter()
+            .flat_map(|rule| {
+                let lang = (variants.len() > 1).then(|| format!("[{}] ", rule.language));
+                check(rule, &fixture)
+                    .into_iter()
+                    .map(move |e| format!("{}{e}", lang.clone().unwrap_or_default()))
+            })
+            .collect();
         let cases = fixture.valid.len() + fixture.invalid.len() + fixture.fixed.len();
         if errors.is_empty() {
             let _ = writeln!(text, "✓ {:<28} {cases} case(s)", fixture.id);

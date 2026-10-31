@@ -1,0 +1,14 @@
+{
+  "id": "no-sql-interpolation",
+  "valid": [
+    "db.query('select * from u where id = $1', [id])",
+    "db.query(`select * from u`)",
+    "list.query(x)"
+  ],
+  "invalid": [
+    "db.query(`select * from u where id = ${id}`)",
+    "db.query('select * from u where id = ' + id)",
+    "prisma.$queryRawUnsafe(`select ${x}`)",
+    "knex.raw(\"delete from t where id=\" + id)"
+  ]
+}

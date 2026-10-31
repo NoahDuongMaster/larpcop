@@ -1,0 +1,13 @@
+{
+  "id": "py-no-sql-interpolation",
+  "valid": [
+    "cur.execute('select * from u where id = %s', (uid,))",
+    "cur.execute(QUERY, params)"
+  ],
+  "invalid": [
+    "cur.execute(f'select * from u where id = {uid}')",
+    "cur.execute('select * from u where id = %s' % uid)",
+    "cur.execute('select * from u where id = {}'.format(uid))",
+    "cur.executemany('insert into ' + table + ' values (%s)', rows)"
+  ]
+}

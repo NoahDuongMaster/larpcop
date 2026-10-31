@@ -1,0 +1,10 @@
+{
+  "id": "go-no-sql-sprintf",
+  "valid": [
+    "package m\nfunc f() { db.Query(\"select * from u where id = $1\", id) }"
+  ],
+  "invalid": [
+    "package m\nfunc f() { db.Query(fmt.Sprintf(\"select * from u where id = %d\", id)) }",
+    "package m\nfunc f() { db.ExecContext(ctx, \"delete from t where id = \" + id) }"
+  ]
+}

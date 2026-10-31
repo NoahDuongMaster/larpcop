@@ -21,6 +21,14 @@ on:
         description: agentkit release tag. Empty = latest release.
         type: string
         default: ""
+      comment:
+        description: Post (and keep updating) one summary comment on the pull request. Needs `pull-requests write`.
+        type: boolean
+        default: true
+      sarif:
+        description: Upload SARIF to GitHub code scanning. Needs code scanning and `security-events write`.
+        type: boolean
+        default: false
     secrets:
       agentkit-token:
         description: Token able to read agentkit releases and private standards (needed while they are private).
@@ -54,7 +62,33 @@ jobs:
 
       # Only files changed by the PR: legacy debt does not block, new debt cannot land.
       - name: Rules
-        run: agentkit check --since "origin/${BASE_REF}" --format github
+        id: rules
+        run: >-
+          agentkit check --since "origin/${BASE_REF}" --format github
+          --output markdown=agentkit-report.md --output sarif=agentkit.sarif
+
+      # One comment per PR, edited on every push (never a pile of bot comments).
+      - name: Pull request comment
+        if: always() && inputs.comment && github.event_name == 'pull_request' && hashFiles('agentkit-report.md') != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
+            --jq '.[] | select(.body | startswith("<!-- agentkit-report -->")) | .id' | head -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@agentkit-report.md >/dev/null
+          else
+            gh pr comment "$PR" --body-file agentkit-report.md
+          fi
+
+      - name: Code scanning
+        if: always() && inputs.sarif && hashFiles('agentkit.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: agentkit.sarif
+          category: agentkit
 
       - name: Generated agent files are current
         run: agentkit sync --check

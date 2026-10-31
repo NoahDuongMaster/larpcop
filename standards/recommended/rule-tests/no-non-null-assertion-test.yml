@@ -1,0 +1,9 @@
+{
+  "id": "no-non-null-assertion",
+  "valid": [
+    "const x = y ?? 0"
+  ],
+  "invalid": [
+    "const x = y!"
+  ]
+}

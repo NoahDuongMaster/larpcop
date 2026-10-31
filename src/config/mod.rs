@@ -4,7 +4,9 @@ mod fetch;
 mod model;
 
 pub use fetch::cache_root;
-pub use model::{DependenciesConfig, ExtendSpec, LinterConfig, MaxLinesConfig, RawConfig};
+pub use model::{
+    DependenciesConfig, ExtendSpec, LinterConfig, MaxLinesConfig, MetricsConfig, RawConfig,
+};
 
 use anyhow::{Context, Result, bail};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -29,6 +31,7 @@ pub struct Config {
     pub deps: DepsPolicy,
     /// Agents to generate files for; `None` = all.
     pub agents: Option<Vec<String>>,
+    pub metrics: Option<MetricsConfig>,
     /// Layers in application order, for traceability.
     pub sources: Vec<String>,
 }
@@ -66,6 +69,20 @@ pub fn resolve(root: &Path, forced: &[String], refresh: bool) -> Result<Config> 
     }
     cfg.apply(repo, root, REPO_CONFIG)?;
     Ok(cfg)
+}
+
+/// Rule directories declared by one standards directory (for `agentkit test DIR`).
+pub fn rule_dirs_of(dir: &Path) -> Result<Vec<PathBuf>> {
+    let file = STANDARDS_CONFIG
+        .iter()
+        .map(|name| dir.join(name))
+        .find(|p| p.is_file())
+        .with_context(|| format!("no agentkit.yaml in {}", dir.display()))?;
+    Ok(read_raw(&file)?
+        .rule_dirs
+        .iter()
+        .map(|d| dir.join(d))
+        .collect())
 }
 
 fn read_raw(path: &Path) -> Result<RawConfig> {
@@ -160,6 +177,14 @@ impl Config {
         }
         if raw.agents.is_some() {
             self.agents = raw.agents;
+        }
+        if let Some(m) = raw.metrics {
+            if self.metrics.is_some() {
+                use crate::rules::{COMPLEXITY_ID, LENGTH_ID};
+                self.ensure_unlocked(COMPLEXITY_ID, source, "override")?;
+                self.ensure_unlocked(LENGTH_ID, source, "override")?;
+            }
+            self.metrics = Some(m);
         }
         for id in raw.locked {
             self.locked.entry(id).or_insert_with(|| source.to_string());

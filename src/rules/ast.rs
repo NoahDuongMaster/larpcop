@@ -25,7 +25,9 @@ pub const TESTS_DIR: &str = "rule-tests";
 /// Every rule defined in `dirs`, enabled or not (`agentkit test` checks them all).
 pub fn load_all(dirs: &[PathBuf]) -> Result<Vec<RuleConfig<SupportLang>>> {
     let mut out = Vec::new();
-    let mut origin: BTreeMap<String, PathBuf> = BTreeMap::new();
+    // One id may exist once per language (`no-eval` for TypeScript, Tsx and
+    // JavaScript): disabling or locking the id covers all of them.
+    let mut origin: BTreeMap<(String, String), PathBuf> = BTreeMap::new();
     for file in rule_files(dirs)? {
         let text =
             fs::read_to_string(&file).with_context(|| format!("reading {}", file.display()))?;
@@ -35,10 +37,12 @@ pub fn load_all(dirs: &[PathBuf]) -> Result<Vec<RuleConfig<SupportLang>>> {
             if rule.id.is_empty() {
                 bail!("rule without `id` in {}", file.display());
             }
-            if let Some(prev) = origin.insert(rule.id.clone(), file.clone()) {
+            let key = (rule.id.clone(), rule.language.to_string());
+            if let Some(prev) = origin.insert(key, file.clone()) {
                 bail!(
-                    "duplicate rule id `{}` in {} and {}",
+                    "duplicate rule id `{}` for {} in {} and {}",
                     rule.id,
+                    rule.language,
                     prev.display(),
                     file.display()
                 );
@@ -55,7 +59,7 @@ impl AstRules {
             .into_iter()
             .filter(|r| !disabled.contains(&r.id) && !matches!(r.severity, Severity::Off))
             .collect();
-        let infos = configs.iter().map(info).collect();
+        let infos = merge_languages(configs.iter().map(info));
         let collection =
             RuleCollection::try_new(configs).context("invalid files/ignores glob in rules")?;
         Ok(Self { collection, infos })
@@ -208,6 +212,18 @@ fn level(severity: &Severity) -> Level {
         Severity::Info => Level::Info,
         Severity::Hint | Severity::Off => Level::Hint,
     }
+}
+
+/// One entry per id; per-language variants list their languages together.
+fn merge_languages(infos: impl Iterator<Item = RuleInfo>) -> Vec<RuleInfo> {
+    let mut out: Vec<RuleInfo> = Vec::new();
+    for i in infos {
+        match out.iter_mut().find(|o| o.id == i.id) {
+            Some(o) => o.scope = format!("{}, {}", o.scope, i.scope),
+            None => out.push(i),
+        }
+    }
+    out
 }
 
 fn info(rule: &RuleConfig<SupportLang>) -> RuleInfo {

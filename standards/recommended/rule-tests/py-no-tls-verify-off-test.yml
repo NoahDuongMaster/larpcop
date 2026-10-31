@@ -1,0 +1,11 @@
+{
+  "id": "py-no-tls-verify-off",
+  "valid": [
+    "requests.get(url, verify=ca_path)",
+    "requests.get(url)"
+  ],
+  "invalid": [
+    "requests.get(url, verify=False)",
+    "httpx.Client(verify=False)"
+  ]
+}

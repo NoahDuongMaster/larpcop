@@ -1,0 +1,10 @@
+{
+  "id": "rs-no-unwrap",
+  "valid": [
+    "fn f() -> Option<u8> { let v = g()?; Some(v) }",
+    "#[test]\nfn t() { g().unwrap(); }"
+  ],
+  "invalid": [
+    "fn f() { let v = g().unwrap(); }"
+  ]
+}

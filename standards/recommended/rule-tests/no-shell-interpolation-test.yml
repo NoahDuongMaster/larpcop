@@ -1,0 +1,12 @@
+{
+  "id": "no-shell-interpolation",
+  "valid": [
+    "execFile('git', ['log', ref])",
+    "exec('ls -la')",
+    "regex.exec(text)"
+  ],
+  "invalid": [
+    "exec(`git log ${ref}`)",
+    "child_process.execSync('rm -rf ' + dir)"
+  ]
+}

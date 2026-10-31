@@ -1,0 +1,9 @@
+{
+  "id": "py-no-bare-except",
+  "valid": [
+    "try:\n    f()\nexcept ValueError:\n    pass"
+  ],
+  "invalid": [
+    "try:\n    f()\nexcept:\n    pass"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "no-console",
+  "valid": [
+    "logger.info('x')"
+  ],
+  "invalid": [
+    "console.log(x)",
+    "console.error('boom', e)"
+  ]
+}

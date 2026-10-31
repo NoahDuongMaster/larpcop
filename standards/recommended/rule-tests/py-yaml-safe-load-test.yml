@@ -1,0 +1,16 @@
+{
+  "id": "py-yaml-safe-load",
+  "valid": [
+    "yaml.safe_load(f)",
+    "yaml.load(f, Loader=yaml.SafeLoader)"
+  ],
+  "invalid": [
+    "yaml.load(f)"
+  ],
+  "fixed": [
+    {
+      "before": "data = yaml.load(f)",
+      "after": "data = yaml.safe_load(f)"
+    }
+  ]
+}

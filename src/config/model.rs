@@ -30,6 +30,19 @@ pub struct RawConfig {
     pub dependencies: Option<DependenciesConfig>,
     /// Agents `sync` generates files for (default: all). Ids as in `agentkit hook`.
     pub agents: Option<Vec<String>>,
+    /// Function-level limits (`complexity`, `function-length` rules).
+    pub metrics: Option<MetricsConfig>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MetricsConfig {
+    /// Highest cyclomatic complexity a function may have.
+    pub max_complexity: Option<usize>,
+    /// Longest a function may be, in lines.
+    pub max_function_lines: Option<usize>,
+    #[serde(default)]
+    pub exclude: Vec<String>,
 }
 
 /// Supply-chain rules. Patterns are `[ecosystem:]glob`, e.g. `npm:@acme/*`, `serde`.
@@ -104,10 +117,15 @@ impl ExtendSpec {
             Some((url, r)) => (url, Some(r.to_string())),
             None => (spec, None),
         };
+        // `URL#v1.2.0//standards/recommended`: a subdirectory of the checkout.
+        let (reference, subdir) = match reference.as_deref().and_then(|r| r.split_once("//")) {
+            Some((r, sub)) => (Some(r.to_string()), Some(sub.to_string())),
+            None => (reference, None),
+        };
         Self::Git {
             git: url.to_string(),
             reference,
-            subdir: None,
+            subdir,
         }
     }
 

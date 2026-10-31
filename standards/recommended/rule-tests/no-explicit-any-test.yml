@@ -1,0 +1,11 @@
+{
+  "id": "no-explicit-any",
+  "valid": [
+    "let a: unknown",
+    "function f<T>(x: T): T { return x }"
+  ],
+  "invalid": [
+    "let a: any",
+    "function f(x: any) {}"
+  ]
+}

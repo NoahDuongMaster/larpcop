@@ -1,0 +1,15 @@
+{
+  "id": "no-debugger",
+  "valid": [
+    "const debuggerOn = true"
+  ],
+  "invalid": [
+    "debugger;"
+  ],
+  "fixed": [
+    {
+      "before": "f();\ndebugger;\ng();",
+      "after": "f();\n\ng();"
+    }
+  ]
+}

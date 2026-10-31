@@ -1,0 +1,9 @@
+{
+  "id": "no-dangerously-set-inner-html",
+  "valid": [
+    "const a = <div>{text}</div>"
+  ],
+  "invalid": [
+    "const a = <div dangerouslySetInnerHTML={{ __html: html }} />"
+  ]
+}

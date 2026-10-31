@@ -1,0 +1,12 @@
+{
+  "id": "no-empty-catch",
+  "valid": [
+    "try { f() } catch (e) { log(e) }",
+    "try { f() } catch (e) { throw new Error('x', { cause: e }) }",
+    "try { f() } catch { // expected when offline\n}"
+  ],
+  "invalid": [
+    "try { f() } catch (e) {}",
+    "try { f() } catch {}"
+  ]
+}

@@ -1,5 +1,7 @@
 //! Output formats. `text` is written so an LLM agent can act on it directly.
 
+mod ci;
+
 use crate::context::Outcome;
 use crate::rules::{Level, Violation};
 use std::fmt::Write;
@@ -10,6 +12,12 @@ pub enum Format {
     Json,
     /// GitHub Actions annotations followed by the text report.
     Github,
+    /// SARIF 2.1.0, for GitHub code scanning and most security dashboards.
+    Sarif,
+    /// GitLab Code Quality report.
+    Gitlab,
+    /// Markdown summary for a pull request comment.
+    Markdown,
 }
 
 pub const NO_BYPASS: &str = "These rules are enforced by the pre-commit hook and CI: violating code cannot be \
@@ -23,10 +31,13 @@ pub fn render(outcome: &Outcome, format: Format) -> String {
         Format::Text => text(outcome),
         Format::Json => json(outcome),
         Format::Github => github(outcome) + &text(outcome),
+        Format::Sarif => ci::sarif(outcome),
+        Format::Gitlab => ci::gitlab(outcome),
+        Format::Markdown => ci::markdown(outcome),
     }
 }
 
-fn summary(outcome: &Outcome) -> String {
+pub(crate) fn summary(outcome: &Outcome) -> String {
     let count = |l: Level| outcome.violations.iter().filter(|v| v.level == l).count();
     let (errors, warnings) = (count(Level::Error), count(Level::Warning));
     let others = outcome.violations.len() - errors - warnings;

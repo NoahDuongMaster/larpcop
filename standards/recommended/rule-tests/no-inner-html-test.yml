@@ -1,0 +1,12 @@
+{
+  "id": "no-inner-html",
+  "valid": [
+    "el.textContent = html",
+    "el.innerHTML = ''",
+    "el.innerHTML = DOMPurify.sanitize(html)"
+  ],
+  "invalid": [
+    "el.innerHTML = html",
+    "el.outerHTML = `<b>${name}</b>`"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "py-no-shell-true",
+  "valid": [
+    "subprocess.run(['ls', '-la'], check=True)",
+    "subprocess.run(cmd, shell=False)"
+  ],
+  "invalid": [
+    "subprocess.run(cmd, shell=True)",
+    "subprocess.Popen(f'ls {d}', shell=True)"
+  ]
+}

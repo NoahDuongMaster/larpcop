@@ -8,6 +8,8 @@ dependencies:
   approved:
     - cargo:base64
     - cargo:jiff
+    - cargo:lsp-server
+    - cargo:lsp-types
     - cargo:percent-encoding
     - cargo:rmcp
     - cargo:tokio

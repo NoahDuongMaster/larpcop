@@ -1,0 +1,11 @@
+{
+  "id": "no-eval",
+  "valid": [
+    "JSON.parse(text)",
+    "evaluate(x)"
+  ],
+  "invalid": [
+    "eval(code)",
+    "new Function('a', body)"
+  ]
+}

@@ -109,10 +109,13 @@ Cả hai rule được lock trong standards mẫu. Một rule đã lock chỉ đ
 ## Lệnh
 
 ```sh
-agentkit check [paths…] [--staged | --changed | --since REF] [--format text|json|github] [--output FORMAT=FILE]
+agentkit check [paths…] [--staged | --changed | --since REF] [--format text|json|github|sarif|gitlab|markdown] [--output FORMAT=FILE]
 agentkit fix [paths…] [--changed | --since REF] [--dry-run]   # áp `fix:` của rule rồi check lại
 agentkit baseline [--prune]    # ghi nhận vi phạm cũ; --prune chỉ xoá entry đã sửa
-agentkit test [--require-all]  # chạy fixture trong rule-tests/ (valid, invalid, fixed)
+agentkit test [STANDARDS_DIR] [--require-all]  # chạy fixture trong rule-tests/ (valid, invalid, fixed)
+agentkit metrics [paths…] [--top N] [--json]    # độ phức tạp, kích thước hàm
+agentkit lsp | agentkit mcp    # language server / MCP server (stdio)
+agentkit org status|setup …    # trạng thái và triển khai trên GitHub
 agentkit rules                 # rule hiệu lực, nguồn, rule nào bị lock
 agentkit sync [--check]        # AGENTS.md + file hook cho mọi agent (xem bảng dưới)
 agentkit install [--force]     # git pre-commit hook (tôn trọng core.hooksPath, monorepo)
@@ -138,6 +141,35 @@ Rule ast-grep có `fix:` thì vi phạm kèm gợi ý `agentkit fix <file>`. Fix
 ### Guard đọc lệnh shell bằng parser
 
 Hook phân tích lệnh bằng tree-sitter-bash: quote, pipe, `&&`/`;`/`&`, redirect, `bash -c '…'`, `eval`, `sudo`/`env` đều được giải theo cấu trúc. Nhờ vậy `bash -c 'rm .agentkit.yaml'`, `--no-ver""ify`, `git push --no-veri`, `sudo env SKIP=all git commit` bị chặn, còn `cp .agentkit.yaml /tmp/bak`, `git config --get core.hooksPath` hay `echo 'never rm .agentkit.yaml' > notes.txt` thì không.
+
+## Bộ rule chính thức `recommended`
+
+[`standards/recommended`](standards/recommended) là bộ rule do agentkit duy trì, version theo tag của repo:
+
+```yaml
+extends:
+  - https://github.com/NoahDuongMaster/agentkit.git#v0.2.0//standards/recommended
+```
+
+(`URL#tag//thư-mục` lấy một thư mục con của repo standards.) Bộ này có 20 rule, mỗi rule kèm fixture và `agentkit test standards/recommended --require-all` chạy trong `cargo test`:
+
+- **Biến lỗi bảo mật thành quy ước cú pháp** (không cần taint): SQL chỉ qua tham số (`no-sql-interpolation`, `py-no-sql-interpolation`, `go-no-sql-sprintf`), lệnh shell chỉ qua mảng tham số (`no-shell-interpolation`, `py-no-shell-true`), không `eval`/`new Function`/`exec`, không gán HTML từ biến vào `innerHTML`, không `dangerouslySetInnerHTML`, không tắt kiểm chứng chỉ TLS (`py-no-tls-verify-off`, `go-no-insecure-tls`), `yaml.safe_load` (có auto-fix).
+- **Không tắt kiểm tra**: `@ts-ignore`, `@ts-expect-error`, `eslint-disable`, `biome-ignore` là vi phạm; `any`, catch rỗng, `debugger` (có auto-fix).
+- **Kích thước và độ phức tạp**: hàm tối đa 80 dòng, độ phức tạp vòng (McCabe) tối đa 15, file tối đa 500 dòng.
+
+Rule cho JavaScript/TypeScript được sinh cho cả TypeScript, Tsx và JavaScript dưới **cùng một id** (`scripts/gen-recommended.py`), nên `disable`/`locked` một id là áp cho cả ba.
+
+## Chất lượng code (thay Sonar/Codacy)
+
+- **Metric** — `agentkit metrics [--top N] [--json]`: số dòng, số hàm, độ phức tạp vòng của từng hàm (đếm trên cây tree-sitter, mọi ngôn ngữ ast-grep đọc được; hàm lồng nhau tính riêng). Trên chính repo này: 60 file, 813 hàm, trung bình 1,91. Ép bằng config:
+  ```yaml
+  metrics:
+    max_complexity: 15        # rule `complexity`
+    max_function_lines: 80    # rule `function-length`
+  ```
+- **Báo cáo cho CI** — `--format sarif|gitlab|markdown`, hoặc ghi nhiều định dạng cùng lúc bằng `--output FORMAT=FILE`. SARIF đã kiểm với schema SARIF 2.1.0 chính thức (0 lỗi); có `partialFingerprints` ổn định khi code dịch dòng. GitLab Code Quality có fingerprint riêng cho từng issue.
+- **Comment PR** — workflow `enforce.yml` ghi `agentkit-report.md` và giữ **một** comment trên PR, sửa lại sau mỗi lần push (`comment: true`, mặc định). `sarif: true` đẩy kết quả lên GitHub code scanning.
+- **LSP** — `agentkit lsp`: diagnostic ngay khi gõ (kể cả buffer chưa lưu), và code action "apply rule fixes". Đã chạy trong Neovim 0.12 thật: hiện đúng `no-sql-interpolation` và `no-debugger`, có code action. Lần chạy đó lộ bug: request sai định dạng làm server thoát; nay trả lỗi `InvalidParams` và chạy tiếp (có test hồi quy).
 
 ## Adapter agent
 

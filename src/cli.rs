@@ -114,9 +114,21 @@ pub enum Cmd {
     },
     /// Run the rule fixtures in `rule-tests/` (valid, invalid and fixed cases).
     Test {
+        /// A standards directory to test on its own (default: this project's rules).
+        standards: Option<PathBuf>,
         /// Fail when a rule has no fixture.
         #[arg(long)]
         require_all: bool,
+    },
+    /// Size and cyclomatic complexity per function, most complex first.
+    Metrics {
+        #[command(flatten)]
+        scope: ScopeArgs,
+        /// How many functions to list.
+        #[arg(long, default_value_t = 20)]
+        top: usize,
+        #[arg(long)]
+        json: bool,
     },
     /// List the effective rules and where they come from.
     Rules,
@@ -146,6 +158,8 @@ pub enum Cmd {
     },
     /// MCP server on stdio: rules for a file, check content before writing, fix.
     Mcp,
+    /// Language server on stdio: diagnostics while typing, fixes as code actions.
+    Lsp,
     /// Roll the standards out across a GitHub user's or organization's repositories.
     Org {
         #[command(subcommand)]

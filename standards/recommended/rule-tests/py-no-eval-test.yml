@@ -1,0 +1,11 @@
+{
+  "id": "py-no-eval",
+  "valid": [
+    "ast.literal_eval(s)",
+    "evaluate(x)"
+  ],
+  "invalid": [
+    "eval(s)",
+    "exec(code)"
+  ]
+}

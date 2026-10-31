@@ -99,6 +99,39 @@ fn standards_from_git_at_a_pinned_tag() {
 }
 
 #[test]
+fn recommended_standards_from_a_git_subdirectory() {
+    let upstream = Repo::new();
+    let recommended = concat!(env!("CARGO_MANIFEST_DIR"), "/standards/recommended");
+    copy_dir(
+        Path::new(recommended),
+        &upstream.path().join("standards/recommended"),
+    );
+    upstream.commit_all("recommended");
+    upstream.git(&["tag", "v2.0.0"]);
+
+    let repo = Repo::new();
+    let url = format!(
+        "{}#v2.0.0//standards/recommended",
+        file_url(&upstream.path())
+    );
+    repo.write(".agentkit.yaml", &extends_yaml(&url));
+    repo.write(
+        "db.ts",
+        "export const q = (id: string) => db.query(`select * from u where id = ${id}`);\n",
+    );
+    repo.write("ok.py", "import yaml\ndata = yaml.load(open('a.yml'))\n");
+    let run = repo.run(&["check"]);
+    assert_eq!(run.code(), 1, "{}{}", run.stdout(), run.stderr());
+    let out = run.stdout();
+    assert!(
+        out.contains("no-sql-interpolation") && out.contains("py-yaml-safe-load"),
+        "{out}"
+    );
+    assert_eq!(repo.run(&["fix", "ok.py"]).code(), 0);
+    assert!(repo.read("ok.py").contains("yaml.safe_load(open('a.yml'))"));
+}
+
+#[test]
 fn staged_mode_checks_what_will_be_committed() {
     let repo = Repo::with_standards();
     repo.write("a.ts", BAD_TS);

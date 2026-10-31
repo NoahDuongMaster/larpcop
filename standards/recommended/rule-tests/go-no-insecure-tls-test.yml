@@ -1,0 +1,9 @@
+{
+  "id": "go-no-insecure-tls",
+  "valid": [
+    "package m\nvar c = tls.Config{MinVersion: tls.VersionTLS12}"
+  ],
+  "invalid": [
+    "package m\nvar c = tls.Config{InsecureSkipVerify: true}"
+  ]
+}

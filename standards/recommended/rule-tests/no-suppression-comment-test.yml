@@ -1,0 +1,12 @@
+{
+  "id": "no-suppression-comment",
+  "valid": [
+    "// ignore whitespace here",
+    "/* eslint is configured in eslint.config.js */"
+  ],
+  "invalid": [
+    "// @ts-ignore\nconst a = 1",
+    "/* eslint-disable */",
+    "// @ts-expect-error\nf()"
+  ]
+}

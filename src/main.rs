@@ -7,6 +7,7 @@ mod deps;
 mod files;
 mod hook;
 mod install;
+mod lsp;
 mod mcp;
 mod org;
 mod report;

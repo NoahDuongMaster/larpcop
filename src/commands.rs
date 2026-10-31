@@ -49,9 +49,15 @@ pub fn run(cli: Cli) -> Result<u8> {
             );
             Ok(0)
         }
-        Cmd::Test { require_all } => {
-            let (cfg, _) = ctx()?.load()?;
-            let report = crate::rules::testing::run(&cfg.rule_dirs)?;
+        Cmd::Test {
+            standards,
+            require_all,
+        } => {
+            let rule_dirs = match standards {
+                Some(dir) => crate::config::rule_dirs_of(&dir)?,
+                None => ctx()?.load()?.0.rule_dirs,
+            };
+            let report = crate::rules::testing::run(&rule_dirs)?;
             print!("{}", report.text);
             if !report.untested.is_empty() {
                 println!("untested rule(s): {}", report.untested.join(", "));
@@ -66,6 +72,19 @@ pub fn run(cli: Cli) -> Result<u8> {
                 }
             );
             Ok(u8::from(failed))
+        }
+        Cmd::Metrics { scope, top, json } => {
+            let ctx = ctx()?;
+            let (cfg, _) = ctx.load()?;
+            let exclude = files::globset(&cfg.exclude)?;
+            let sources = files::collect(&cfg.root, &scope.scope(), &exclude)?;
+            let summary = crate::rules::metrics::summarize(&sources, top);
+            if json {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            } else {
+                print!("{}", crate::rules::metrics::render(&summary));
+            }
+            Ok(0)
         }
         Cmd::Rules => rules(&ctx()?),
         Cmd::Sync {
@@ -96,6 +115,10 @@ pub fn run(cli: Cli) -> Result<u8> {
         }
         Cmd::Mcp => {
             crate::mcp::serve(g.dir, g.extends)?;
+            Ok(0)
+        }
+        Cmd::Lsp => {
+            crate::lsp::serve(g.dir, g.extends)?;
             Ok(0)
         }
         Cmd::Org { cmd } => org(cmd),

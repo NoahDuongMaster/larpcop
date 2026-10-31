@@ -1,0 +1,15 @@
+# agentkit's recommended standards: security conventions that make injection
+# bugs unwritable (no taint analysis needed), no silenced checks, and function
+# size/complexity limits. Extend it, then tighten or add your own:
+#
+#   extends:
+#     - https://github.com/NoahDuongMaster/agentkit.git#v0.2.0//standards/recommended
+rule_dirs: [rules]
+max_lines:
+  max: 500
+  exclude: ["**/*.test.*", "**/*_test.*", "**/generated/**", "**/*.lock", "**/*-lock.*"]
+metrics:
+  max_complexity: 15
+  max_function_lines: 80
+  exclude: ["**/*.test.*", "**/*_test.*", "**/tests/**"]
+exclude: ["**/node_modules/**", "**/dist/**", "**/build/**", "**/vendor/**", "**/*.min.js"]

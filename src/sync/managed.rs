@@ -82,7 +82,12 @@ pub fn write(opts: &Options) -> Result<Vec<PathBuf>> {
     if opts.extends.iter().all(|s| s.trim().is_empty()) {
         bail!("--managed needs the company standards: pass --extends <git URL#tag>");
     }
-    if !Path::new(opts.bin).is_absolute() && !opts.bin.contains(":\\") {
+    // Absolute on the *target* OS, whatever OS generates the files.
+    let absolute = match opts.platform {
+        Platform::Windows => opts.bin.get(1..3).is_some_and(|s| s == ":\\" || s == ":/"),
+        _ => opts.bin.starts_with('/'),
+    };
+    if !absolute {
         bail!("--bin must be absolute: managed hooks run with a minimal PATH");
     }
     let standards = opts.extends.join(",");
@@ -106,9 +111,11 @@ pub fn write(opts: &Options) -> Result<Vec<PathBuf>> {
 
 /// Codex managed hooks must live under `managed_dir`; the binary's directory is it.
 fn codex_requirements(cmd: &str, opts: &Options) -> Result<String> {
-    let dir = Path::new(opts.bin)
-        .parent()
-        .map(|d| d.to_string_lossy().into_owned())
+    // Split on the target's separators, not the host's.
+    let dir = opts
+        .bin
+        .rsplit_once(['/', '\\'])
+        .map(|(d, _)| d.to_string())
         .unwrap_or_default();
     let mut hooks = toml::Table::new();
     let key = if opts.platform == Platform::Windows {

@@ -1,11 +1,14 @@
 //! Rule engine: built-in rules, ast-grep rules and delegated linters.
 
 mod ast;
+mod complexity;
 mod linters;
 mod max_lines;
+pub mod metrics;
 pub mod testing;
 
 pub use max_lines::ID as MAX_LINES_ID;
+pub use metrics::{COMPLEXITY_ID, LENGTH_ID};
 
 use crate::config::Config;
 use crate::files::SourceFile;
@@ -62,6 +65,7 @@ pub struct RuleInfo {
 
 pub struct Engine {
     max_lines: Option<max_lines::MaxLines>,
+    metrics: Option<metrics::Metrics>,
     ast: ast::AstRules,
     linters: Vec<linters::Linter>,
     deps: Option<crate::deps::Deps>,
@@ -80,8 +84,14 @@ impl Engine {
             .filter(|l| !cfg.disabled.contains(&l.id))
             .map(linters::Linter::new)
             .collect::<Result<_>>()?;
+        let metrics = cfg
+            .metrics
+            .as_ref()
+            .map(metrics::Metrics::new)
+            .transpose()?;
         Ok(Self {
             max_lines,
+            metrics,
             ast,
             linters,
             deps: crate::deps::Deps::new(cfg)?,
@@ -90,6 +100,7 @@ impl Engine {
 
     pub fn is_empty(&self) -> bool {
         self.max_lines.is_none()
+            && self.metrics.is_none()
             && self.ast.is_empty()
             && self.linters.is_empty()
             && self.deps.is_none()
@@ -105,6 +116,7 @@ impl Engine {
             .flat_map_iter(|file| {
                 let mut v = self.ast.check(file);
                 v.extend(self.max_lines.as_ref().and_then(|m| m.check(file)));
+                v.extend(self.metrics.iter().flat_map(|m| m.check(file)));
                 v
             })
             .collect();
@@ -119,6 +131,7 @@ impl Engine {
     pub fn check_source(&self, file: &SourceFile) -> Vec<Violation> {
         let mut v = self.ast.check(file);
         v.extend(self.max_lines.as_ref().and_then(|m| m.check(file)));
+        v.extend(self.metrics.iter().flat_map(|m| m.check(file)));
         sort(&mut v);
         v
     }
@@ -134,6 +147,7 @@ impl Engine {
     /// Rules that apply to one root-relative path (language and `files` globs).
     pub fn rules_for(&self, rel: &str) -> Vec<RuleInfo> {
         let mut out: Vec<RuleInfo> = self.max_lines.iter().map(|m| m.info()).collect();
+        out.extend(self.metrics.iter().flat_map(|m| m.infos()));
         out.extend(self.ast.infos_for(rel));
         out.extend(self.linters.iter().map(|l| l.info()));
         out
@@ -141,6 +155,7 @@ impl Engine {
 
     pub fn rules(&self) -> Vec<RuleInfo> {
         let mut out: Vec<RuleInfo> = self.max_lines.iter().map(|m| m.info()).collect();
+        out.extend(self.metrics.iter().flat_map(|m| m.infos()));
         out.extend(self.ast.infos().iter().cloned());
         out.extend(self.linters.iter().map(|l| l.info()));
         out.extend(self.deps.iter().flat_map(|d| d.rules()));

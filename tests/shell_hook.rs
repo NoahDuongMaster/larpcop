@@ -24,13 +24,12 @@ fn files_a_command_changed_are_checked_right_after_it() {
         repo.run_stdin(&["hook", "claude-code"], &bash(event, &dir, call, cmd))
     };
 
-    // `sed -i` cannot be judged before it runs: it is judged right after.
-    assert_eq!(
-        hook("PreToolUse", "t1", "sed -i.bak 's/x/y/' src/ok.ts").code(),
-        0
-    );
+    // A script `sed` cannot run safely on a copy (it writes a file) is judged
+    // right after it runs.
+    let cmd = "sed -i.bak 's/x/y/w /dev/null' src/ok.ts";
+    assert_eq!(hook("PreToolUse", "t1", cmd).code(), 0);
     repo.write("src/ok.ts", BAD_TS);
-    let after = hook("PostToolUse", "t1", "sed -i.bak 's/x/y/' src/ok.ts");
+    let after = hook("PostToolUse", "t1", cmd);
     assert_eq!(after.code(), 2, "{}", after.stdout());
     assert!(
         after
@@ -187,4 +186,39 @@ fn yarn_1_has_no_age_gate_so_its_installs_are_checked() {
         "{}",
         run.stderr()
     );
+}
+
+#[test]
+fn copies_and_substitutions_are_judged_before_they_run() {
+    let repo = Repo::with_standards();
+    repo.write("src/ok.ts", GOOD_TS);
+    repo.write("drafts/bad.ts", BAD_TS);
+    repo.commit_all("base");
+    let dir = repo.path();
+    let pre = |cmd: &str| {
+        repo.run_stdin(
+            &["hook", "claude-code"],
+            &bash("PreToolUse", &dir, "c", cmd),
+        )
+    };
+    let copy = pre("cp drafts/bad.ts src/new.ts");
+    assert_eq!(copy.code(), 2, "{}", copy.stdout());
+    assert!(
+        copy.stderr().contains("no-explicit-any"),
+        "{}",
+        copy.stderr()
+    );
+    assert_eq!(pre("mkdir -p lib && mv drafts/bad.ts src/").code(), 2);
+    assert_eq!(pre("cp src/ok.ts src/copy.ts").code(), 0);
+    let sed = std::process::Command::new("sed")
+        .arg("s/a/b/")
+        .stdin(std::process::Stdio::null())
+        .output();
+    if sed.is_ok_and(|o| o.status.success()) {
+        let sed = pre("sed -i.bak -e 's/x: string/x: any/' src/ok.ts");
+        assert_eq!(sed.code(), 2, "{}{}", sed.stdout(), sed.stderr());
+        assert_eq!(pre("sed -i.bak 's/trim/trimEnd/g' src/ok.ts").code(), 0);
+    } else {
+        eprintln!("skipped: no sed");
+    }
 }

@@ -54,6 +54,17 @@ fn within(r: &Range<usize>, outer: &Range<usize>) -> bool {
 }
 
 impl Ctx {
+    /// What is known of the function a call calls: by its name, or for
+    /// `obj.method(…)` on an object of unknown class, the one method of that
+    /// name among the known classes (`*.method`).
+    pub fn summary<D: Doc>(&self, call: &Node<D>) -> Option<&super::summary::Summary> {
+        let name = callee(call)?;
+        self.summaries.get(&name).or_else(|| {
+            let (_, method) = name.rsplit_once('.')?;
+            self.summaries.get(&format!("*.{method}"))
+        })
+    }
+
     /// Does `node` carry source data (not passed through a sanitizer)?
     pub fn tainted<D: Doc>(&self, node: &Node<D>, names: &HashSet<String>) -> bool {
         // A function value is code, not data; what it captures is followed when
@@ -73,7 +84,7 @@ impl Ctx {
         }
         // A function we have a summary for: only what it really passes through.
         if CALLS.contains(&node.kind().as_ref())
-            && let Some(s) = callee(node).and_then(|c| self.summaries.get(&c))
+            && let Some(s) = self.summary(node)
         {
             return s.returns_source
                 || args(node)
@@ -170,7 +181,7 @@ impl Ctx {
                     {
                         names.insert(container);
                     }
-                    let Some(s) = callee(call).and_then(|c| self.summaries.get(&c)) else {
+                    let Some(s) = self.summary(call) else {
                         continue;
                     };
                     let args = args(call);

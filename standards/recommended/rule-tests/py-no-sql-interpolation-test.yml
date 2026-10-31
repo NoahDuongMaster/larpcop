@@ -1,13 +1,14 @@
-{
-  "id": "py-no-sql-interpolation",
-  "valid": [
-    "cur.execute('select * from u where id = %s', (uid,))",
-    "cur.execute(QUERY, params)"
-  ],
-  "invalid": [
-    "cur.execute(f'select * from u where id = {uid}')",
-    "cur.execute('select * from u where id = %s' % uid)",
-    "cur.execute('select * from u where id = {}'.format(uid))",
-    "cur.executemany('insert into ' + table + ' values (%s)', rows)"
-  ]
-}
+id: py-no-sql-interpolation
+valid:
+- cur.execute('select * from u where id = %s', (uid,))
+- cur.execute(QUERY, params)
+- label = f'Select an item from {menu}'
+- q = 'SELECT id FROM users WHERE id = %s'
+invalid:
+- cur.execute(f'select * from u where id = {uid}')
+- cur.execute('select * from u where id = %s' % uid)
+- cur.execute('select * from u where id = {}'.format(uid))
+- cur.executemany('insert into ' + table + ' values (%s)', rows)
+- "q = (\"INSERT INTO students (name) \"\n     \"VALUES ('%(name)s')\" % {'name': name})"
+- q = f"select * from users where name = '{name}'"
+- q = 'DELETE FROM t WHERE id = {}'.format(i)

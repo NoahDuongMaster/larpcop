@@ -3,7 +3,7 @@
 use super::*;
 use std::path::Path;
 
-fn rule(
+pub(super) fn rule(
     lang: &str,
     root: &Path,
     sources: &[&str],
@@ -44,7 +44,7 @@ fn guarded(
     .unwrap()
 }
 
-fn found(r: &TaintRule, root: &Path, rel: &str) -> Vec<(usize, String)> {
+pub(super) fn found(r: &TaintRule, root: &Path, rel: &str) -> Vec<(usize, String)> {
     let content = std::fs::read_to_string(root.join(rel)).unwrap();
     let file = SourceFile {
         rel: rel.into(),

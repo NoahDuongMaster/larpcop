@@ -120,7 +120,7 @@ Bốn lớp, xếp theo mức chắc chắn. Lớp đầu tất định 100%, c�
 
 **1. Quy ước cú pháp (bộ `recommended`).** Không đi truy vết lỗi mà cấm luôn cách viết dẫn tới lỗi: SQL chỉ qua tham số, lệnh shell chỉ qua mảng tham số, dữ liệu request chỉ được dùng sau khi qua schema (`validate-request-input`: `req.body`, `req.query`, `req.params`, `request.json()` phải nằm trong `X.parse(…)`/`safeParse`/`validate`…). Khi đó lỗi không viết ra được ngay từ đầu, và ast-grep bắt đúng 100%, cùng một kết quả ở mọi lần chạy.
 
-**2. Taint xuyên hàm và xuyên file.** Theo dữ liệu từ `sources` tới đối số của `sinks` qua các phép gán theo thứ tự dòng code; đi qua `sanitizers` thì sạch, gán lại giá trị sạch thì hết taint, destructuring cũng được theo. Mỗi hàm có một *summary* (tham số nào tới sink, tham số nào được trả về, hàm có trả về dữ liệu nguồn không), nên dữ liệu được theo qua lời gọi hàm trong cùng file, qua `import`/`require`/alias của tsconfig, `from … import` của Python và các package trong cùng module Go; callback và closure thấy các biến bẩn mà chúng bắt được. Pattern viết bằng cú pháp ast-grep:
+**2. Taint xuyên hàm và xuyên file.** Theo dữ liệu từ `sources` tới đối số của `sinks` qua các phép gán theo thứ tự dòng code; đi qua `sanitizers` thì sạch, gán lại giá trị sạch thì hết taint, destructuring cũng được theo. Mỗi hàm có một *summary* (tham số nào tới sink, tham số nào được trả về, hàm có trả về dữ liệu nguồn không), nên dữ liệu được theo qua lời gọi hàm trong cùng file, qua `import`/`require`/alias của tsconfig, `from … import` của Python và các package trong cùng module Go; callback và closure thấy các biến bẩn mà chúng bắt được; method được biết dưới tên `Class.method` (cả khi class được import), và `obj.method(…)` với `obj` chưa rõ kiểu dùng method duy nhất mang tên đó. Pattern viết bằng cú pháp ast-grep:
 
 ```yaml
 taint:
@@ -137,7 +137,7 @@ taint:
 
 `guards` là phép kiểm trong điều kiện `if`: sau một nhánh `return`/`throw`, hoặc bên trong nhánh chạy khi phép kiểm đúng, biến được kiểm là sạch. `safe_prefix` là regex trên phần chuỗi cố định ở đầu đối số được ghép (`res.redirect("/p/" + id)` không thể dẫn ra ngoài site).
 
-Bộ `recommended` có sẵn 16 rule taint: SQL, shell, open redirect, code injection (`eval`, `vm`, `mathjs.eval`), XSS phản chiếu (`res.send` của chuỗi HTML, `innerHTML`), path traversal, SSRF, NoSQL injection (MongoDB/Mongoose; filter của Sequelize thì không), regex injection, log injection cho JS/TS; SQL, path traversal, SSRF, SSTI (`render_template_string`), code injection/deserialization, log injection cho Python. Lớp 1 bắt ``db.query(`…${id}`)`` ngay tại chỗ gọi; lớp 2 bắt trường hợp lớp 1 không thấy, khi chuỗi SQL được dựng ở biến hoặc ở hàm khác:
+Bộ `recommended` có sẵn 16 rule taint: SQL, shell, open redirect, code injection (`eval`, `vm`, `mathjs.eval`), XSS phản chiếu (`res.send` của chuỗi HTML, `innerHTML`), path traversal, SSRF, NoSQL injection (MongoDB/Mongoose; filter của Sequelize thì không), regex injection, log injection cho JS/TS; SQL, path traversal, SSRF, SSTI (`render_template_string`), code injection/deserialization, log injection cho Python (nguồn của Flask, Django, FastAPI/Starlette, aiohttp, Tornado). Lớp 1 bắt ``db.query(`…${id}`)`` ngay tại chỗ gọi; lớp 2 bắt trường hợp lớp 1 không thấy, khi chuỗi SQL được dựng ở biến hoặc ở hàm khác:
 
 ```ts
 const name = req.query.name as string;
@@ -230,10 +230,11 @@ llm:
 | Juice Shop: dòng lỗ hổng tìm thấy | **11/27** | 6/27 | – |
 | NodeGoat: dòng tìm thấy | **12/14** | 4/14 | – |
 | DVNA: dòng tìm thấy | **12/14** | 7/14 | – |
+| DVPWA (Python): dòng tìm thấy | **3/4** | 2/4 | – |
 | vulnerable-node `sast/seeds` (chấm bằng script của dự án) | **11/12**, 1 báo nhầm (0 nếu bỏ rule chung chung) | 10/12, 1 báo nhầm (8/12 nếu bỏ rule chung chung) | – |
 | Secrets | trùng khớp hoàn toàn với gitleaks | – | 69 + 3 |
 
-Mỗi bộ từng là bộ kiểm chứng ở lần chạy đầu, rồi được dùng để thêm rule: NodeGoat lần đầu 8/14, DVNA 5/14 (Semgrep 7/14), vulnerable-node 10/12 với 1 báo nhầm. Thứ tự đó và từng dòng bị bỏ sót nằm trong [bench/README.md](bench/README.md).
+Mỗi bộ từng là bộ kiểm chứng ở lần chạy đầu, rồi được dùng để thêm rule: NodeGoat lần đầu 8/14, DVNA 5/14 (Semgrep 7/14), vulnerable-node 10/12 với 1 báo nhầm, DVPWA 1/4 (Semgrep 2/4). Thứ tự đó và từng dòng bị bỏ sót nằm trong [bench/README.md](bench/README.md).
 
 ## Lệnh
 
@@ -285,7 +286,7 @@ extends:
 
 (`URL#tag//thư-mục` lấy một thư mục con của repo standards.) Bộ này có 47 rule ast-grep, 16 rule taint, 3 rule `text:`, cùng secrets và `dependency-vulnerability`. Mọi rule kèm fixture, và `larpcop test standards/recommended --require-all` chạy trong `cargo test`:
 
-- **Biến lỗi bảo mật thành quy ước cú pháp** (không cần taint): SQL chỉ qua tham số (`no-sql-interpolation`, `py-no-sql-interpolation`, `go-no-sql-sprintf`), lệnh shell chỉ qua mảng tham số (`no-shell-interpolation`, `py-no-shell-true`), không `eval`/`new Function`/`exec`, không gán HTML từ biến vào `innerHTML`, không `dangerouslySetInnerHTML` hay `bypassSecurityTrust*` (Angular), không `serve-index`, không MD5/SHA-1, không `$where` của MongoDB, input của request phải qua schema (`validate-request-input`), không tắt kiểm chứng chỉ TLS (`py-no-tls-verify-off`, `go-no-insecure-tls`), `yaml.safe_load` (có auto-fix), regex có lượng từ lồng nhau (ReDoS), tắt autoescape của template, so sánh mật khẩu dạng plain text, secret của session/JWT viết cứng, XML bật external entity (XXE), thư viện deserialize chạy được code (`node-serialize`, `pickle`), hàm merge đệ quy không chặn `__proto__` (prototype pollution).
+- **Biến lỗi bảo mật thành quy ước cú pháp** (không cần taint): SQL chỉ qua tham số (`no-sql-interpolation`, `py-no-sql-interpolation`, `go-no-sql-sprintf`; chuỗi có dạng câu SQL mà được ghép hay format ở bất kỳ đâu cũng bị bắt, không chỉ trong lời gọi `query`), lệnh shell chỉ qua mảng tham số (`no-shell-interpolation`, `py-no-shell-true`), không `eval`/`new Function`/`exec`, không gán HTML từ biến vào `innerHTML`, không `dangerouslySetInnerHTML` hay `bypassSecurityTrust*` (Angular), không `serve-index`, không MD5/SHA-1, không `$where` của MongoDB, input của request phải qua schema (`validate-request-input`), không tắt kiểm chứng chỉ TLS (`py-no-tls-verify-off`, `go-no-insecure-tls`), `yaml.safe_load` (có auto-fix), regex có lượng từ lồng nhau (ReDoS), tắt autoescape của template, so sánh mật khẩu dạng plain text, secret của session/JWT viết cứng, XML bật external entity (XXE), thư viện deserialize chạy được code (`node-serialize`, `pickle`), hàm merge đệ quy không chặn `__proto__` (prototype pollution).
 - **Không tắt kiểm tra**: `@ts-ignore`, `@ts-expect-error`, `eslint-disable`, `biome-ignore` là vi phạm; `any`, catch rỗng, `debugger` (có auto-fix).
 - **Kích thước và độ phức tạp**: hàm tối đa 80 dòng, độ phức tạp vòng (McCabe) tối đa 15, file tối đa 500 dòng.
 
@@ -433,7 +434,7 @@ Binary nặng 47 MB trên đĩa, nhưng chỉ khoảng **4 MB khi tải về** (
 
 ## Đã kiểm chứng
 
-`cargo test` có 109 test:
+`cargo test` có 114 test:
 
 - Unit: guard, tìm shell, path trong patch Codex; đọc lockfile thật của npm 11, pnpm 11, uv 0.11, cargo 1.98, bun 1.4, bundler (kèm yarn v1/Berry, Poetry, go.mod, NuGet, Gradle, Composer, pom.xml, csproj, và các entry registry riêng/git/workspace phải bị bỏ qua); manifest; nhận diện lệnh cài; thiết lập gate của 4 package manager.
 - Dashboard: số mở/baseline theo rule, xu hướng nợ qua lịch sử git, trang không có script.
@@ -474,7 +475,7 @@ Ngoài ra đã chạy agent thật trong repo demo:
 - **Taint là xấp xỉ**: không theo dữ liệu qua field của object được gán ở hàm khác hay quá 2 tầng import (collection thì có: `push`, `set`, `append`, `Object.assign`…); giá trị trả về từ hàm không có summary (thư viện) được coi là bẩn nếu đối số bẩn. `guards` không phân biệt chiều của phép kiểm. Language server cần dự án đã cài đủ dependency mới trả lời đúng kiểu.
 - **Package uy tín bị chiếm quyền**: tuổi tối thiểu 14 ngày chặn được bản độc bị phát hiện trong 14 ngày (phần lớn: OSV ghi nhận mã độc với độ trễ trung vị khoảng 20 giờ). Bản độc tồn tại lâu hơn mà chưa ai báo thì không công cụ dựa trên advisory nào biết.
 - **Cursor và Gemini chưa chạy agent thật.** Cursor cần đăng nhập `cursor-agent login` (qua trình duyệt); Gemini CLI chưa được cài hay đăng nhập trên máy dev. Adapter được test bằng đúng schema payload ở trên.
-- **File agent ghi bằng shell**: `cat > f <<EOF`, `tee`, `echo … > f` được kiểm nội dung *trước khi* lệnh chạy. `sed -i`, `cp`, script tự viết thì không thấy trước được nội dung; hook kiểm các file mà lệnh đã đổi ngay sau khi lệnh chạy, rồi lại ở lượt kết thúc, pre-commit và CI.
+- **File agent ghi bằng shell**: `cat > f <<EOF`, `tee`, `echo … > f`, `cp`/`mv`/`install` và `sed -i` chỉ gồm lệnh thay thế (`s/…/…/`, chạy thử trên bản sao) được kiểm nội dung *trước khi* lệnh chạy. Script tự viết, Makefile hay `sed` có lệnh khác thì không thấy trước được; hook kiểm các file mà lệnh đã đổi ngay sau khi lệnh chạy, rồi lại ở lượt kết thúc, pre-commit và CI.
 - **Repo private** khiến installer `curl | sh`, Homebrew và npm chưa dùng được cho người ngoài (xem [Phân phối khi repo private](#phân-phối-khi-repo-private)). Repo khác muốn gọi `enforce.yml` thì cần quyền truy cập Actions; mục này đã được bật sẵn cho các repo cùng owner `NoahDuongMaster` (`access_level: user`). Repo gọi vẫn phải truyền secret `larpcop-token` để tải binary.
 - **Chi phí CI**: GitHub Actions của repo private tính phút chạy, với runner macOS nhân 10 và Windows nhân 2. Repo public thì miễn phí.
 - **Dependency**: rule tuổi phiên bản cần mạng tới deps.dev và fail closed khi không tra được; package ở registry riêng phải được khai trong `exempt`.

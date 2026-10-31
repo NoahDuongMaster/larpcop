@@ -191,4 +191,6 @@ mod summary;
 mod tests;
 #[cfg(test)]
 mod tests_calls;
+#[cfg(test)]
+mod tests_methods;
 pub mod typed;

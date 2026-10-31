@@ -1,0 +1,9 @@
+{
+  "source": "The 'Vulnerabilities' section of DVPWA's README.rst (anxolerd/dvpwa a1d8f89), each mapped to the line it names or describes. Written before any tool ran on DVPWA. CSRF is 'TBA' in the README and left out.",
+  "lines": [
+    {"file": "sqli/dao/student.py", "line": 43, "label": "SQL injection (student name % formatted into INSERT)"},
+    {"file": "sqli/app.py", "line": 35, "label": "Stored XSS (Jinja2 autoescape=False)"},
+    {"file": "sqli/dao/user.py", "line": 41, "label": "Passwords stored as unsalted md5"},
+    {"file": "sqli/views.py", "line": 42, "label": "Session fixation (session id not rotated on login)"}
+  ]
+}

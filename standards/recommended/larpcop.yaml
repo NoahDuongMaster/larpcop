@@ -127,7 +127,7 @@ taint:
     languages: [Python]
     message: Request data used as a file path (path traversal).
     note: Use werkzeug's secure_filename / os.path.basename, or resolve the path and check it is under the base directory (Path.is_relative_to).
-    sources: ["request.args", "request.form", "request.values", "request.json", "request.files", "request.GET", "request.POST", "request.FILES", "request.query_params", "request.path_params", "request.headers", "request.cookies"]
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.files", "request.GET", "request.POST", "request.FILES", "request.query_params", "request.path_params", "request.headers", "request.cookies", "await request.post()", "await request.json()", "await request.form()", "await request.text()", "request.query", "request.match_info", "request.rel_url.query", "self.get_argument($$$A)", "self.get_query_argument($$$A)", "self.get_body_argument($$$A)"]
     sinks: ["open($P, $$$R)", "send_file($P, $$$R)", "send_from_directory($D, $P, $$$R)", "FileResponse($P, $$$R)", "os.remove($P)", "os.unlink($P)", "shutil.rmtree($P, $$$R)", "Path($P, $$$R)", "pathlib.Path($P)"]
     sink_arg: P
     sanitizers: ["secure_filename($X)", "os.path.basename($X)", "int($X)", "uuid.UUID($X)"]
@@ -136,7 +136,7 @@ taint:
     languages: [Python]
     message: Request data decides which URL the server fetches (SSRF).
     note: Fetch only fixed hosts; check urlparse(url).hostname against an allowlist first.
-    sources: ["request.args", "request.form", "request.values", "request.json", "request.files", "request.GET", "request.POST", "request.FILES", "request.query_params", "request.path_params", "request.headers", "request.cookies"]
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.files", "request.GET", "request.POST", "request.FILES", "request.query_params", "request.path_params", "request.headers", "request.cookies", "await request.post()", "await request.json()", "await request.form()", "await request.text()", "request.query", "request.match_info", "request.rel_url.query", "self.get_argument($$$A)", "self.get_query_argument($$$A)", "self.get_body_argument($$$A)"]
     sinks: ["requests.$M($U, $$$R)", "httpx.$M($U, $$$R)", "urllib.request.urlopen($U, $$$R)", "urlopen($U, $$$R)", "aiohttp.ClientSession().$M($U, $$$R)", "$S.get($U, $$$R)", "$S.post($U, $$$R)"]
     sink_arg: U
     safe_prefix: '^https?://[^/?#]+[/?#]'
@@ -146,7 +146,7 @@ taint:
     languages: [Python]
     message: Request data used as a template (server-side template injection, runs code).
     note: Keep templates in files; pass request data as variables to render_template.
-    sources: ["request.args", "request.form", "request.values", "request.json", "request.files", "request.GET", "request.POST", "request.FILES", "request.query_params", "request.path_params", "request.headers", "request.cookies"]
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.files", "request.GET", "request.POST", "request.FILES", "request.query_params", "request.path_params", "request.headers", "request.cookies", "await request.post()", "await request.json()", "await request.form()", "await request.text()", "request.query", "request.match_info", "request.rel_url.query", "self.get_argument($$$A)", "self.get_query_argument($$$A)", "self.get_body_argument($$$A)"]
     sinks: ["render_template_string($T, $$$R)", "Template($T, $$$R)", "jinja2.Template($T)", "Environment($$$E).from_string($T)", "$ENV.from_string($T)", "Markup($T)"]
     sink_arg: T
     sanitizers: ["escape($X)", "markupsafe.escape($X)"]
@@ -154,7 +154,7 @@ taint:
     languages: [Python]
     message: Request data evaluated as code or deserialized into objects (code injection).
     note: Parse data with json.loads / ast.literal_eval and validate it; never eval, exec, pickle or yaml.load input.
-    sources: ["request.args", "request.form", "request.values", "request.json", "request.files", "request.GET", "request.POST", "request.FILES", "request.query_params", "request.path_params", "request.headers", "request.cookies"]
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.files", "request.GET", "request.POST", "request.FILES", "request.query_params", "request.path_params", "request.headers", "request.cookies", "await request.post()", "await request.json()", "await request.form()", "await request.text()", "request.query", "request.match_info", "request.rel_url.query", "self.get_argument($$$A)", "self.get_query_argument($$$A)", "self.get_body_argument($$$A)"]
     sinks: ["eval($X, $$$R)", "exec($X, $$$R)", "pickle.loads($X)", "yaml.load($X, $$$R)", "marshal.loads($X)", "subprocess.$M($X, $$$R)", "os.system($X)", "os.popen($X, $$$R)"]
     sink_arg: X
     sanitizers: ["int($X)", "float($X)", "shlex.quote($X)", "ast.literal_eval($X)"]
@@ -172,14 +172,14 @@ taint:
     severity: warning
     message: Request data written to a log as is (log injection / forged log lines).
     note: Use logging's own formatting with %r, or strip CR/LF first.
-    sources: ["request.args", "request.form", "request.values", "request.json", "request.GET", "request.POST", "request.query_params", "request.headers"]
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.GET", "request.POST", "request.query_params", "request.headers", "await request.post()", "await request.json()", "await request.form()", "await request.text()", "request.query", "request.match_info", "request.rel_url.query", "self.get_argument($$$A)", "self.get_query_argument($$$A)", "self.get_body_argument($$$A)"]
     sinks: ["logging.$M($$$A)", "logger.$M($$$A)", "log.$M($$$A)", "$APP.logger.$M($$$A)"]
     sanitizers: ["$S.replace($$$R)", "json.dumps($X)", "int($X)", "repr($X)"]
   - id: py-taint-sql
     languages: [Python]
     message: Request data reaches a SQL query.
     note: Pass it as a query parameter (cursor.execute(sql, params)) or convert it first (int(), a form/serializer).
-    sources: ["request.args", "request.form", "request.values", "request.json", "request.GET", "request.POST", "request.query_params"]
+    sources: ["request.args", "request.form", "request.values", "request.json", "request.GET", "request.POST", "request.query_params", "await request.post()", "await request.json()", "await request.form()", "await request.text()", "request.query", "request.match_info", "request.rel_url.query", "self.get_argument($$$A)", "self.get_query_argument($$$A)", "self.get_body_argument($$$A)"]
     sinks: ["$C.execute($SQL)", "$C.execute($SQL, $$$P)", "$C.executemany($SQL, $$$P)", "$C.raw($SQL)", "$C.raw($SQL, $$$P)"]
     sink_arg: SQL
     sanitizers: ["int($X)", "float($X)", "uuid.UUID($X)"]

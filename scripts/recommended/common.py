@@ -23,3 +23,10 @@ _GROUP_UNBOUNDED = _OPEN + f"(?:{_ATOM}{_ANY_Q}?)*{_ATOM}{_UNBOUNDED_Q}(?:{_ATOM
 _UNIT = f"(?:{_ATOM}|{_GROUP})"
 NESTED_QUANTIFIER = (_OPEN + f"(?:{_UNIT}{_ANY_Q}?)*(?:{_UNIT}{_UNBOUNDED_Q}|{_GROUP_UNBOUNDED}{_ANY_Q}?)"
                      + f"(?:{_UNIT}{_ANY_Q}?)*" + r"\)" + _UNBOUNDED_Q)
+
+# String literal text that starts like a SQL statement (optionally with a Python
+# string prefix): uppercase keywords, or lowercase ones in shapes UI text lacks.
+SQL_TEXT = (r"(?s)^[rRbBuUfF]*[`'\"]{1,3}\s*("
+            r"SELECT\s.+?\sFROM\s|INSERT\s+INTO\s|UPDATE\s+\S+\s+SET\s|DELETE\s+FROM\s|"
+            r"(?i:insert\s+into\s|delete\s+from\s|update\s+[\w.\"`]+\s+set\s|"
+            r"select\s+[\w.*,\s\"`()]+?\s+from\s+[\w.\"`]))")

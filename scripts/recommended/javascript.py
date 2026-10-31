@@ -1,6 +1,6 @@
 """JavaScript / TypeScript rule specs."""
 
-from .common import JS, NESTED_QUANTIFIER, TESTS, TS  # noqa: F401
+from .common import JS, NESTED_QUANTIFIER, SQL_TEXT, TESTS, TS  # noqa: F401
 
 RULES = [
     # ---- JavaScript / TypeScript: security conventions ------------------------
@@ -8,14 +8,22 @@ RULES = [
          message="SQL built by interpolating or concatenating values.",
          note="Pass values as parameters: db.query('... WHERE id = $1', [id]), a query builder, or the ORM. "
               "Never splice values into SQL text, even after escaping.",
-         rule={"kind": "call_expression", "all": [
-             {"has": {"field": "function", "kind": "member_expression", "has": {
-                 "field": "property",
-                 "regex": "^(query|execute|raw|exec|unsafe|\\$queryRawUnsafe|\\$executeRawUnsafe)$"}}},
-             {"has": {"field": "arguments", "has": {"nthChild": 1, "any": [
-                 {"kind": "template_string", "has": {"kind": "template_substitution"}},
-                 {"kind": "binary_expression", "regex": "^[\"'`]", "has": {"field": "operator", "regex": "^\\+$"}},
-             ]}}},
+         rule={"any": [
+             {"kind": "call_expression", "all": [
+                 {"has": {"field": "function", "kind": "member_expression", "has": {
+                     "field": "property",
+                     "regex": "^(query|execute|raw|exec|unsafe|\\$queryRawUnsafe|\\$executeRawUnsafe)$"}}},
+                 {"has": {"field": "arguments", "has": {"nthChild": 1, "any": [
+                     {"kind": "template_string", "has": {"kind": "template_substitution"}},
+                     {"kind": "binary_expression", "regex": "^[\"'`]", "has": {"field": "operator", "regex": "^\\+$"}},
+                 ]}}},
+             ]},
+             # SQL text built anywhere, then passed on in a variable.
+             {"kind": "template_string", "regex": SQL_TEXT, "has": {"kind": "template_substitution"},
+              "not": {"inside": {"kind": "arguments", "inside": {"kind": "call_expression"}}}},
+             {"kind": "binary_expression", "regex": SQL_TEXT, "has": {"field": "operator", "regex": "^\\+$"},
+              "not": {"any": [{"inside": {"kind": "binary_expression"}},
+                              {"inside": {"kind": "arguments", "inside": {"kind": "call_expression"}}}]}},
          ]}),
     dict(id="no-shell-interpolation", langs=JS, severity="error",
          message="Shell command built from interpolated values (command injection).",

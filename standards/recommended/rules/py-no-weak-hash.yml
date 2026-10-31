@@ -11,7 +11,7 @@
       {
         "has": {
           "field": "function",
-          "regex": "^hashlib\\.(md5|sha1|new)$"
+          "regex": "^(hashlib\\.)?(md5|sha1)$|^hashlib\\.new$"
         }
       },
       {
@@ -27,7 +27,7 @@
           {
             "has": {
               "field": "function",
-              "regex": "^hashlib\\.(md5|sha1)$"
+              "regex": "^(hashlib\\.)?(md5|sha1)$"
             }
           },
           {

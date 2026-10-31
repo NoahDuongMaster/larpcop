@@ -1,21 +1,30 @@
 """Python, Go, Rust, GitHub Actions and Terraform rule specs."""
 
-from .common import NESTED_QUANTIFIER, TESTS, UNTRUSTED, WORKFLOWS  # noqa: F401
+from .common import NESTED_QUANTIFIER, SQL_TEXT, TESTS, UNTRUSTED, WORKFLOWS  # noqa: F401
 
 RULES = [
     # ---- Python ----------------------------------------------------------------
     dict(id="py-no-sql-interpolation", langs=["Python"], severity="error",
          message="SQL built with an f-string, `%` or `.format()`.",
          note="Pass parameters: cursor.execute('... WHERE id = %s', (id,)) or use the ORM.",
-         rule={"kind": "call", "all": [
-             {"has": {"field": "function", "kind": "attribute",
-                      "has": {"field": "attribute", "regex": "^(execute|executemany|raw)$"}}},
-             {"has": {"field": "arguments", "has": {"nthChild": 1, "any": [
-                 {"kind": "string", "has": {"kind": "interpolation"}},
-                 {"kind": "binary_operator", "has": {"field": "operator", "regex": "^[%+]$"}},
-                 {"kind": "call", "has": {"field": "function", "kind": "attribute",
-                                          "has": {"field": "attribute", "regex": "^format$"}}},
-             ]}}},
+         rule={"any": [
+             {"kind": "call", "all": [
+                 {"has": {"field": "function", "kind": "attribute",
+                          "has": {"field": "attribute", "regex": "^(execute|executemany|raw)$"}}},
+                 {"has": {"field": "arguments", "has": {"nthChild": 1, "any": [
+                     {"kind": "string", "has": {"kind": "interpolation"}},
+                     {"kind": "binary_operator", "has": {"field": "operator", "regex": "^[%+]$"}},
+                     {"kind": "call", "has": {"field": "function", "kind": "attribute",
+                                              "has": {"field": "attribute", "regex": "^format$"}}},
+                 ]}}},
+             ]},
+             # SQL text built anywhere, then passed on in a variable.
+             {"kind": "string", "regex": SQL_TEXT, "has": {"kind": "interpolation"},
+              "not": {"inside": {"kind": "argument_list"}}},
+             {"kind": "binary_operator", "regex": SQL_TEXT, "has": {"field": "operator", "regex": "^[%+]$"},
+              "not": {"any": [{"inside": {"kind": "binary_operator"}}, {"inside": {"kind": "argument_list"}}]}},
+             {"kind": "call", "regex": SQL_TEXT, "not": {"inside": {"kind": "argument_list"}},
+              "has": {"field": "function", "kind": "attribute", "has": {"field": "attribute", "regex": "^format$"}}},
          ]}),
     dict(id="py-no-shell-true", langs=["Python"], severity="error",
          message="`shell=True` runs the command through a shell (command injection).",
@@ -33,10 +42,10 @@ RULES = [
          note="Use hashlib.sha256 for checksums and argon2/bcrypt/scrypt for passwords "
               "(or pass usedforsecurity=False for a non-security checksum).",
          rule={"kind": "call", "all": [
-             {"has": {"field": "function", "regex": "^hashlib\\.(md5|sha1|new)$"}},
+             {"has": {"field": "function", "regex": "^(hashlib\\.)?(md5|sha1)$|^hashlib\\.new$"}},
              {"not": {"has": {"field": "arguments", "regex": "usedforsecurity\\s*=\\s*False"}}},
              {"any": [
-                 {"has": {"field": "function", "regex": "^hashlib\\.(md5|sha1)$"}},
+                 {"has": {"field": "function", "regex": "^(hashlib\\.)?(md5|sha1)$"}},
                  {"has": {"field": "arguments", "has": {"nthChild": 1, "regex": "^['\"](md5|sha1)['\"]$"}}},
              ]},
          ]}),

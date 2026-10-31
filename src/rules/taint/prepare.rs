@@ -3,7 +3,7 @@
 
 use super::events::{Hit, Hits};
 use super::flow::Ctx;
-use super::summary::Summaries;
+use super::summary::{self, Summaries};
 use super::{IMPORT_DEPTH, TaintRule, imports, prefix};
 use crate::files::SourceFile;
 use ast_grep_core::{Doc, Language, Node, NodeMatch};
@@ -54,7 +54,7 @@ impl TaintRule {
             summaries: Summaries::new(),
             source_texts: self.source_texts.clone(),
         };
-        let known = self.imported_summaries(lang, root, file, depth);
+        let known = summary::with_unique_methods(self.imported_summaries(lang, root, file, depth));
         // The file being checked (not an import, whose callers need its
         // summaries) can only carry taint from a source, a destructured request
         // parameter (`{ query }`) or a callee returning source data.
@@ -66,7 +66,8 @@ impl TaintRule {
         {
             return None;
         }
-        let summaries = self.summarize(root, lang, file, &base, &hits, &known);
+        let summaries =
+            summary::with_unique_methods(self.summarize(root, lang, file, &base, &hits, &known));
         Some((Ctx { summaries, ..base }, hits))
     }
 
@@ -89,6 +90,13 @@ impl TaintRule {
             for (exported, local) in &imp.names {
                 if let Some(s) = theirs.get(exported) {
                     out.insert(local.clone(), s.clone());
+                }
+                // An imported class: its methods, `Local.method`.
+                let prefix = format!("{exported}.");
+                for (name, s) in theirs.iter() {
+                    if let Some(method) = name.strip_prefix(&prefix) {
+                        out.insert(format!("{local}.{method}"), s.clone());
+                    }
                 }
             }
             for (name, s) in theirs.iter() {

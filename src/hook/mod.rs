@@ -7,6 +7,7 @@
 mod event;
 pub mod guard;
 mod inert;
+mod predict;
 mod respond;
 mod shell_run;
 
@@ -98,13 +99,21 @@ fn decide(event: &Event, cwd: &Path, extends: &[String], refresh: bool) -> Resul
             let dir = script
                 .cd()
                 .map_or_else(|| cwd.to_path_buf(), |d| cwd.join(d));
-            for w in &script.file_writes {
-                let path = dir.join(&w.path);
-                let content = match (w.append, std::fs::read_to_string(&path)) {
-                    (true, Ok(old)) => old + &w.content,
-                    _ => w.content.clone(),
-                };
-                if let Some(v) = proposed(&ctx(start_dir(&path, cwd))?, &path, &content)? {
+            let mut writes: Vec<(std::path::PathBuf, String)> = script
+                .file_writes
+                .iter()
+                .map(|w| {
+                    let path = dir.join(&w.path);
+                    let content = match (w.append, std::fs::read_to_string(&path)) {
+                        (true, Ok(old)) => old + &w.content,
+                        _ => w.content.clone(),
+                    };
+                    (path, content)
+                })
+                .collect();
+            writes.extend(predict::predicted(&script, &dir));
+            for (path, content) in &writes {
+                if let Some(v) = proposed(&ctx(start_dir(path, cwd))?, path, content)? {
                     return Ok(v);
                 }
             }

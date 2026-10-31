@@ -9,6 +9,7 @@ Chạy lại được bằng một lệnh: `bench/run.sh` (cần git, python3, n
 | Juice Shop | [OWASP Juice Shop](https://github.com/juice-shop/juice-shop) `v20.3.0` (Express + Angular) | Comment `// vuln-code-snippet vuln-line` do chính nhóm Juice Shop đặt: 27 dòng (bỏ `test/` và `data/static/codefixes/`) |
 | NodeGoat | [OWASP NodeGoat](https://github.com/OWASP/NodeGoat) `c5cb68a` (Express + MongoDB) | [`nodegoat-truth.json`](nodegoat-truth.json): 14 dòng theo tutorial của NodeGoat |
 | DVNA | [appsecco/dvna](https://github.com/appsecco/dvna) `9ba473a` (Express + Sequelize + EJS) | [`dvna-truth.json`](dvna-truth.json): 14 dòng theo `docs/solution/*.md` của DVNA |
+| DVPWA | [anxolerd/dvpwa](https://github.com/anxolerd/dvpwa) `a1d8f89` (Python, aiohttp + Jinja2) | [`dvpwa-truth.json`](dvpwa-truth.json): 4 dòng theo mục *Vulnerabilities* trong README của DVPWA |
 | vulnerable-node | [cr0hn/vulnerable-node](https://github.com/cr0hn/vulnerable-node) `d68f2a3`, thư mục `sast/seeds/` | Do chính dự án viết (`sast/ground-truth.yaml`) và chấm bằng script của dự án (`sast/tests/score.js`): 12 file, mỗi file một lỗ hổng, cộng 2 file sạch để đo báo nhầm |
 
 - **Một dòng tính là tìm thấy** khi có finding của công cụ phủ dòng đó, chấp nhận lệch ±3 dòng, áp dụng như nhau cho mọi công cụ. Với vulnerable-node, một file tính là tìm thấy khi công cụ báo bất kỳ finding nào trong file (cách chấm của dự án); cột thứ hai bỏ các rule báo cho mọi handler Express bất kể lỗi (`validate-request-input` của larpcop, kiểm middleware CSRF của Semgrep).
@@ -24,7 +25,9 @@ Một bộ chỉ đo được độ tổng quát khi rule chưa được viết 
 3. **DVNA** đo bốn rule đó: chúng không bắt thêm dòng nào (DVNA không có các lỗi này). Lần chạy đầu: larpcop **5/14**, Semgrep **7/14**. Các chỗ trống (secret của session viết cứng, XXE, deserialization, `mathjs.eval`, output không escape trong template EJS) sau đó có rule, nên DVNA cũng hết là bộ kiểm chứng.
 4. **vulnerable-node** đo các rule của bước 3, lần đầu: larpcop 10/12 file, 1 báo nhầm (6/12 nếu bỏ rule chung chung), Semgrep 10/12, 1 báo nhầm (8/12). Các chỗ trống (XSS qua `res.send`, path traversal, SSRF, ReDoS, prototype pollution) và báo nhầm (redirect đã được kiểm bằng `startsWith`) sau đó được xử lý bằng rule taint mới, `guards` và `safe_prefix`.
 
-Kết quả dưới đây là sau bước 4: chỉ có ý nghĩa *không thụt lùi* trên cả bốn bộ. Rule mới cần một bộ thứ năm chưa ai nhìn.
+5. **DVPWA** là bộ Python đầu tiên, đo mọi rule Python tới lúc đó, lần đầu: larpcop **1/4**, Semgrep **2/4**. Chỗ trống lộ ra ba điểm yếu chung: SQL được dựng bằng `%` ở một biến rồi mới truyền vào `execute`, `md5` gọi trực tiếp sau `from hashlib import md5`, và nguồn request của aiohttp/Starlette/Tornado chưa được khai. Thêm vào đó, taint chưa theo được qua method của class được import (`Student.create(...)`). Cả bốn đã được sửa.
+
+Kết quả dưới đây là sau bước 5: chỉ có ý nghĩa *không thụt lùi* trên cả năm bộ. Rule mới cần một bộ chưa ai nhìn.
 
 ## Kết quả (01/11/2026)
 
@@ -36,6 +39,7 @@ Kết quả dưới đây là sau bước 4: chỉ có ý nghĩa *không thụt 
 | NodeGoat: dòng tìm thấy (/14) | **12** | 4 | – |
 | DVNA: thời gian | **1,12 s** | 9,51 s | 0,23 s |
 | DVNA: dòng tìm thấy (/14) | **12** | 7 | – |
+| DVPWA: dòng tìm thấy (/4) | **3** | 2 | – |
 | vulnerable-node seeds (/12 file, báo nhầm trên 2 file sạch) | **11**, 1 báo nhầm (11 và 0 báo nhầm nếu bỏ rule chung chung) | 10, 1 báo nhầm (8 và 1 báo nhầm nếu bỏ rule chung chung) | – |
 | Secrets (so với gitleaks) | 69/69 và 3/3 trùng khớp | – | 69 và 3 |
 
@@ -46,6 +50,7 @@ larpcop chạy cả bộ `recommended` (ast-grep, 16 rule taint, rule template, 
 - Juice Shop: 16 dòng lỗi logic, phân quyền, cấu hình (route admin lộ, allowlist redirect dùng `includes`, rate limit tin `X-Forwarded-For`, prompt injection chatbot…).
 - NodeGoat: chính sách mật khẩu yếu (`session.js:144`), mật khẩu lưu plain text (`user-dao.js:25`, phép gán chứ không phải phép so sánh).
 - DVNA: API trả mọi bản ghi user (`appHandler.js:207`), route admin không kiểm quyền (`routes/app.js:42`).
+- DVPWA: session fixation (`views.py:42`, không đổi session id khi đăng nhập).
 - vulnerable-node: NoSQL injection trong một hàm nhận filter làm tham số, không có nguồn request nào trong file.
 
 SAST cú pháp không với tới lỗi logic và phân quyền; rule `llm` (`larpcop review`) nhắm vào loại này nhưng không được tính vì không tất định.

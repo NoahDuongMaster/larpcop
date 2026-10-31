@@ -49,24 +49,67 @@ pub fn args<'a, D: Doc>(call: &Node<'a, D>) -> Vec<Node<'a, D>> {
 
 /// Named functions defined in `root`: (name, function node, parameter names).
 pub fn functions<'a, D: Doc>(root: &Node<'a, D>) -> Vec<(String, Node<'a, D>, Vec<String>)> {
-    root.dfs()
-        .filter(|n| is_function(n))
-        .filter_map(|f| {
-            let name = f.field("name").map(|n| n.text().to_string()).or_else(|| {
-                // `const f = (…) => …`, `f := func(…)`
-                let parent = f.parent()?;
-                (parent.kind() == "variable_declarator")
-                    .then(|| parent.field("name"))
-                    .flatten()
-                    .map(|n| n.text().to_string())
-            })?;
-            let default = f.parent().is_some_and(|p| {
-                p.kind() == "export_statement" && p.text().starts_with("export default")
-            });
-            let name = if default { "default".to_string() } else { name };
-            Some((name, f.clone(), params(&f)))
-        })
-        .collect()
+    let mut out: Vec<(String, Node<'a, D>, Vec<String>)> = named(root).collect();
+    // Methods are also known as `Class.method`, the way callers outside name them.
+    let qualified: Vec<_> = out
+        .iter()
+        .filter_map(|(name, f, p)| Some((format!("{}.{name}", class_of(f)?), f.clone(), p.clone())))
+        .collect();
+    out.extend(qualified);
+    out
+}
+
+/// Adds `*.method` for every method name exactly one known class defines.
+pub fn with_unique_methods(mut s: Summaries) -> Summaries {
+    let mut seen: HashMap<String, Vec<String>> = HashMap::new();
+    for key in s.keys() {
+        if let Some((class, method)) = key.rsplit_once('.')
+            && class.chars().next().is_some_and(char::is_uppercase)
+        {
+            seen.entry(method.to_string())
+                .or_default()
+                .push(key.clone());
+        }
+    }
+    for (method, keys) in seen {
+        if let [only] = keys.as_slice()
+            && let Some(summary) = s.get(only).cloned()
+        {
+            s.insert(format!("*.{method}"), summary);
+        }
+    }
+    s
+}
+
+/// The class a method is defined in.
+fn class_of<D: Doc>(f: &Node<D>) -> Option<String> {
+    let class = f.ancestors().take_while(|a| !is_function(a)).find(|a| {
+        matches!(
+            a.kind().as_ref(),
+            "class_definition" | "class_declaration" | "class"
+        )
+    })?;
+    Some(class.field("name")?.text().to_string())
+}
+
+fn named<'a, D: Doc>(
+    root: &Node<'a, D>,
+) -> impl Iterator<Item = (String, Node<'a, D>, Vec<String>)> {
+    root.dfs().filter(|n| is_function(n)).filter_map(|f| {
+        let name = f.field("name").map(|n| n.text().to_string()).or_else(|| {
+            // `const f = (…) => …`, `f := func(…)`
+            let parent = f.parent()?;
+            (parent.kind() == "variable_declarator")
+                .then(|| parent.field("name"))
+                .flatten()
+                .map(|n| n.text().to_string())
+        })?;
+        let default = f.parent().is_some_and(|p| {
+            p.kind() == "export_statement" && p.text().starts_with("export default")
+        });
+        let name = if default { "default".to_string() } else { name };
+        Some((name, f.clone(), params(&f)))
+    })
 }
 
 /// Parameter names of a function, as a set.
@@ -81,7 +124,10 @@ fn params<D: Doc>(f: &Node<D>) -> Vec<String> {
     let Some(list) = f.field("parameters") else {
         return Vec::new();
     };
+    // Python's `self` / `cls` are not among the call's arguments.
+    let receiver = |p: &Node<D>| matches!(p.text().as_ref(), "self" | "cls");
     list.children()
+        .filter(|c| !(f.kind() == "function_definition" && receiver(c)))
         .filter(|c| c.is_named() && c.kind() != "comment")
         .map(|p| {
             if p.kind() == "identifier" {

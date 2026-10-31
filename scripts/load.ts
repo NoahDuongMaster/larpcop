@@ -1,4 +1,3 @@
-export function load(raw: any) {
-  console.log(raw);
+export function load(raw: unknown): unknown {
   return raw;
 }

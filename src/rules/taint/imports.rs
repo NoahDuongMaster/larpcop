@@ -40,6 +40,8 @@ pub fn imports<D: Doc>(lang: SupportLang, root: &Node<D>, file: &Path, repo: &Pa
         SupportLang::Java => {
             let mut all = siblings::imports(root, file);
             all.extend(java::imports(root, file, repo));
+            let implementations = java::implementations(&all, root, file, repo);
+            all.extend(implementations);
             all
         }
         SupportLang::CSharp => siblings::imports(root, file),

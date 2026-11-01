@@ -26,6 +26,9 @@ impl Ctx {
         let mut prefixed: HashSet<String> = HashSet::new();
         // (end of an `if`, names its untaken path proved safe).
         let mut settled: Vec<(usize, HashSet<String>)> = Vec::new();
+        // Objects this scope builds (`req = new PayRequest()`): what their
+        // setters are given, they hold.
+        let mut built: HashSet<String> = HashSet::new();
         for (at, e) in events.iter() {
             until.retain(|(end, name)| {
                 let over = *end <= *at;
@@ -75,6 +78,9 @@ impl Ctx {
                         }
                     }
                     let tainted = !safe_start && self.tainted(right, &names);
+                    if right.kind() == "object_creation_expression" && left.kind() == "identifier" {
+                        built.insert(left.text().to_string());
+                    }
                     // `m['k'] = v`: that entry only.
                     if let Some(entry) = super::entries::entry(left) {
                         if tainted {
@@ -120,7 +126,8 @@ impl Ctx {
                         } else {
                             names.remove(&entry);
                         }
-                    } else if let Some(container) = filled(call)
+                    } else if let Some(container) =
+                        filled(call).or_else(|| super::containers::set_on(call, &built))
                         && args(call).iter().any(|a| self.tainted(a, &names))
                     {
                         names.insert(container);

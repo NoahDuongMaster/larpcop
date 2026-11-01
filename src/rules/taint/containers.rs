@@ -51,6 +51,24 @@ pub(super) fn filled<D: Doc>(call: &Node<D>) -> Option<String> {
     .then(|| root.to_string())
 }
 
+/// `order.setNote(x)` on an object the scope built: the object holds `x`.
+pub(super) fn set_on<D: Doc>(
+    call: &Node<D>,
+    built: &std::collections::HashSet<String>,
+) -> Option<String> {
+    if built.is_empty() {
+        return None;
+    }
+    let object = call.field("object")?;
+    let method = call.field("name")?;
+    let method = method.text();
+    let setter = method.len() > 3
+        && method.starts_with("set")
+        && method[3..].starts_with(char::is_uppercase);
+    (setter && args(call).len() == 1 && built.contains(object.text().as_ref()))
+        .then(|| object.text().to_string())
+}
+
 /// `headers.get("Location").add(x)`: the variable at the root of the
 /// receiver chain holds what the call stores.
 fn chained<D: Doc>(call: &Node<D>) -> Option<String> {

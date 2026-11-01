@@ -136,3 +136,24 @@ def d(req):
         [20]
     );
 }
+
+/// A bean the scope builds holds what its setters are given; a parameter
+/// (`resp`) does not become tainted through its setters.
+#[test]
+fn setters_of_built_objects() {
+    let java = "\
+class A {
+  void a(Req req, Resp resp) {
+    PayRequest p = new PayRequest();
+    p.setNote(req.getParameter(\"n\"));
+    sink(client.execute(p));
+    resp.setContentType(req.getParameter(\"t\"));
+    sink(resp.getLocale());
+  }
+}
+";
+    assert_eq!(
+        lines("Java", "A.java", java, &["req.getParameter($K)"]),
+        [5]
+    );
+}

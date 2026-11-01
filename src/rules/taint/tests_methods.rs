@@ -137,3 +137,42 @@ def view(req, store):
     );
     assert_eq!(lines("Python", "a.py", "req.GET", "open($X, $$$R)"), [10]);
 }
+
+/// Java: a field typed by an interface whose implementation lives in another
+/// package and is never imported (Spring injects it).
+#[test]
+fn java_injected_implementation() {
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("src/main/java/org/acme");
+    for d in ["service", "impl", "web"] {
+        std::fs::create_dir_all(base.join(d)).unwrap();
+    }
+    std::fs::write(
+        base.join("service/Fetcher.java"),
+        "package org.acme.service;\npublic interface Fetcher {\n  String fetch(String url);\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        base.join("impl/FetcherImpl.java"),
+        "package org.acme.impl;\nimport org.acme.service.Fetcher;\npublic class FetcherImpl implements Fetcher {\n  public String fetch(String url) { return sink(url); }\n}\n",
+    )
+    .unwrap();
+    let rel = "src/main/java/org/acme/web/App.java";
+    std::fs::write(
+        dir.path().join(rel),
+        "package org.acme.web;\nimport org.acme.service.Fetcher;\npublic class App {\n  private Fetcher fetcher;\n  String f(Req req) {\n    return fetcher.fetch(req.getParameter(\"u\"));\n  }\n}\n",
+    )
+    .unwrap();
+    let r = super::tests_calls::rule(
+        "Java",
+        dir.path(),
+        &["req.getParameter($K)"],
+        &["sink($X)"],
+        &[],
+    );
+    let lines: Vec<usize> = super::tests_calls::found(&r, dir.path(), rel)
+        .iter()
+        .map(|(l, _)| *l)
+        .collect();
+    assert_eq!(lines, [6]);
+}

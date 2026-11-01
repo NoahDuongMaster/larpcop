@@ -14,6 +14,13 @@ use std::sync::{LazyLock, Mutex};
 /// which directories of the repository are build modules.
 static IS_FILE: LazyLock<Mutex<HashMap<PathBuf, bool>>> = LazyLock::new(Default::default);
 static MODULES: LazyLock<Mutex<HashMap<PathBuf, Vec<PathBuf>>>> = LazyLock::new(Default::default);
+/// Per repository: interface name → files of the classes implementing it.
+type Implementations = HashMap<String, Vec<PathBuf>>;
+static IMPLEMENTS: LazyLock<Mutex<HashMap<PathBuf, std::sync::Arc<Implementations>>>> =
+    LazyLock::new(Default::default);
+static IMPLEMENTS_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\bclass\s+\w+[^{;]*?\bimplements\s+([\w.<>,\s]+?)\s*\{").expect("regex")
+});
 
 fn is_file(p: &Path) -> bool {
     if let Some(known) = IS_FILE.lock().ok().and_then(|m| m.get(p).copied()) {
@@ -113,6 +120,32 @@ pub(super) fn imports<D: Doc>(root: &Node<D>, file: &Path, repo: &Path) -> Vec<I
     out
 }
 
+/// The implementations of the interfaces among `imports` (Spring injects
+/// them: `HttpService` is an `HttpServiceImpl` in another package, never
+/// imported).
+pub(super) fn implementations<D: Doc>(
+    imports: &[Import],
+    root: &Node<D>,
+    file: &Path,
+    repo: &Path,
+) -> Vec<Import> {
+    if imports.is_empty() {
+        return Vec::new();
+    }
+    let roots = source_roots(root, file, repo);
+    let mut out: Vec<Import> = imports
+        .iter()
+        .filter(|i| is_interface(&i.path))
+        .filter_map(|i| i.path.file_stem()?.to_str())
+        .flat_map(|name| implementing(repo, &roots, name))
+        .filter(|p| p != file && !imports.iter().any(|i| &i.path == p))
+        .map(|p| whole(&p))
+        .collect();
+    out.sort_by(|a, b| a.path.cmp(&b.path));
+    out.dedup_by(|a, b| a.path == b.path);
+    out
+}
+
 fn whole(path: &Path) -> Import {
     Import {
         path: path.to_path_buf(),
@@ -167,4 +200,75 @@ fn modules(repo: &Path) -> Vec<PathBuf> {
         m.insert(repo.to_path_buf(), found.clone());
     }
     found
+}
+
+static INTERFACES: LazyLock<Mutex<HashMap<PathBuf, bool>>> = LazyLock::new(Default::default);
+
+/// Does the file declare an interface named after it?
+fn is_interface(path: &Path) -> bool {
+    if let Some(known) = INTERFACES.lock().ok().and_then(|m| m.get(path).copied()) {
+        return known;
+    }
+    let name = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
+    let found = std::fs::read_to_string(path).is_ok_and(|text| {
+        text.match_indices("interface ").any(|(at, _)| {
+            text[at + "interface ".len()..]
+                .trim_start()
+                .starts_with(name)
+        })
+    });
+    if let Ok(mut m) = INTERFACES.lock() {
+        m.insert(path.to_path_buf(), found);
+    }
+    found
+}
+
+/// Files of the classes that implement `interface`, under the source roots.
+fn implementing(repo: &Path, roots: &[PathBuf], interface: &str) -> Vec<PathBuf> {
+    // Built once per repository: the lock is held while building, so the
+    // other threads wait for it instead of each walking the tree.
+    let Ok(mut known) = IMPLEMENTS.lock() else {
+        return Vec::new();
+    };
+    let index = known
+        .entry(repo.to_path_buf())
+        .or_insert_with(|| std::sync::Arc::new(index_implementations(roots)))
+        .clone();
+    drop(known);
+    index.get(interface).cloned().unwrap_or_default()
+}
+
+fn index_implementations(roots: &[PathBuf]) -> Implementations {
+    let mut out: Implementations = HashMap::new();
+    let mut stack: Vec<PathBuf> = roots.to_vec();
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|e| e != "java") {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            for c in IMPLEMENTS_RE.captures_iter(&text) {
+                for name in c[1].split(',') {
+                    let name = name.split('<').next().unwrap_or_default().trim();
+                    let simple = name.rsplit('.').next().unwrap_or(name);
+                    if !simple.is_empty() {
+                        out.entry(simple.to_string())
+                            .or_default()
+                            .push(path.clone());
+                    }
+                }
+            }
+        }
+    }
+    out
 }

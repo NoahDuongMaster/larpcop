@@ -14,3 +14,6 @@ invalid:
   \  }\n}\n"
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String u = request.getParameter(\"u\");\n    if (u.contains(\"\
   http\")) {\n      new URL(u).openStream();\n    }\n  }\n}\n"
+- "@RestController\nclass C {\n  private RestTemplate restTemplateBanRedirects;\n  @GetMapping(\"/r\")\n  public String r(String url) {\n    return restTemplateBanRedirects.exchange(url, HttpMethod.GET,\
+  \ null, String.class).getBody();\n  }\n}\n"
+- "@RestController\nclass C {\n  @GetMapping(\"/h\")\n  public String h(String url) {\n    return HttpUtil.get(url);\n  }\n}\n"

@@ -194,6 +194,16 @@ impl Indexed {
         }
     }
 
+    /// The words a source or sink match must contain, one per pattern; `None`
+    /// when some pattern needs none.
+    pub(super) fn needles(&self) -> Option<Vec<&str>> {
+        self.groups[..2]
+            .iter()
+            .flatten()
+            .map(|(_, needle, _)| needle.as_deref())
+            .collect()
+    }
+
     /// Matches of every group, each in tree order (as `find_all` gives them).
     /// Each match comes with the specificity of its pattern.
     pub fn scan<'a, D: Doc>(

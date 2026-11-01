@@ -15,8 +15,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-/// How many imports deep summaries are followed.
-const IMPORT_DEPTH: usize = 2;
+use reach::IMPORT_DEPTH;
 
 pub struct TaintRule {
     id: String,
@@ -48,6 +47,8 @@ pub struct TaintRule {
     /// Summaries of imported files by (path, import depth), computed once per
     /// run even when several threads need the same file at once.
     imported: Mutex<HashMap<(PathBuf, usize), prepare::Slot>>,
+    /// Whether a file leads to a source or sink within some import depth.
+    reach: Mutex<HashMap<(PathBuf, usize), bool>>,
 }
 
 use names::{NAMES, VARIABLES};
@@ -230,11 +231,13 @@ mod names;
 mod paths;
 mod prefix;
 mod prepare;
+mod reach;
 mod responds;
 mod returns;
 mod scan;
 pub use scan::FileIndex;
 mod summary;
+mod switches;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

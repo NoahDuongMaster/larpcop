@@ -5,6 +5,7 @@
 
 use super::kotlin::Part;
 use ast_grep_core::{Doc, Node};
+use std::collections::HashMap;
 
 /// Statements and members that declare names with a type, per grammar.
 const DECLARATIONS: [&str; 7] = [
@@ -124,30 +125,35 @@ fn typed<D: Doc>(decl: &Node<D>, name: &str) -> Option<String> {
     Some(ty.trim_start_matches(':').trim().to_string())
 }
 
-/// The class `name` is built as in the function around `at`
-/// (`Base b = new Impl();` gives `Impl`), when it is built there once.
-pub(super) fn constructed<D: Doc>(at: &Node<D>, name: &str) -> Option<String> {
-    if !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        return None;
-    }
-    let f = at
-        .ancestors()
-        .find(|a| crate::rules::complexity::is_function(a))?;
-    let mut types = f.dfs().filter_map(|n| {
+/// The classes the locals of function `f` are built as, by name
+/// (`Base b = new Impl();` gives `b` → `Impl`); `None` for a name assigned
+/// more than once or not with `new`.
+pub(super) fn constructions<D: Doc>(f: &Node<D>) -> HashMap<String, Option<String>> {
+    let mut out: HashMap<String, Option<String>> = HashMap::new();
+    for n in f.dfs() {
         let (left, right) = match n.kind().as_ref() {
-            "variable_declarator" => (n.part("name")?, n.part("value")?),
-            "assignment_expression" => (n.part("left")?, n.part("right")?),
-            _ => return None,
+            "variable_declarator" => match (n.part("name"), n.part("value")) {
+                (Some(l), Some(r)) => (l, r),
+                _ => continue,
+            },
+            "assignment_expression" => match (n.part("left"), n.part("right")) {
+                (Some(l), Some(r)) => (l, r),
+                _ => continue,
+            },
+            _ => continue,
         };
-        (left.text() == name).then_some(right)
-    });
-    let value = types.next()?;
-    if types.next().is_some() || value.kind() != "object_creation_expression" {
-        return None;
+        let class = (right.kind() == "object_creation_expression")
+            .then(|| right.part("type"))
+            .flatten()
+            .and_then(|t| {
+                let ty = t.text();
+                Some(ty.split('<').next()?.rsplit('.').next()?.trim().to_string())
+            });
+        out.entry(left.text().to_string())
+            .and_modify(|seen| *seen = None)
+            .or_insert(class);
     }
-    let ty = value.part("type")?.text().to_string();
-    let simple = ty.split('<').next()?.rsplit('.').next()?.trim();
-    Some(simple.to_string())
+    out
 }
 
 #[cfg(test)]

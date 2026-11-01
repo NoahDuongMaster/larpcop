@@ -138,6 +138,7 @@ impl TaintRule {
             bare_calls: lang == SupportLang::Ruby,
             safe_prefix: self.safe_prefix.clone(),
             summarized: Default::default(),
+            built: Default::default(),
         };
         let known = summary::with_unique_methods(self.imported_summaries(lang, index, file, depth));
         // The file being checked (not an import, whose callers need its
@@ -165,6 +166,7 @@ impl TaintRule {
             summaries: summary::with_unique_methods(summaries),
             sourcing: Default::default(),
             summarized: Default::default(),
+            built: Default::default(),
             ..base
         };
         let validating = super::validators::calls(index, &ctx);
@@ -232,6 +234,9 @@ impl TaintRule {
     }
 
     fn compute_summaries(&self, path: &Path, depth: usize) -> Option<Arc<Summaries>> {
+        if depth > super::reach::SHALLOW && !self.reaches(path, IMPORT_DEPTH - depth) {
+            return None;
+        }
         let lang = SupportLang::from_path(path)?;
         self.patterns(lang)?;
         let content = std::fs::read_to_string(path).ok()?;

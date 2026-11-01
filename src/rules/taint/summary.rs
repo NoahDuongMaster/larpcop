@@ -188,6 +188,7 @@ impl TaintRule {
                 bare_calls: ctx.bare_calls,
                 safe_prefix: ctx.safe_prefix.clone(),
                 summarized: Default::default(),
+                built: Default::default(),
             };
             let validating = super::validators::calls(index, &round);
             round.guards.extend(validating);
@@ -280,6 +281,7 @@ impl Ctx {
             bare_calls: self.bare_calls,
             safe_prefix: self.safe_prefix.clone(),
             summarized: Default::default(),
+            built: Default::default(),
         }
     }
 }

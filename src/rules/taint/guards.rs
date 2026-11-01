@@ -96,8 +96,11 @@ pub(super) enum Guard {
     Settle(Range<usize>, HashSet<String>),
 }
 
-/// The guards an `if` node sets up.
+/// The guards an `if` node sets up, or the arms of a `switch`.
 pub(super) fn of<D: Doc>(n: &Node<D>, checks: &[Check]) -> Vec<Guard> {
+    if super::switches::SWITCHES.contains(&n.kind().as_ref()) {
+        return super::switches::arms(n);
+    }
     let mut out = Vec::new();
     if checks.is_empty() || !IFS.contains(&n.kind().as_ref()) {
         return out;

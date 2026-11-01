@@ -1,5 +1,5 @@
 //! A branch that replaces an unsafe value, and appending to a value that
-//! starts safely.
+//! starts safely, and arms of a `switch` on fixed values.
 
 use super::TaintRule;
 use super::tests_calls::found;
@@ -129,4 +129,107 @@ function f(req) {
         ..Default::default()
     };
     assert_eq!(reported("JavaScript", "a.js", js, cfg), [4]);
+}
+
+/// In an arm of a `switch`/`when`/`match` on fixed values the subject is one
+/// of them; a default arm, a variable label, or falling through from one is not.
+#[test]
+fn switch_arms_on_fixed_values() {
+    let cfg = || TaintConfig {
+        sinks: vec!["q($U)".into()],
+        ..Default::default()
+    };
+    let js = "\
+function f(req) {
+  const s = req.query;
+  switch (s) {
+    case 'a':
+    case 'b':
+      q(s);
+      break;
+    case other:
+    case 'c':
+      q(s);
+      break;
+    default:
+      q(s);
+  }
+}
+";
+    assert_eq!(reported("JavaScript", "a.js", js, cfg()), [10, 13]);
+    let java = "\
+class A {
+  void f(Req req) {
+    String s = req.getParameter(\"s\");
+    switch (s) {
+      case \"a\": q(s); break;
+      case Mode.FAST: q(s); break;
+      default: q(s);
+    }
+    String r = switch (s) { case \"x\" -> q(s); default -> q(s); };
+  }
+}
+";
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("A.java"), java).unwrap();
+    let rule = super::tests_calls::rule(
+        "Java",
+        dir.path(),
+        &["$R.getParameter($K)"],
+        &["q($X)"],
+        &[],
+    );
+    let lines: Vec<usize> = found(&rule, dir.path(), "A.java")
+        .iter()
+        .map(|(l, _)| *l)
+        .collect();
+    assert_eq!(lines, [7, 9]);
+    let kt = "\
+fun f(req: Req) {
+    val s = req.query
+    when (s) {
+        \"a\", \"b\" -> q(s)
+        in ALLOWED -> q(s)
+        other -> q(s)
+        else -> q(s)
+    }
+}
+";
+    assert_eq!(reported("Kotlin", "A.kt", kt, cfg()), [6, 7]);
+    let go = "\
+package m
+
+func f(req *Req) {
+\ts := req.query
+\tswitch s {
+\tcase \"a\", \"b\":
+\t\tq(s)
+\tdefault:
+\t\tq(s)
+\t}
+}
+";
+    assert_eq!(reported("Go", "a.go", go, cfg()), [9]);
+    let py = "\
+def f(req):
+    s = req.query
+    match s:
+        case 'a' | 'b':
+            q(s)
+        case x:
+            q(s)
+";
+    assert_eq!(reported("Python", "a.py", py, cfg()), [7]);
+    let cs = "\
+class A {
+  void F(Req req) {
+    var s = req.query;
+    switch (s) {
+      case \"a\": q(s); break;
+      default: q(s); break;
+    }
+  }
+}
+";
+    assert_eq!(reported("CSharp", "A.cs", cs, cfg()), [6]);
 }

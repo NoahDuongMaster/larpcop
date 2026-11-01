@@ -1,6 +1,8 @@
 //! Entries of a map under a literal key: `m['b'] = x` taints `m['b']`, not
-//! `m['a']`; `m.put("b", x)` then `m.get("a")` is clean. Reading the whole
-//! map (`m`, `str(m)`) still sees every tainted entry.
+//! `m['a']`; `m.put("b", x)` then `m.get("a")` is clean. Two literal keys
+//! address one entry too: Python's `conf.set('s', 'b', x)` /
+//! `conf.get('s', 'a')`. Reading the whole map (`m`, `str(m)`) still sees
+//! every tainted entry.
 
 use super::kotlin::Part;
 use super::summary::args;
@@ -32,29 +34,59 @@ pub(super) fn entry<D: Doc>(n: &Node<D>) -> Option<String> {
         }
         let member = n.part("function");
         let member = member.as_ref().unwrap_or(n);
-        let method = member.part("property").or_else(|| member.part("name"))?;
+        let method = member
+            .part("property")
+            .or_else(|| member.part("name"))
+            .or_else(|| member.part("attribute"))?;
         let method = method.text();
         // `m.get(k)` reads, `m.put(k, v)` writes; `Paths.get("/srv", x)` is
         // neither (a class, and more arguments).
-        let arity = if READS.contains(&method.as_ref()) {
+        let keys = if READS.contains(&method.as_ref()) {
             1
         } else if WRITES.contains(&method.as_ref()) {
-            2
+            0
         } else {
             return None;
         };
         let object = member.part("object")?;
         let all = args(n);
-        if all.len() != arity || object.text().starts_with(char::is_uppercase) {
+        if object.text().starts_with(char::is_uppercase) {
             return None;
         }
-        (object, all.into_iter().next()?)
+        // Reads: one key, or two literals (`conf.get('s', 'k')`); writes: the
+        // keys before the value (`m.put(k, v)`, `conf.set('s', 'k', v)`).
+        let keyed: Vec<Node<D>> = match (keys, all.len()) {
+            (1, 1) => all,
+            (1, 2) if all.iter().all(|a| literal(a).is_some()) => all,
+            (0, 2 | 3) => all[..all.len() - 1].to_vec(),
+            _ => return None,
+        };
+        let key = keyed
+            .iter()
+            .map(|k| literal(k))
+            .collect::<Option<Vec<String>>>()?
+            .join(SEPARATOR);
+        return (object.kind() == "identifier" || object.kind() == "variable_name")
+            .then(|| format!("{}[{key}]", object.text()));
     } else {
         return None;
     };
     let key = literal(&key)?;
     (base.kind() == "identifier" || base.kind() == "variable_name")
         .then(|| format!("{}[{key}]", base.text()))
+}
+
+/// Between the keys of an entry addressed by two (`conf[s␁k]`).
+const SEPARATOR: &str = "\u{1}";
+
+/// The entries a read may get: `d.get('k', 'default')` is `d[k]` for a dict,
+/// `d[k␁default]` for a config parser.
+pub(super) fn read_as(entry: &str) -> Vec<String> {
+    let mut out = vec![entry.to_string()];
+    if let Some((first, _)) = entry.split_once(SEPARATOR) {
+        out.push(format!("{first}]"));
+    }
+    out
 }
 
 /// The value a write-like call stores (`m.put("k", v)`: `v`).
@@ -65,11 +97,18 @@ pub(super) fn stored<'a, D: Doc>(call: &Node<'a, D>) -> Option<Node<'a, D>> {
     }
     let member = call.part("function");
     let member = member.as_ref().unwrap_or(call);
-    let method = member.part("property").or_else(|| member.part("name"))?;
+    let method = member
+        .part("property")
+        .or_else(|| member.part("name"))
+        .or_else(|| member.part("attribute"))?;
     if !WRITES.contains(&method.text().as_ref()) {
         return None;
     }
-    args(call).into_iter().nth(1)
+    let all = args(call);
+    (2..=3)
+        .contains(&all.len())
+        .then(|| all.into_iter().last())
+        .flatten()
 }
 
 /// Does `name` (a whole map) hold a tainted entry?

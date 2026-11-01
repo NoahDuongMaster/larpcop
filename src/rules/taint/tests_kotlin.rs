@@ -90,8 +90,8 @@ fun c(req: HttpServletRequest) {
         &["$L.contains($X)", "$C.equals($X)"],
     );
     // a: allow-listed; b: through `run`, not through a cleaning function; c:
-    // `when` does not compare (yet), and `it` holds the list.
-    assert_eq!(lines(&r, dir.path(), "A.kt"), [20, 28, 31]);
+    // `id` is "x" in its `when` arm, and `it` holds the list.
+    assert_eq!(lines(&r, dir.path(), "A.kt"), [20, 31]);
 }
 
 #[test]

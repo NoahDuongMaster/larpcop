@@ -172,7 +172,9 @@ fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
             return;
         }
         let kind = n.kind();
-        if super::guards::IFS.contains(&kind.as_ref()) {
+        if super::guards::IFS.contains(&kind.as_ref())
+            || super::switches::SWITCHES.contains(&kind.as_ref())
+        {
             out.push((n.range().start, Shape::If(n.clone())));
         }
         if let Some((_, l, r)) = ASSIGNMENTS.iter().find(|(k, ..)| kind == *k)

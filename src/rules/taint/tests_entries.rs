@@ -157,3 +157,23 @@ class A {
         [5]
     );
 }
+
+/// Two literal keys address one entry (`configparser`); a dict's
+/// `get(k, default)` still reads `d[k]`.
+#[test]
+fn entries_under_two_keys() {
+    let py = "\
+def f(req):
+    conf = configparser.ConfigParser()
+    conf.add_section('s')
+    conf.set('s', 'keyA', 'a-Value')
+    conf.set('s', 'keyB', req.query)
+    sink(conf.get('s', 'keyA'))
+    sink(conf.get('s', 'keyB'))
+    d = {}
+    d['k'] = req.query
+    sink(d.get('k', 'none'))
+    sink(d.get('j', 'none'))
+";
+    assert_eq!(lines("Python", "a.py", py, &["req.query"]), [7, 10]);
+}

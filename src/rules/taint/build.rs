@@ -119,6 +119,7 @@ impl TaintRule {
             companions,
             root,
             imported: Mutex::default(),
+            reach: Mutex::default(),
         })
     }
 }

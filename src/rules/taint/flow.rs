@@ -88,7 +88,11 @@ pub(super) struct Ctx {
     pub safe_prefix: Option<regex::Regex>,
     /// Last segments of the summaries' names (computed on first use).
     pub summarized: std::cell::OnceCell<HashSet<String>>,
+    /// Per function (by start): the classes its locals are built as.
+    pub built: std::cell::RefCell<std::collections::HashMap<usize, std::rc::Rc<Built>>>,
 }
+
+type Built = std::collections::HashMap<String, Option<String>>;
 
 fn within(r: &Range<usize>, outer: &Range<usize>) -> bool {
     outer.start <= r.start && r.end <= outer.end
@@ -123,7 +127,7 @@ impl Ctx {
         }
         let (receiver, method) = name.rsplit_once('.')?;
         // `Base b = new Impl(); b.run(x)`: the class the object was built as.
-        if let Some(class) = super::declared::constructed(call, receiver)
+        if let Some(class) = self.built_as(call, receiver)
             && let Some(s) = self.summaries.get(&format!("{class}.{method}"))
         {
             return Some((s, false));
@@ -131,6 +135,18 @@ impl Ctx {
         self.summaries
             .get(&format!("*.{method}"))
             .map(|s| (s, true))
+    }
+
+    fn built_as<D: Doc>(&self, call: &Node<D>, name: &str) -> Option<String> {
+        let f = call.ancestors().find(|a| is_function(a))?;
+        let start = f.range().start;
+        let known = self.built.borrow().get(&start).cloned();
+        let built = known.unwrap_or_else(|| {
+            let b = std::rc::Rc::new(super::declared::constructions(&f));
+            self.built.borrow_mut().insert(start, b.clone());
+            b
+        });
+        built.get(name).cloned().flatten()
     }
 
     fn any_sourcing(&self) -> bool {
@@ -166,7 +182,10 @@ impl Ctx {
         {
             let base = entry.split('[').next().unwrap_or_default();
             // The key is a literal: nothing else in the read can carry taint.
-            return names.contains(&entry) || names.contains(base);
+            return super::entries::read_as(&entry)
+                .iter()
+                .any(|e| names.contains(e))
+                || names.contains(base);
         }
         // A map read whole holds its tainted entries.
         if entries

@@ -128,7 +128,28 @@ printf "extends: ['%s/standards/recommended']\ndisable: [dependency-vulnerabilit
 "$LARPCOP" check --format json > "$OUT/juliet-cs-larpcop.json" || true
 rm .larpcop.yaml
 semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/juliet-cs-semgrep-default.json" --quiet . || true
-python3 "$HERE/juliet_cs.py" . "$OUT/juliet-cs-larpcop.json" "$OUT/juliet-cs-semgrep-default.json" > "$OUT/juliet-cs.md"
+python3 "$HERE/juliet.py" . "$OUT/juliet-cs-larpcop.json" "$OUT/juliet-cs-semgrep-default.json" > "$OUT/juliet-cs.md" "$OUT/juliet-java.md"
+
+# Juliet Java 1.3: servlet test cases (getParameter, getCookies, getQueryString), same scorer.
+if [ ! -d "$WORK/juliet-java-web" ]; then
+  curl -sfL -o "$WORK/juliet-java.zip" \
+    https://samate.nist.gov/SARD/downloads/test-suites/2017-10-01-juliet-test-suite-for-java-v1-3.zip
+  mkdir -p "$WORK/juliet-java" && unzip -q -o "$WORK/juliet-java.zip" -d "$WORK/juliet-java"
+  (cd "$WORK/juliet-java/Java/src/testcases" && find . -name "*.java" \
+    | grep -E "/CWE(89|78|23|36|601|80|81|83|90|643)_[^/]*$" | grep -E "_(getParameter|getCookies|getQueryString)_Servlet_" |
+    while read -r f; do mkdir -p "$WORK/juliet-java-web/$(dirname "$f")" && cp "$f" "$WORK/juliet-java-web/$f"; done)
+  mkdir -p "$WORK/juliet-java-web/testcasesupport"
+  cp "$WORK/juliet-java/Java/src/testcasesupport/"*.java "$WORK/juliet-java-web/testcasesupport/"
+  git -C "$WORK/juliet-java-web" init -q
+fi
+cd "$WORK/juliet-java-web"
+printf "extends: ['%s/standards/recommended']\ndisable: [dependency-vulnerability]\n" "$REPO" > .larpcop.yaml
+"$LARPCOP" check --format json > "$OUT/juliet-java-larpcop.json" || true
+rm .larpcop.yaml
+semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/juliet-java-semgrep-default.json" --quiet . || true
+semgrep scan --config "$WORK/p-java.yml" --metrics off --json -o "$OUT/juliet-java-semgrep-java.json" --quiet . || true
+python3 "$HERE/juliet.py" . "$OUT/juliet-java-larpcop.json" "$OUT/juliet-java-semgrep-default.json" \
+  "$OUT/juliet-java-semgrep-java.json" > "$OUT/juliet-java.md"
 
 # java-sec-code (Java/Spring): endpoints labelled by the project's routes and comments.
 cd "$WORK/java-sec-code"

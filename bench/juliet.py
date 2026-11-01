@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Scores tools on the NIST Juliet C# 1.3 test cases whose data comes from an
-HTTP request (QueryString, Params, Cookies). Juliet labels by construction:
-code in a `Bad*` method (or a `*_bad.cs` file) is vulnerable, code in a
-`Good*` method (or `*_good*.cs`) is not. Per test case, it is found when a
+"""Scores tools on the NIST Juliet 1.3 test cases (C# or Java) whose data comes
+from an HTTP request: C# `QueryString`, `Params`, `Cookies`; Java servlet
+`getParameter`, `getCookies`, `getQueryString`. Juliet labels by
+construction: code in a `bad*` method (or a `*_bad` file) is vulnerable, code
+in a `good*` method (or `*_good*`) is not. Per test case, it is found when a
 finding of its category lands in bad code and flagged wrongly when one lands
 in good code; score = found rate - wrongly flagged rate per category.
 
-    juliet_cs.py TESTCASES_DIR LARPCOP_JSON SEMGREP_JSON [SEMGREP_JSON ...]
+    juliet.py TESTCASES_DIR LARPCOP_JSON SEMGREP_JSON [SEMGREP_JSON ...]
 """
 import json
 import pathlib
@@ -15,14 +16,15 @@ import sys
 
 CATEGORIES = {"CWE89_": "sql", "CWE78_": "shell", "CWE23_": "path", "CWE36_": "path", "CWE601_": "redirect",
               "CWE80_": "xss", "CWE81_": "xss", "CWE83_": "xss", "CWE90_": "ldap", "CWE643_": "xpath"}
-WEB = re.compile(r"_(QueryString_Web|Params_Get_Web|Get_Cookies_Web|Get_QueryString_Web|Params_Post_Web)_")
-LARPCOP = {"cs-taint-sql": "sql", "cs-taint-shell": "shell", "cs-taint-path": "path", "cs-taint-redirect": "redirect",
-           "cs-taint-xss": "xss", "cs-taint-ldap": "ldap", "cs-taint-xpath": "xpath"}
+WEB = re.compile(r"_(QueryString_Web|Params_Get_Web|Get_Cookies_Web|Get_QueryString_Web|Params_Post_Web"
+                 r"|getParameter_Servlet|getCookies_Servlet|getQueryString_Servlet)_")
+LARPCOP = {f"{lang}-taint-{c}": c for lang in ("cs", "java")
+           for c in ("sql", "shell", "path", "redirect", "xss", "ldap", "xpath")}
 CWE = {"89": "sql", "78": "shell", "77": "shell", "22": "path", "23": "path", "36": "path", "73": "path",
        "601": "redirect", "79": "xss", "80": "xss", "90": "ldap", "643": "xpath"}
-METHOD = re.compile(r"^\s*(?:(?:public|private|protected|internal|static|override|virtual|async)\s+)+"
-                    r"[\w<>\[\],. ]+?\s+(\w+)\s*\(")
-CASE = re.compile(r"^(CWE\d+_.+?_\d+)(?:[a-e]|_bad|_good\w*|_base)?\.cs$")
+METHOD = re.compile(r"^\s*(?:(?:public|private|protected|internal|static|override|virtual|async|final"
+                    r"|synchronized)\s+)+[\w<>\[\],. ]+?\s+(\w+)\s*\(")
+CASE = re.compile(r"^(CWE\d+_.+?_\d+)(?:[a-e]|_bad|_good\w*|_base)?\.(cs|java)$")
 
 
 def category(name):
@@ -32,7 +34,7 @@ def category(name):
 def cases(root):
     """Test case id -> (category, {file: [(line, method)]})."""
     out = {}
-    for f in pathlib.Path(root).rglob("*.cs"):
+    for f in pathlib.Path(root).rglob("*"):
         m, cat = CASE.match(f.name), category(f.name)
         if not (m and cat and WEB.search(f.name)):
             continue

@@ -1,5 +1,6 @@
 //! C and C++: no imports, only declarations, and the linker joins the files.
-//! A function called here but not defined here is looked up among the
+//! A function called (or taken as a pointer) here but not defined here is
+//! looked up among the
 //! functions defined in the C/C++ files of the same directory (indexed once per
 //! directory: a definition starts at column 0 and its line does not end the
 //! declaration with `;`).
@@ -35,11 +36,10 @@ pub(super) fn imports<D: Doc>(root: &Node<D>, file: &Path) -> Vec<Import> {
         })
         .filter_map(|n| n.field("declarator").map(|d| d.text().to_string()))
         .collect();
+    // Called, or taken as a value (`void (*fp)(char *) = other_file_sink;`).
     let called: HashSet<String> = root
         .dfs()
-        .filter(|n| n.kind() == "call_expression")
-        .filter_map(|n| n.field("function"))
-        .filter(|f| f.kind() == "identifier")
+        .filter(|n| n.kind() == "identifier")
         .map(|f| f.text().to_string())
         .filter(|name| !defined.contains(name))
         .collect();

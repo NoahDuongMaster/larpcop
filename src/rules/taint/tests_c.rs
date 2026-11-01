@@ -125,3 +125,81 @@ void bad(void) {
     // `ls cmd` runs no shell; `cmd.exe /c dir cmd` joins `cmd` into the command.
     assert_eq!(lines, [5, 7, 9]);
 }
+
+#[test]
+fn c_pointers_function_pointers_and_globals() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("a.c"),
+        "\
+static char *saved;
+static char *quiet;
+static void show(char *s) { printf(s); }
+static void show_saved(void) { char *s = saved; printf(s); }
+static void show_quiet(void) { printf(quiet); }
+void through_pointer(void) {
+    char *data = \"\";
+    char **in = &data;
+    char **out = &data;
+    {
+        char *data = getenv(\"X\");
+        *in = data;
+    }
+    {
+        char *data = *out;
+        printf(data);
+    }
+}
+void through_function_pointer(void) {
+    void (*fp)(char *) = show;
+    fp(getenv(\"X\"));
+}
+void through_global(void) {
+    saved = getenv(\"X\");
+    quiet = \"fixed\";
+    show_saved();
+    show_quiet();
+}
+",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("b.c"),
+        "\
+extern char *shared;
+void show_shared(void) { printf(shared); }
+void print_it(char *s) { printf(s); }
+",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("c.c"),
+        "\
+char *shared;
+void show_shared(void);
+void print_it(char *s);
+void across_files(void) {
+    void (*fp)(char *) = print_it;
+    shared = getenv(\"X\");
+    show_shared();
+    fp(getenv(\"Y\"));
+}
+",
+    )
+    .unwrap();
+    let r = super::tests_calls::rule(
+        "C",
+        dir.path(),
+        &["getenv($$$A)"],
+        &["printf($F, $$$A)", "printf($F)"],
+        &[],
+    );
+    let lines = |f: &str| -> Vec<usize> {
+        found(&r, dir.path(), f)
+            .into_iter()
+            .map(|(l, _)| l)
+            .collect()
+    };
+    assert_eq!(lines("a.c"), [16, 21, 26]);
+    assert_eq!(lines("c.c"), [7, 8]);
+}

@@ -1227,7 +1227,10 @@ taint:
       shells: '(?i)(^|[/\\])(sh|bash|zsh|dash|ksh|ash|cmd(\.exe)?|powershell(\.exe)?|pwsh)$'
       flags: '^(-[a-z]*c|/[cC]|(?i)-command)$'
       vectors: ["execl:1..", "execlp:1..", "execle:1..", "_execl:1..", "_execlp:1..", "_wexecl:1..", "_wexeclp:1..", "execv:1", "execvp:1", "execve:1", "execvpe:1", "_execv:1", "_execvp:1", "_wexecv:1", "_wexecvp:1", "_spawnl:2..", "_spawnlp:2..", "_wspawnl:2..", "_wspawnlp:2..", "_spawnv:2", "_spawnvp:2", "_wspawnv:2", "_wspawnvp:2"]
-    sanitizers: ["atoi($X)", "atol($X)", "atoll($X)", "strtol($X, $$$R)", "strtoul($X, $$$R)", "strtoll($X, $$$R)", "strtod($X, $$$R)", "_wtoi($X)", "wcstol($X, $$$R)"]
+    # The login sets these for the user's own session: whoever can change
+    # them already runs as that user. LANG/LC_*/TERM (forwarded by SSH) and
+    # CGI variables stay sources.
+    sanitizers: ["atoi($X)", "atol($X)", "atoll($X)", "strtol($X, $$$R)", "strtoul($X, $$$R)", "strtoll($X, $$$R)", "strtod($X, $$$R)", "_wtoi($X)", "wcstol($X, $$$R)", 'getenv("HOME")', 'getenv("USER")', 'getenv("LOGNAME")', 'getenv("SHELL")', 'getenv("PWD")', 'getenv("OLDPWD")', 'getenv("TMPDIR")', 'getenv("PATH")', 'secure_getenv("HOME")', 'secure_getenv("USER")', 'secure_getenv("LOGNAME")', 'secure_getenv("SHELL")', 'secure_getenv("PWD")', 'secure_getenv("OLDPWD")', 'secure_getenv("TMPDIR")', 'secure_getenv("PATH")']
   - id: c-taint-format
     languages: [C, Cpp]
     message: "Outside input used as a printf-style format string."
@@ -1237,4 +1240,4 @@ taint:
     copies: ["strcpy:0", "strncpy:0", "strcat:0", "strncat:0", "strlcpy:0", "strlcat:0", "memcpy:0", "memmove:0", "wcscpy:0", "wcsncpy:0", "wcscat:0", "wcsncat:0", "wmemcpy:0", "wmemmove:0", "sscanf:2..", "swscanf:2.."]
     sinks: ["printf($F, $$$A)", "wprintf($F, $$$A)", "vprintf($F, $$$A)", "vwprintf($F, $$$A)", "fprintf($S, $F, $$$A)", "fwprintf($S, $F, $$$A)", "vfprintf($S, $F, $$$A)", "vfwprintf($S, $F, $$$A)", "sprintf($B, $F, $$$A)", "vsprintf($B, $F, $$$A)", "snprintf($B, $N, $F, $$$A)", "_snprintf($B, $N, $F, $$$A)", "vsnprintf($B, $N, $F, $$$A)", "_vsnprintf($B, $N, $F, $$$A)", "swprintf($B, $N, $F, $$$A)", "_snwprintf($B, $N, $F, $$$A)", "vswprintf($B, $N, $F, $$$A)", "_vsnwprintf($B, $N, $F, $$$A)", "syslog($P, $F, $$$A)", "vsyslog($P, $F, $$$A)", "dprintf($D, $F, $$$A)", "vdprintf($D, $F, $$$A)", "err($C, $F, $$$A)", "warn($F, $$$A)", "warnx($F, $$$A)", "errx($C, $F, $$$A)"]
     sink_arg: F
-    sanitizers: ["atoi($X)", "atol($X)", "strtol($X, $$$R)", "strtoul($X, $$$R)"]
+    sanitizers: ["atoi($X)", "atol($X)", "strtol($X, $$$R)", "strtoul($X, $$$R)", 'getenv("HOME")', 'getenv("USER")', 'getenv("LOGNAME")', 'getenv("SHELL")', 'getenv("PWD")', 'getenv("OLDPWD")', 'getenv("TMPDIR")', 'getenv("PATH")', 'secure_getenv("HOME")', 'secure_getenv("USER")', 'secure_getenv("LOGNAME")', 'secure_getenv("SHELL")', 'secure_getenv("PWD")', 'secure_getenv("OLDPWD")', 'secure_getenv("TMPDIR")', 'secure_getenv("PATH")']

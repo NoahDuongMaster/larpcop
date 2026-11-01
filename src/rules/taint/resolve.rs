@@ -3,9 +3,11 @@
 //! that name among the known classes (`*.run`).
 
 use super::flow::Ctx;
+use super::kotlin::Part;
 use super::summary::{Summary, callee};
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
+use std::collections::HashMap;
 
 /// Per function: the classes its locals are built as.
 pub(super) type Built = std::collections::HashMap<String, Option<String>>;
@@ -30,7 +32,11 @@ impl Ctx {
                     .collect()
             });
             if !known.contains(last.as_str()) {
-                return None;
+                // `void (*fp)(char *) = sink; fp(data)`: the function it holds.
+                let held = super::summary::callee(call)
+                    .filter(|c| *c == last)
+                    .and_then(|_| self.built_as(call, &format!("(*){last}")))?;
+                return self.summaries.get(&held).map(|s| (s, false));
             }
         }
         let name = callee(call)?;
@@ -64,7 +70,7 @@ impl Ctx {
         let start = f.range().start;
         let known = self.built.borrow().get(&start).cloned();
         let built = known.unwrap_or_else(|| {
-            let b = std::rc::Rc::new(super::declared::constructions(&f));
+            let b = std::rc::Rc::new(constructions(&f));
             self.built.borrow_mut().insert(start, b.clone());
             b
         });
@@ -74,7 +80,6 @@ impl Ctx {
 
 /// The plain name a method is called on: `s` of `s.save(x)`.
 fn receiver_node<'a, D: Doc>(call: &Node<'a, D>) -> Option<Node<'a, D>> {
-    use super::kotlin::Part;
     let object = call
         .part("object")
         .or_else(|| {
@@ -83,4 +88,50 @@ fn receiver_node<'a, D: Doc>(call: &Node<'a, D>) -> Option<Node<'a, D>> {
         })
         .or_else(|| call.part("receiver"))?;
     matches!(object.kind().as_ref(), "identifier" | "simple_identifier").then_some(object)
+}
+
+/// The classes the locals of function `f` are built as, by name
+/// (`Base b = new Impl();` gives `b` → `Impl`); `None` for a name assigned
+/// more than once or not with `new`. C function pointers too, as `(*)fp`.
+fn constructions<D: Doc>(f: &Node<D>) -> HashMap<String, Option<String>> {
+    let mut out: HashMap<String, Option<String>> = HashMap::new();
+    for n in f.dfs() {
+        if !matches!(
+            n.kind().as_ref(),
+            "variable_declarator" | "assignment_expression" | "init_declarator"
+        ) {
+            continue;
+        }
+        // C `void (*fp)(char *) = sink;`, `fp = sink;`: the function `fp`
+        // holds, under `(*)fp`.
+        if n.kind() != "variable_declarator"
+            && let Some((left, right)) = super::flow::assignment(&n)
+            && right.kind() == "identifier"
+            && (n.kind() == "assignment_expression"
+                || n.field("declarator")
+                    .is_some_and(|d| d.dfs().any(|c| c.kind() == "function_declarator")))
+        {
+            out.entry(format!("(*){}", left.text()))
+                .and_modify(|seen| *seen = None)
+                .or_insert_with(|| Some(right.text().to_string()));
+        }
+        if n.kind() == "init_declarator" {
+            continue;
+        }
+        // C#'s `T b = new Impl()` leaves the value without a field name.
+        let Some((left, right)) = super::flow::assignment(&n) else {
+            continue;
+        };
+        let class = (right.kind() == "object_creation_expression")
+            .then(|| right.part("type"))
+            .flatten()
+            .and_then(|t| {
+                let ty = t.text();
+                Some(ty.split('<').next()?.rsplit('.').next()?.trim().to_string())
+            });
+        out.entry(left.text().to_string())
+            .and_modify(|seen| *seen = None)
+            .or_insert(class);
+    }
+    out
 }

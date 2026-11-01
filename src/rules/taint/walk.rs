@@ -31,7 +31,10 @@ impl Ctx {
         let mut built: HashSet<String> = HashSet::new();
         // What each tainted local was built from, for checks made after.
         let mut origins = super::origins::Origins::default();
+        // C `p = &data`: `p` and `data` are one place.
+        let pointers = super::pointers::groups(&events);
         for (at, e) in events.iter() {
+            super::pointers::spread(&pointers, &mut names);
             until.retain(|(end, name)| {
                 let over = *end <= *at;
                 let kept = settled.iter().any(|(e, s)| e == end && s.contains(name));

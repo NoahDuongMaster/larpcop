@@ -3,7 +3,9 @@
 //! parameter. Its summary records the sinks such a field reaches; a caller
 //! holding the field tainted at the call (`data = request.getParameter(…)` in
 //! `Case68a`, or `Case68a.data = …` anywhere) reaches them there. A caller
-//! that set it to a constant first (`data = "foo"`) does not.
+//! that set it to a constant first (`data = "foo"`) does not. C globals
+//! (`static char *badData;`, `extern char *badData;` at file scope) are read
+//! the same way: `char *data = badData;` in the callee.
 
 use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
@@ -32,9 +34,70 @@ pub(super) fn read<D: Doc>(f: &Node<D>) -> Vec<String> {
                 && field.chars().next().is_some_and(char::is_lowercase)
         })
         .collect();
+    out.extend(globals_read(f));
     out.sort();
     out.dedup();
     out
+}
+
+/// The C file-scope variables `f` reads and does not declare itself.
+fn globals_read<D: Doc>(f: &Node<D>) -> Vec<String> {
+    if f.kind() != "function_definition" {
+        return Vec::new();
+    }
+    let Some(unit) = f.ancestors().find(|a| a.kind() == "translation_unit") else {
+        return Vec::new();
+    };
+    let globals = file_scope(&unit);
+    if globals.is_empty() {
+        return Vec::new();
+    }
+    let own: HashSet<String> = f
+        .dfs()
+        .filter(|n| matches!(n.kind().as_ref(), "declaration" | "parameter_declaration"))
+        .flat_map(|d| declared(&d))
+        .collect();
+    f.dfs()
+        .filter(|n| n.kind() == "identifier")
+        .map(|n| n.text().to_string())
+        .filter(|n| globals.contains(n) && !own.contains(n))
+        .collect()
+}
+
+/// Variables declared at file scope, through preprocessor blocks.
+fn file_scope<D: Doc>(unit: &Node<D>) -> HashSet<String> {
+    let mut out = HashSet::new();
+    let mut stack: Vec<Node<D>> = unit.children().collect();
+    while let Some(n) = stack.pop() {
+        match n.kind().as_ref() {
+            "declaration" => out.extend(declared(&n)),
+            k if k.starts_with("preproc_if") || k == "preproc_else" || k == "preproc_elif" => {
+                stack.extend(n.children())
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// The variables a declaration declares: not the functions it prototypes.
+fn declared<D: Doc>(d: &Node<D>) -> Vec<String> {
+    d.field_children("declarator")
+        .filter_map(|mut n| {
+            loop {
+                match n.kind().as_ref() {
+                    "identifier" => return Some(n.text().to_string()),
+                    "init_declarator"
+                    | "pointer_declarator"
+                    | "array_declarator"
+                    | "parenthesized_declarator" => {
+                        n = n.field("declarator").or_else(|| n.child(1))?
+                    }
+                    _ => return None,
+                }
+            }
+        })
+        .collect()
 }
 
 /// Does the caller hold `key` (`Cls[field]`) tainted at `call`: the entry

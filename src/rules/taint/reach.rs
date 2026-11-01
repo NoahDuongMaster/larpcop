@@ -72,7 +72,8 @@ impl TaintRule {
 
 impl TaintRule {
     /// Does the file match one of the rule's sources or sinks? Its words
-    /// first, then the patterns themselves.
+    /// first, then the patterns themselves, then the sources and sinks the
+    /// engine finds without a pattern (`fgets(buf, …)`, `execl("/bin/sh", …)`).
     fn matches(&self, path: &Path, entry: &Entry) -> bool {
         // Kept with the depths, under a depth no walk asks for.
         let key = (path.to_path_buf(), usize::MAX);
@@ -96,11 +97,22 @@ impl TaintRule {
         let worded = patterns
             .needles()
             .is_none_or(|needles| needles.iter().any(|n| entry.text.contains(n)));
-        if !worded {
+        let extra = self.shell_argv.is_some() || self.path_objects.is_some() || self.html_fragments;
+        let text = crate::rules::macros::expand(lang, &entry.text);
+        if self.writes.reads_input(&text) {
+            return true;
+        }
+        if !worded && !extra {
             return false;
         }
-        let grep = lang.ast_grep(crate::rules::macros::expand(lang, &entry.text));
-        let [sources, sinks, ..] = patterns.scan(&super::scan::FileIndex::new(grep.root()));
-        !sources.is_empty() || !sinks.is_empty()
+        let grep = lang.ast_grep(text);
+        let index = super::scan::FileIndex::new(grep.root());
+        if worded {
+            let [sources, sinks, ..] = patterns.scan(&index);
+            if !sources.is_empty() || !sinks.is_empty() {
+                return true;
+            }
+        }
+        extra && !self.extra_sinks(&index).is_empty()
     }
 }

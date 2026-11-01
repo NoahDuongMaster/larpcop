@@ -22,7 +22,19 @@ valid:
       char *dir = getenv("DIR");
       execl("/bin/ls", "ls", dir, NULL);
   }
+- |
+  void open_home(void) {
+      char cmd[300];
+      snprintf(cmd, sizeof cmd, "ls %s", getenv("HOME"));
+      system(cmd);
+  }
 invalid:
+- |
+  int main(void) {
+      char cmd[300];
+      snprintf(cmd, sizeof cmd, "grep %s db.txt", getenv("QUERY_STRING"));
+      system(cmd);
+  }
 - |
   void run(void) {
       char cmd[100] = "ls ";

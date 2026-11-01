@@ -153,6 +153,7 @@ mod origins;
 mod outputs;
 mod pathobj;
 mod paths;
+mod pointers;
 mod prefix;
 mod prepare;
 mod reach;

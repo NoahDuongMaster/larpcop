@@ -52,7 +52,7 @@ def select(suite, out):
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(src, dest)
         n += 1
-    print(f"{n} cases")
+    sys.stdout.write(f"{n} cases\n")
 
 
 def findings(path, tool):

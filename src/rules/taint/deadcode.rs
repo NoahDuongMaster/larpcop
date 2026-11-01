@@ -1,6 +1,5 @@
-//! Branches decided before the program runs. A branch whose condition has a
-//! known value either never runs (its events are dropped) or always runs
-//! (what it assigns is no longer conditional).
+//! Branches decided before the program runs: a branch whose condition has a
+//! known value never runs (its events are dropped) or always runs.
 
 use super::constant::{Env, Value, eval};
 use super::kotlin::Part;
@@ -27,7 +26,8 @@ pub(super) struct Branches {
 }
 
 impl Branches {
-    pub fn of<D: Doc>(scope: &Node<D>) -> Self {
+    /// With `seed`, a parameter's known value (flags.rs).
+    pub fn of<D: Doc>(scope: &Node<D>, seed: Option<(&str, bool)>) -> Self {
         let mut out = Branches::default();
         const DECIDABLE: [&str; 6] = [
             "if_statement",
@@ -40,7 +40,10 @@ impl Branches {
         if !scope.dfs().any(|n| DECIDABLE.contains(&n.kind().as_ref())) {
             return out;
         }
-        let env = Env::new(scope);
+        let mut env = Env::new(scope);
+        if let Some((name, value)) = seed {
+            env = env.fixing(name, Value::Bool(value));
+        }
         out.visit(scope, &env);
         out
     }
@@ -102,7 +105,8 @@ impl Branches {
         }
     }
 
-    /// `if … elif … else …` (Python), `if … else …` (Java, JS, C#, Go).
+    /// `if … elif … else …` (Python), `if … else …` (Java, JS, C#, Go),
+    /// `if … elseif … else …` (PHP).
     fn if_chain<D: Doc>(&mut self, n: &Node<D>, env: &Env<D>) {
         let Some(cond) = n.part("condition") else {
             return;
@@ -111,7 +115,7 @@ impl Branches {
             return;
         };
         self.always.insert(key(n));
-        let Some(then) = n.part("consequence") else {
+        let Some(then) = n.part("consequence").or_else(|| n.part("body")) else {
             return;
         };
         let rest: Vec<Node<D>> = n
@@ -127,7 +131,7 @@ impl Branches {
         let mut prior_false = true;
         for clause in rest {
             match clause.kind().as_ref() {
-                "elif_clause" if prior_false => {
+                "elif_clause" | "else_if_clause" if prior_false => {
                     match clause.part("condition").and_then(|c| eval(&c, env, 0)) {
                         Some(Value::Bool(true)) => {
                             self.always.insert(key(&clause));

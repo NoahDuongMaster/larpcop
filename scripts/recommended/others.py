@@ -38,31 +38,6 @@ RULES = [
                               {"not": {"has": {"stopBy": "end", "regex": "(?i)sanitize"}}},
                               {"not": {"regex": "(?i)sanitize"}}]}}},
          ]}),
-    # ---- PHP -------------------------------------------------------------------
-    dict(id="php-no-sql-interpolation", langs=["Php"], severity="error",
-         message="SQL built by string interpolation or concatenation.",
-         note="Use prepared statements with bound parameters (PDO prepare/execute, mysqli bind_param, query builder bindings).",
-         rule={"any": [
-             {"kind": "encapsed_string", "regex": SQL_TEXT, "has": {"stopBy": "end", "kind": "variable_name"}},
-             {"kind": "binary_expression", "regex": SQL_TEXT, "has": {"field": "operator", "regex": "^\\.$"},
-              "all": [{"has": {"stopBy": "end", "any": [{"kind": "variable_name"}, {"kind": "function_call_expression"},
-                                                        {"kind": "member_call_expression"}]}}],
-              "not": {"inside": {"kind": "binary_expression"}}},
-         ]}),
-    dict(id="php-no-eval", langs=["Php"], severity="error",
-         message="eval / assert(string) / create_function run strings as PHP code.",
-         note="Call the code directly; map allowed values to fixed functions.",
-         rule={"any": [
-             {"kind": "function_call_expression", "has": {"field": "function", "regex": "^(eval|create_function)$"}},
-             {"kind": "expression_statement", "regex": "^eval\\s*\\("},
-         ]}),
-    dict(id="php-no-unserialize", langs=["Php"], severity="error",
-         message="unserialize on data that is not a constant can instantiate any class (object injection).",
-         note="Use json_decode; if unserialize is unavoidable pass ['allowed_classes' => false].",
-         rule={"kind": "function_call_expression", "all": [
-             {"has": {"field": "function", "regex": "^unserialize$"}},
-             {"not": {"has": {"field": "arguments", "regex": "allowed_classes"}}},
-         ]}),
     # ---- Rust ----------------------------------------------------------------------
     dict(id="rs-no-unwrap", langs=["Rust"], severity="warning",
          message="`unwrap()` panics on error.",

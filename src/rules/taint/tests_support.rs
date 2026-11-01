@@ -68,6 +68,8 @@ pub(super) fn guarded_config(
         values: Default::default(),
         sink_configured: Default::default(),
         strict_sink_types: Default::default(),
+        excluded_sink_types: Default::default(),
+        sink_texts: Default::default(),
         source_types: Default::default(),
         source_text: Default::default(),
         response_returns: None,

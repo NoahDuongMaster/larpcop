@@ -56,3 +56,31 @@ Wrong reports outside the listed lines (the other findings off them are real:
 - `add_guestbook(…, False)` and `create_user(…, False)`: the `False` flag
   picks the escaping branch of the callee (3);
 - `date("l jS \of F Y", $date)` printed (1).
+
+## After the fixes
+
+Post-fix runs are not held-out: these are the applications the rules above
+were written against.
+
+| | larpcop | Semgrep OSS |
+|---|---|---|
+| XVWA: lines found / 19 | **17** (16 of the named kind) | 5 |
+| WackoPicko: lines found / 14 | **11** | 1 |
+
+What the run found besides the 12 and 9 of the first one:
+
+- the formula injection (`php-taint-csv`, written after this run);
+- the DOM XSS, from the page's `<script>` read as JavaScript (`taint-dom-xss`,
+  `no-document-write`);
+- the session id kept at login (`php-no-session-fixation`), the unsalted MD5
+  (`php-no-weak-hash`) and the template injection (`php-taint-ssti`);
+- WackoPicko's second-order SQL injection (`php-taint-stored-sql`) and its
+  session cookie taken from an auto-increment id
+  (`php-taint-predictable-token`).
+
+The seventeenth XVWA line, CSRF, is credited by a `php-no-weak-hash` finding
+one line above the listed line (the same handler hashes the new password with
+MD5); no rule looks for CSRF. Left: XVWA's IDOR and its delete without an
+admin check, WackoPicko's forceful browsing, its page reachable without
+login and its reusable coupon. Those four are authorization and business
+logic, which a rule matching syntax cannot decide.

@@ -1,0 +1,8 @@
+id: py-taint-csv
+file: app/export.py
+valid:
+- "import csv\nfrom flask import request\n\ndef export():\n    w = csv.writer(open(\"\
+  o.csv\", \"w\"))\n    w.writerow([\"id\", int(request.args[\"id\"])])\n"
+invalid:
+- "import csv\nfrom flask import request\n\ndef export():\n    w = csv.writer(open(\"\
+  o.csv\", \"w\"))\n    w.writerow([\"id\", request.args[\"id\"]])\n"

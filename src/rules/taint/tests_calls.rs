@@ -235,3 +235,29 @@ function c(req) {
         .collect();
     assert_eq!(lines, [4, 9]);
 }
+
+#[test]
+fn query_and_fragment_cannot_pick_the_host() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("a.js"),
+        "function a(req, res) { res.redirect(\"/search?q=\" + req.query.q); }
+function b(req, res) { res.redirect(BASE_URL + \"#\" + req.query.q); }
+function c(req, res) { res.redirect(BASE_URL + req.query.q); }
+function d(req, res) { res.redirect(`${base}?q=${req.query.q}`); }
+function e(req, res) { res.redirect(\"/\" + req.query.q); }
+function f(req, res) { res.redirect(\"/\" + \"p/\" + req.query.q); }
+",
+    )
+    .unwrap();
+    let r = with_safe_prefix(
+        guarded_config("JavaScript", &["req.query"], &["$R.redirect($X)"], &[], &[]),
+        "^/[^/\\\\]",
+        dir.path(),
+    );
+    let lines: Vec<usize> = found(&r, dir.path(), "a.js")
+        .iter()
+        .map(|(l, _)| *l)
+        .collect();
+    assert_eq!(lines, [3, 4, 5]);
+}

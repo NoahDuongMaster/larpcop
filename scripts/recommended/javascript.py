@@ -49,6 +49,18 @@ RULES = [
              {"not": {"has": {"field": "right", "kind": "string"}}},
              {"not": {"has": {"field": "right", "pattern": "DOMPurify.sanitize($$$A)"}}},
          ]}),
+    dict(id="no-document-write", langs=JS, severity="error",
+         message="document.write / insertAdjacentHTML with HTML built from a variable (XSS).",
+         note="Build nodes with createElement and set textContent; sanitize with DOMPurify when HTML is required.",
+         rule={"kind": "call_expression", "all": [
+             {"has": {"field": "function", "regex": "^document\\.(write|writeln)$|\\.insertAdjacentHTML$"}},
+             {"has": {"field": "arguments", "has": {"any": [
+                 {"kind": "identifier"}, {"kind": "member_expression"}, {"kind": "call_expression"},
+                 {"kind": "binary_expression", "has": {"stopBy": "end", "any": [
+                     {"kind": "identifier"}, {"kind": "member_expression"}, {"kind": "call_expression"}]}},
+                 {"kind": "template_string", "has": {"kind": "template_substitution"}},
+             ], "not": {"pattern": "DOMPurify.sanitize($$$A)"}}}},
+         ]}),
     dict(id="no-dangerously-set-inner-html", langs=["Tsx", "JavaScript"], severity="error",
          message="`dangerouslySetInnerHTML` renders raw HTML (XSS).",
          note="Render the content as React children, or sanitize it with DOMPurify where it is produced.",

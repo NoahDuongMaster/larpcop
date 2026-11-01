@@ -8,6 +8,9 @@ mod max_lines;
 pub mod metrics;
 mod pattern_fixes;
 pub(crate) mod php_html;
+mod scripts;
+#[cfg(test)]
+mod scripts_tests;
 pub mod secrets;
 mod settings;
 mod taint;
@@ -190,7 +193,31 @@ impl Engine {
         v.extend(self.metrics.iter().flat_map(|m| m.check(file)));
         v.extend(self.taint_check(file));
         v.extend(self.text.iter().flat_map(|t| t.check(file)));
+        v.extend(self.page_scripts(file));
         v
+    }
+
+    /// The JavaScript rules on a page's `<script>` blocks (scripts.rs),
+    /// reported at the page's path and lines.
+    fn page_scripts(&self, file: &SourceFile) -> Vec<Violation> {
+        let Some((view, ts)) = scripts::view(&file.rel, &file.content) else {
+            return Vec::new();
+        };
+        let suffix = if ts {
+            scripts::SUFFIX_TS
+        } else {
+            scripts::SUFFIX_JS
+        };
+        let page = SourceFile {
+            rel: format!("{}{suffix}", file.rel),
+            content: view,
+        };
+        let mut found = self.ast.check(&page);
+        found.extend(self.taint_check(&page));
+        for v in &mut found {
+            v.file.clone_from(&file.rel);
+        }
+        found
     }
 
     /// Taint rules on one parse and one walk of the file: each rule only

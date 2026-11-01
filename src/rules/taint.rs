@@ -43,6 +43,8 @@ pub struct TaintRule {
     fixed_routes: routes::FixedRoutes,
     source_types: srctypes::SourceTypes,
     configured: configured::Configured,
+    /// `sink_texts`: metavariables whose text the sink's must match.
+    sink_texts: configured::SinkTexts,
     valued: valued::Valued,
     path_objects: Option<pathobj::PathObjects>,
     html_fragments: bool,
@@ -144,6 +146,7 @@ mod equality;
 mod events;
 mod exits;
 mod fields;
+mod flags;
 pub(crate) mod flow;
 mod fragments;
 mod guards;
@@ -206,6 +209,8 @@ mod tests_dump;
 mod tests_entries;
 #[cfg(test)]
 mod tests_equality;
+#[cfg(test)]
+mod tests_flags;
 #[cfg(test)]
 mod tests_higher;
 #[cfg(test)]

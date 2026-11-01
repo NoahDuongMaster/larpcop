@@ -44,6 +44,12 @@ pub(super) type Events<'a, D> = Rc<Vec<(usize, Event<'a, D>)>>;
 
 type Key = (usize, usize);
 
+/// A parameter's known value (flags.rs).
+type Seed = Option<(String, bool)>;
+
+/// Scope, number of guard matches, seed.
+type EventsKey = (Key, usize, Seed);
+
 /// What a scope holds whatever the rule, in walk order: `If` stands where the
 /// guard events of an `if` go once a rule's guards are known.
 pub(super) enum Shape<'a, D: Doc> {
@@ -70,8 +76,11 @@ pub(super) struct Hits<'a, D: Doc> {
     /// Scope → its sinks (indexes into `list`).
     by_scope: HashMap<Key, Vec<usize>>,
     skeletons: Skeletons<'a, D>,
-    /// By scope and number of guard matches (validators add some once known).
-    events: RefCell<HashMap<(Key, usize), Events<'a, D>>>,
+    /// By scope, number of guard matches (validators add some once known)
+    /// and seed.
+    events: RefCell<HashMap<EventsKey, Events<'a, D>>>,
+    /// While set: a scope walked with a parameter's value known (flags.rs).
+    seed: RefCell<Option<(Key, String, bool)>>,
 }
 
 fn key<D: Doc>(n: &Node<D>) -> Key {
@@ -93,11 +102,33 @@ impl<'a, D: Doc> Hits<'a, D> {
             by_scope,
             skeletons,
             events: RefCell::default(),
+            seed: RefCell::default(),
         }
     }
 
+    /// Runs `run` with function `f`'s parameter `name` known to be `value`.
+    pub fn seeded<R>(
+        &self,
+        f: &Node<'a, D>,
+        name: &str,
+        value: bool,
+        run: impl FnOnce() -> R,
+    ) -> R {
+        *self.seed.borrow_mut() = Some((key(f), name.to_string(), value));
+        let out = run();
+        *self.seed.borrow_mut() = None;
+        out
+    }
+
+    /// The seed that applies to `scope`.
+    fn seed_of(&self, scope: &Node<'a, D>) -> Seed {
+        let seed = self.seed.borrow();
+        let (_, name, value) = seed.as_ref().filter(|(k, ..)| *k == key(scope))?;
+        Some((name.clone(), *value))
+    }
+
     pub fn events(&self, scope: &Node<'a, D>, guards: &[Check]) -> Events<'a, D> {
-        let at = (key(scope), guards.len());
+        let at = (key(scope), guards.len(), self.seed_of(scope));
         if let Some(known) = self.events.borrow().get(&at) {
             return known.clone();
         }
@@ -107,10 +138,14 @@ impl<'a, D: Doc> Hits<'a, D> {
     }
 
     fn skeleton(&self, scope: &Node<'a, D>) -> Rc<Skeleton<'a, D>> {
+        // Seeded: built for this summary only, not shared.
+        if let Some((name, value)) = self.seed_of(scope) {
+            return Rc::new(skeleton(scope, Some((&name, value))));
+        }
         if let Some(known) = self.skeletons.borrow().get(&key(scope)) {
             return known.clone();
         }
-        let built = Rc::new(skeleton(scope));
+        let built = Rc::new(skeleton(scope, None));
         self.skeletons
             .borrow_mut()
             .insert(key(scope), built.clone());
@@ -163,9 +198,9 @@ impl<'a, D: Doc> Hits<'a, D> {
     }
 }
 
-fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
+fn skeleton<'a, D: Doc>(scope: &Node<'a, D>, seed: Option<(&str, bool)>) -> Skeleton<'a, D> {
     let mut out: Skeleton<D> = Vec::new();
-    let branches = super::deadcode::Branches::of(scope);
+    let branches = super::deadcode::Branches::of(scope, seed);
     let lists = super::lists::Lists::of(scope);
     for d in branches.dead() {
         out.push((d.start, Shape::Dead(d.start, d.end)));

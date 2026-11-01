@@ -6,6 +6,8 @@
 //! `strict_sink_types` are kept only when the type is known: declared, or
 //! written at the sink (`new URL(u).getContent()`), for methods whose name is
 //! common elsewhere (`getContent()` of a page or an entity).
+//! `excluded_sink_types` drop the sink when the type is known and matches
+//! (`$xpath->query(…)` on a `DOMXPath` is not SQL).
 
 use crate::files::SourceFile;
 use anyhow::{Context, Result};
@@ -16,10 +18,20 @@ use regex::Regex;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+/// How a sink's type constraint is read.
+#[derive(Clone, Copy, PartialEq)]
+enum Mode {
+    /// The type, when known, must match.
+    Known,
+    /// The type must be known and match.
+    Strict,
+    /// The type, when known, must not match.
+    Excluded,
+}
+
 #[derive(Default)]
 pub struct Typed {
-    /// (metavariable, regex over the hover text, type must be known)
-    constraints: Vec<(String, Regex, bool)>,
+    constraints: Vec<(String, Regex, Mode)>,
     root: PathBuf,
     servers: BTreeMap<String, Vec<String>>,
 }
@@ -36,7 +48,7 @@ impl Typed {
             .map(|(var, re)| {
                 let re =
                     Regex::new(re).with_context(|| format!("taint `{id}`: sink_types.{var}"))?;
-                Ok((var.trim_start_matches('$').to_string(), re, false))
+                Ok((var.trim_start_matches('$').to_string(), re, Mode::Known))
             })
             .collect::<Result<_>>()?;
         Ok(Self {
@@ -47,12 +59,26 @@ impl Typed {
     }
 
     /// Adds constraints that hold only for a known type.
-    pub fn with_strict(mut self, id: &str, strict: &BTreeMap<String, String>) -> Result<Self> {
-        for (var, re) in strict {
-            let re =
-                Regex::new(re).with_context(|| format!("taint `{id}`: strict_sink_types.{var}"))?;
+    pub fn with_strict(self, id: &str, strict: &BTreeMap<String, String>) -> Result<Self> {
+        self.with(id, "strict_sink_types", strict, Mode::Strict)
+    }
+
+    /// Adds types that are not the sink's.
+    pub fn with_excluded(self, id: &str, excluded: &BTreeMap<String, String>) -> Result<Self> {
+        self.with(id, "excluded_sink_types", excluded, Mode::Excluded)
+    }
+
+    fn with(
+        mut self,
+        id: &str,
+        key: &str,
+        types: &BTreeMap<String, String>,
+        mode: Mode,
+    ) -> Result<Self> {
+        for (var, re) in types {
+            let re = Regex::new(re).with_context(|| format!("taint `{id}`: {key}.{var}"))?;
             self.constraints
-                .push((var.trim_start_matches('$').to_string(), re, true));
+                .push((var.trim_start_matches('$').to_string(), re, mode));
         }
         Ok(self)
     }
@@ -78,16 +104,17 @@ impl Typed {
         nodes: &[(usize, Node<D>)],
     ) -> bool {
         nodes.iter().all(|(i, node)| {
-            let (_, re, strict) = &self.constraints[*i];
+            let (_, re, mode) = &self.constraints[*i];
+            let excluded = *mode == Mode::Excluded;
             if let Some(declared) = super::declared::declared_type(node) {
-                return re.is_match(&declared);
+                return re.is_match(declared.trim_start_matches('\\')) != excluded;
             }
-            if *strict {
+            if *mode != Mode::Known {
                 let created = node.kind().contains("creation")
                     && node
                         .field("type")
                         .is_some_and(|t| re.is_match(t.text().as_ref()));
-                return created;
+                return created != excluded;
             }
             let pos = node.start_pos();
             let at = (pos.line(), pos.column(node));

@@ -1,0 +1,17 @@
+id: php-no-session-fixation
+file: app/page.php
+valid:
+- "<?php\nif (password_verify($_POST[\"password\"], $row[\"hash\"])) {\n  session_regenerate_id(true);\n\
+  \  $_SESSION[\"user\"] = $row[\"name\"];\n}\n"
+- '<?php
+
+  $_SESSION["cart"] = $_POST["items"];
+
+  '
+- "<?php\nfunction remember($name) {\n  $_SESSION[\"user\"] = $name;\n}\n"
+invalid:
+- "<?php\nsession_start();\n$uname = $_POST[\"username\"];\n$password = md5($_POST[\"\
+  password\"]);\nif ($row = check($uname, $password)) {\n  $_SESSION[\"user\"] = $uname;\n\
+  }\n"
+- "<?php\nclass Auth {\n  function login() {\n    if (password_verify($_POST[\"password\"\
+  ], $this->hash)) {\n      $_SESSION[\"user_id\"] = $this->id;\n    }\n  }\n}\n"

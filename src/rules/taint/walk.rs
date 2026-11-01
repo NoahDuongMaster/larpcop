@@ -217,7 +217,12 @@ impl Ctx {
                         }
                     }
                     for (i, into) in &s.sinks {
-                        if let Some(a) = args.get(*i).filter(|a| self.tainted(a, &names)) {
+                        // `http_redirect("?picid=" . $id)` calling `header(…)`:
+                        // the argument starts safely, whatever the callee does.
+                        let safe = |a: &Node<D>| self.starts_safe(a);
+                        if let Some(a) =
+                            args.get(*i).filter(|a| self.tainted(a, &names) && !safe(a))
+                        {
                             // `readFile(() -> ALLOWED.contains(f), f)`: the callee
                             // reaches its sink only when this check holds.
                             let checked = s.conditions.get(i).is_some_and(|(g, applied)| {
@@ -264,7 +269,7 @@ impl Ctx {
         self.sanitizers
             .iter()
             .any(|s| s.start <= r.start && r.end <= s.end)
-            || super::prefix::leading(value).is_some_and(|start| safe.is_match(&start))
+            || super::prefix::safe_start(safe, value)
     }
 }
 

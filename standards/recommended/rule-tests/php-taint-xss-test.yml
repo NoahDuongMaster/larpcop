@@ -67,6 +67,20 @@ valid:
   '
 - "<?php\nforeach ($_POST[\"ids\"] as $id) {\n  echo \"<li>\" . intval($id) . \"</li>\"\
   ;\n}\n"
+- '<?php
+
+  echo "<td>" . base64_encode($_POST["s"]) . "</td>";
+
+  echo date("l jS \\of F Y", $_GET["d"]);
+
+  '
+- '<?php
+
+  $res = $conn->query("SELECT name FROM t WHERE id = " . $_GET["id"]);
+
+  while ($row = $res->fetch_assoc()) { echo $row["name"]; }
+
+  '
 invalid:
 - '<?php
 
@@ -119,3 +133,8 @@ invalid:
   '
 - "<?php\nforeach ($_POST[\"tags\"] as $i => $tag) {\n  echo \"<li>\" . $tag . \"\
   </li>\";\n}\n"
+- '<?php
+
+  echo date($_GET["f"], 1);
+
+  '

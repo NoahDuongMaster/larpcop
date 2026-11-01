@@ -1,0 +1,8 @@
+id: taint-csv
+file: src/export.js
+valid:
+- "import Papa from \"papaparse\";\napp.get(\"/e\", (req, res) => {\n  res.send(Papa.unparse([{\
+  \ id: Number(req.query.id) }]));\n});\n"
+invalid:
+- "import Papa from \"papaparse\";\napp.get(\"/e\", (req, res) => {\n  res.send(Papa.unparse([{\
+  \ name: req.query.name }]));\n});\n"

@@ -127,8 +127,14 @@ impl AstRules {
             let kept = |m: &ast_grep_core::NodeMatch<_>| {
                 resolve.is_none_or(|r| r.keeps(m, &self.settings))
             };
+            // `any:` branches matching a node and its parent at the same start
+            // (a call and its statement) report once.
+            let mut seen = std::collections::HashSet::new();
             for m in grep.root().find_all(&rule.matcher).filter(kept) {
                 let pos = m.start_pos();
+                if !seen.insert((pos.line(), pos.column(m.get_node()))) {
+                    continue;
+                }
                 out.push(Violation {
                     rule: rule.id.clone(),
                     level: level(&rule.severity),

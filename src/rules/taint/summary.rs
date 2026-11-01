@@ -202,6 +202,30 @@ impl TaintRule {
                 if let Some(c) = class {
                     fields.entry(c).or_default().extend(stored);
                 }
+                // `f($x, $vuln = False)`: one summary per value of the flag.
+                for (k, default) in super::flags::flags(f, params) {
+                    for value in [true, false] {
+                        let (v, _) = hits.seeded(f, &params[k], value, || {
+                            self.summary_of(
+                                &round,
+                                &params_only,
+                                name,
+                                f,
+                                params,
+                                lang,
+                                file,
+                                hits,
+                                &mine,
+                            )
+                        });
+                        if v != s {
+                            if default == Some(value) {
+                                out.insert(super::flags::key(name, k, None), v.clone());
+                            }
+                            out.insert(super::flags::key(name, k, Some(value)), v);
+                        }
+                    }
+                }
                 out.insert(name.clone(), s);
                 // `render(rows, f)` running `f.apply(row)`: with a cleaning `f`.
                 for (k, p) in params.iter().enumerate().filter(|(_, p)| !p.is_empty()) {

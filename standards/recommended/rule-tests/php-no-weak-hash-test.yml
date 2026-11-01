@@ -1,0 +1,39 @@
+id: php-no-weak-hash
+file: app/page.php
+valid:
+- '<?php
+
+  $hash = password_hash($_POST["password"], PASSWORD_DEFAULT);
+
+  '
+- '<?php
+
+  $etag = md5($body);
+
+  '
+- '<?php
+
+  $cache_key = sha1($url);
+
+  '
+- '<?php
+
+  $h = hash("sha256", $data);
+
+  '
+invalid:
+- '<?php
+
+  $password = md5($_POST["password"]);
+
+  '
+- '<?php
+
+  $token = sha1(uniqid());
+
+  '
+- '<?php
+
+  $h = hash("md5", $pass);
+
+  '

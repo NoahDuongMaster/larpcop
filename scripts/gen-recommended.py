@@ -10,13 +10,14 @@ import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from recommended import java, javascript, kotlin, others, python, ruby  # noqa: E402
+from recommended import java, javascript, kotlin, others, php, python, ruby  # noqa: E402
 from recommended.common import TESTS  # noqa: E402
 
 OUT = pathlib.Path("standards/recommended/rules")
 # Each: id, languages, severity, message, note, rule (dict), optional fix,
 # files and ignores. Specs live in scripts/recommended/.
-RULES = javascript.RULES + python.RULES + others.RULES + java.RULES + kotlin.RULES + ruby.RULES
+RULES = (javascript.RULES + python.RULES + others.RULES + php.RULES + java.RULES + kotlin.RULES
+         + ruby.RULES)
 # Code-quality rules hold in tests too; security rules do not (test code is not
 # served, and fixtures build SQL or skip TLS on purpose).
 QUALITY = {"no-suppression-comment", "no-explicit-any", "no-non-null-assertion", "no-debugger",

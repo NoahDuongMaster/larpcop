@@ -1,0 +1,28 @@
+id: taint-dom-xss
+file: src/page.js
+valid:
+- 'const q = new URLSearchParams(location.search).get("q");
+
+  result.textContent = q;
+
+  '
+- 'const tab = location.hash.slice(1);
+
+  panel.innerHTML = "<b>" + encodeURIComponent(tab) + "</b>";
+
+  '
+invalid:
+- 'var i = document.location.href.substring(document.location.href.indexOf("default=")
+  + 8);
+
+  document.write("<OPTION value=1>" + i + "</OPTION>");
+
+  '
+- 'const q = new URLSearchParams(window.location.search).get("q");
+
+  document.getElementById("out").innerHTML = "Results for " + q;
+
+  '
+- '$(location.hash);
+
+  '

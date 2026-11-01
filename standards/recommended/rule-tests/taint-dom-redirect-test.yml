@@ -1,0 +1,20 @@
+id: taint-dom-redirect
+file: src/page.js
+valid:
+- 'const next = new URLSearchParams(location.search).get("next");
+
+  if (next.startsWith("/")) { location.href = next; }
+
+  '
+- 'location.href = "/search?q=" + location.hash.slice(1);
+
+  '
+invalid:
+- 'const next = new URLSearchParams(location.search).get("next");
+
+  location.href = next;
+
+  '
+- 'window.location = decodeURIComponent(location.hash.substring(1));
+
+  '

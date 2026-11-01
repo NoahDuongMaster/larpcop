@@ -22,6 +22,8 @@ struct Write<'a, D: Doc> {
 /// The writes of a scope's local names, nested functions left out.
 pub(crate) struct Env<'a, D: Doc> {
     writes: HashMap<String, Vec<Write<'a, D>>>,
+    /// A parameter's value, known for one summary of the function (flags.rs).
+    fixed: Option<(String, Value)>,
 }
 
 const LOOP_KINDS: [&str; 9] = [
@@ -41,15 +43,20 @@ impl<'a, D: Doc> Env<'a, D> {
     pub(crate) fn empty() -> Self {
         Env {
             writes: HashMap::new(),
+            fixed: None,
         }
     }
 
     pub fn new(scope: &Node<'a, D>) -> Self {
-        let mut env = Env {
-            writes: HashMap::new(),
-        };
+        let mut env = Env::empty();
         env.collect(scope, false, &mut Vec::new());
         env
+    }
+
+    /// With parameter `name` holding `value` (it is never assigned).
+    pub(crate) fn fixing(mut self, name: &str, value: Value) -> Self {
+        self.fixed = Some((name.to_string(), value));
+        self
     }
 
     fn collect(&mut self, n: &Node<'a, D>, maybe: bool, loops: &mut Vec<Range<usize>>) {
@@ -115,6 +122,12 @@ impl<'a, D: Doc> Env<'a, D> {
 
     /// The value `name` holds at `at`, when it is known.
     pub(super) fn value(&self, name: &str, at: usize, depth: usize) -> Option<Value> {
+        if let Some((fixed, value)) = &self.fixed
+            && fixed == name
+            && !self.writes.contains_key(name)
+        {
+            return Some(value.clone());
+        }
         eval(&self.assigned(name, at)?, self, depth + 1)
     }
 

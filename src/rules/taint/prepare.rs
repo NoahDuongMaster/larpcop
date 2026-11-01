@@ -114,8 +114,7 @@ impl TaintRule {
                         continue;
                     }
                 }
-                let fixed = self.safe_prefix.as_ref().zip(prefix::leading(&node));
-                if fixed.is_some_and(|(re, start)| re.is_match(&start)) {
+                if (self.safe_prefix.as_ref()).is_some_and(|re| prefix::safe_start(re, &node)) {
                     continue;
                 }
                 // `reverse(…) + "?q=" + q`: starts with a URL the app builds.
@@ -130,6 +129,9 @@ impl TaintRule {
                 }
                 // `$JM.readValue(…)` on a mapper with default typing on.
                 if !self.configured.holds(&index.root, m.get_env()) {
+                    continue;
+                }
+                if !self.sink_texts.holds(m.get_env()) {
                     continue;
                 }
                 let typed = self.typed.metavariables(m.get_env());

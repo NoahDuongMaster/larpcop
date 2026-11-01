@@ -1,0 +1,36 @@
+id: php-taint-predictable-token
+file: app/session.php
+valid:
+- '<?php
+
+  setcookie("session", bin2hex(random_bytes(32)), 0, "/");
+
+  '
+- '<?php
+
+  setcookie("theme", uniqid());
+
+  '
+- '<?php
+
+  setcookie("session", session_id(), 0, "/");
+
+  '
+invalid:
+- '<?php
+
+  $id = mysql_query("INSERT INTO sessions VALUES (NULL)");
+
+  setcookie("session", mysql_insert_id());
+
+  '
+- '<?php
+
+  session_id(uniqid());
+
+  '
+- '<?php
+
+  $r->cookie("token", time(), 60);
+
+  '

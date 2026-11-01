@@ -6,14 +6,29 @@ use super::kotlin::Part;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
 
-/// String literal kinds: JS/TS/Python, Go, Rust.
-const STRINGS: [&str; 5] = [
+/// String literal kinds: JS/TS/Python, Go, Rust, PHP `"…"`.
+const STRINGS: [&str; 6] = [
     "string",
     "template_string",
     "interpreted_string_literal",
     "raw_string_literal",
     "string_literal",
+    "encapsed_string",
 ];
+
+/// Text kinds inside a string literal; any other named child but an escape
+/// is an interpolation (`${x}`, `#{x}`, `$x` in Kotlin and PHP), where the
+/// fixed text ends.
+const CONTENT: [&str; 5] = [
+    "string_fragment",
+    "string_content",
+    "string_literal_content",
+    "interpreted_string_literal_content",
+    "escape_sequence",
+];
+
+/// Delimiters some grammars name (Python).
+const DELIMITERS: [&str; 2] = ["string_start", "string_end"];
 
 /// The fixed text an argument starts with, if it starts with a literal.
 pub(super) fn leading<D: Doc>(node: &Node<D>) -> Option<String> {
@@ -23,22 +38,91 @@ pub(super) fn leading<D: Doc>(node: &Node<D>) -> Option<String> {
         // C# and PHP wrap each call argument.
         "argument" => leading(&node.children().filter(|c| c.is_named()).last()?),
         "raw_string_literal" => Some(node.text().trim_matches('`').to_string()),
-        k if STRINGS.contains(&k) => {
-            let mut fixed = String::new();
-            for c in node.children() {
-                match c.kind().as_ref() {
-                    "string_fragment"
-                    | "string_content"
-                    | "string_literal_content"
-                    | "interpreted_string_literal_content" => fixed.push_str(&c.text()),
-                    "template_substitution" | "interpolation" => break,
-                    _ => {}
-                }
-            }
-            Some(fixed)
-        }
+        k if STRINGS.contains(&k) => Some(literal(node).0),
         _ => None,
     }
+}
+
+/// A literal's text up to its first interpolation, and whether it has one.
+fn literal<D: Doc>(node: &Node<D>) -> (String, bool) {
+    let mut fixed = String::new();
+    for c in node.children().filter(|c| c.is_named()) {
+        match c.kind().as_ref() {
+            k if CONTENT.contains(&k) => fixed.push_str(&c.text()),
+            k if DELIMITERS.contains(&k) => {}
+            _ => return (fixed, true),
+        }
+    }
+    (fixed, false)
+}
+
+/// Does a URL built from `node` start safely: its fixed start (literals and
+/// constants joined, up to the first other part) matches `safe`, or has a
+/// `?` or `#`, after which the rest only picks the query or the fragment?
+pub(super) fn safe_start<D: Doc>(safe: &regex::Regex, node: &Node<D>) -> bool {
+    let mut text = String::new();
+    fixed(node, &mut text);
+    let known = text.split(CONSTANT).next().unwrap_or_default();
+    (!known.is_empty() && safe.is_match(known)) || text.contains(['?', '#'])
+}
+
+/// Stands for a constant's unknown text in a fixed start.
+const CONSTANT: char = '\u{1}';
+
+/// Appends the fixed start of `node`; false once a part is not fixed.
+fn fixed<D: Doc>(node: &Node<D>, text: &mut String) -> bool {
+    let kind = node.kind();
+    match kind.as_ref() {
+        "binary_expression" | "binary_operator"
+            if node
+                .field("operator")
+                .is_some_and(|o| matches!(o.text().as_ref(), "+" | "."))
+                || node
+                    .children()
+                    .any(|c| !c.is_named() && matches!(c.text().as_ref(), "+" | ".")) =>
+        {
+            node.part("left").is_some_and(|l| fixed(&l, text))
+                && node.part("right").is_some_and(|r| fixed(&r, text))
+        }
+        "parenthesized_expression" => node.child(1).is_some_and(|c| fixed(&c, text)),
+        "argument" => node
+            .children()
+            .filter(|c| c.is_named())
+            .last()
+            .is_some_and(|c| fixed(&c, text)),
+        "raw_string_literal" => {
+            text.push_str(node.text().trim_matches('`'));
+            true
+        }
+        k if STRINGS.contains(&k) => {
+            let (part, interpolated) = literal(node);
+            text.push_str(&part);
+            !interpolated
+        }
+        // `Pictures::$VIEW_PIC_URL`, `self::BASE`, `BASE_URL`: set by the code.
+        "class_constant_access_expression" | "scoped_property_access_expression" => {
+            text.push(CONSTANT);
+            true
+        }
+        _ if is_constant_name(&node.text()) => {
+            text.push(CONSTANT);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// `BASE_URL`, `Config.BASE_URL`, `Routes::HOME`.
+fn is_constant_name(text: &str) -> bool {
+    let last = text.rsplit(['.', ':']).next().unwrap_or_default();
+    last.len() > 1
+        && last.starts_with(|c: char| c.is_ascii_uppercase())
+        && last
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+        && text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | ':'))
 }
 
 /// The first operand of a built value: `reverse(…)` in `reverse(…) + "?q=" + q`.

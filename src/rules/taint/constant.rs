@@ -34,6 +34,12 @@ pub(crate) fn eval<D: Doc>(n: &Node<D>, env: &Env<D>, depth: usize) -> Option<Va
         }
         "true" => Some(Value::Bool(true)),
         "false" => Some(Value::Bool(false)),
+        // PHP `True`, `FALSE`: any case.
+        "boolean" => match n.text().to_ascii_lowercase().as_str() {
+            "true" => Some(Value::Bool(true)),
+            "false" => Some(Value::Bool(false)),
+            _ => None,
+        },
         "string"
         | "string_literal"
         | "character_literal"
@@ -43,7 +49,10 @@ pub(crate) fn eval<D: Doc>(n: &Node<D>, env: &Env<D>, depth: usize) -> Option<Va
             env.value(&n.text(), n.range().start, depth)
         }
         "not_operator" => not(eval(&n.part("argument")?, env, depth)?),
-        "unary_operator" | "unary_expression" | "prefix_unary_expression" => {
+        "unary_operator"
+        | "unary_expression"
+        | "prefix_unary_expression"
+        | "unary_op_expression" => {
             let operand = n
                 .part("argument")
                 .or_else(|| n.part("operand"))

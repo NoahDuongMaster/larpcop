@@ -67,7 +67,11 @@ impl Ctx {
     /// `escape`'s calls clean (higher.rs).
     fn pick<D: Doc>(&self, key: &str, call: &Node<D>) -> Option<&Summary> {
         let s = self.summaries.get(key)?;
-        Some(self.specialized(key, call).unwrap_or(s))
+        Some(
+            self.specialized(key, call)
+                .or_else(|| self.flagged(key, call))
+                .unwrap_or(s),
+        )
     }
 
     fn built_as<D: Doc>(&self, call: &Node<D>, name: &str) -> Option<String> {

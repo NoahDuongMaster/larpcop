@@ -5,8 +5,10 @@
 //! and drops `TYPED_MAPPER.readValue(json, Prefs.class)`. What is read: the
 //! name's initializers and assignments, the body of a method of the file
 //! such a value calls, and every call made on the name in the file
-//! (`mapper.enableDefaultTyping()`). An object set up in another file is not
-//! seen, so its sink does not count.
+//! (`mapper.enableDefaultTyping()`), and one level down, how the names an
+//! initializer is given were set up (`$twig = new Twig_Environment($loader)`
+//! with `$loader = new Twig_Loader_String()`). An object set up in another
+//! file is not seen, so its sink does not count.
 
 use super::kotlin::Part;
 use anyhow::{Context, Result};
@@ -33,16 +35,42 @@ impl Configured {
     /// Was every constrained object of this match set up as required?
     pub(super) fn holds<D: Doc>(&self, root: &Node<D>, env: &MetaVarEnv<D>) -> bool {
         self.0.iter().all(|(var, re)| {
-            env.get_match(var)
-                .is_none_or(|n| field_name(n).is_some_and(|name| re.is_match(&setup(root, &name))))
+            env.get_match(var).is_none_or(|n| {
+                field_name(n).is_some_and(|name| re.is_match(&setup(root, &name, 1)))
+            })
         })
     }
 }
 
-/// `mapper`, the field of `this.mapper`, or of `Utils.MAPPER`.
+/// `sink_texts`: what the sink names (`setcookie("session", …)` only).
+#[derive(Default)]
+pub(crate) struct SinkTexts(Vec<(String, Regex)>);
+
+impl SinkTexts {
+    pub(crate) fn new(id: &str, map: &BTreeMap<String, String>) -> Result<Self> {
+        map.iter()
+            .map(|(var, re)| {
+                let re =
+                    Regex::new(re).with_context(|| format!("taint `{id}`: sink_texts.{var}"))?;
+                Ok((var.trim_start_matches('$').to_string(), re))
+            })
+            .collect::<Result<_>>()
+            .map(SinkTexts)
+    }
+
+    /// Do the metavariables of this sink match?
+    pub(super) fn holds<D: Doc>(&self, env: &MetaVarEnv<D>) -> bool {
+        self.0.iter().all(|(var, re)| {
+            env.get_match(var)
+                .is_none_or(|n| re.is_match(n.text().as_ref()))
+        })
+    }
+}
+
+/// `mapper`, `$twig`, the field of `this.mapper`, or of `Utils.MAPPER`.
 fn field_name<D: Doc>(n: &Node<D>) -> Option<String> {
     match n.kind().as_ref() {
-        "identifier" | "simple_identifier" => Some(n.text().to_string()),
+        "identifier" | "simple_identifier" | "variable_name" => Some(n.text().to_string()),
         "field_access" | "member_access_expression" | "navigation_expression" => n
             .part("field")
             .or_else(|| n.part("name"))
@@ -51,8 +79,9 @@ fn field_name<D: Doc>(n: &Node<D>) -> Option<String> {
     }
 }
 
-/// The text that sets `name` up in the file.
-fn setup<D: Doc>(root: &Node<D>, name: &str) -> String {
+/// The text that sets `name` up in the file, and `deeper` more levels of
+/// the names its initializers are given.
+fn setup<D: Doc>(root: &Node<D>, name: &str, deeper: usize) -> String {
     let mut text = String::new();
     let mut values: Vec<Node<D>> = Vec::new();
     for n in root.dfs() {
@@ -63,7 +92,7 @@ fn setup<D: Doc>(root: &Node<D>, name: &str) -> String {
                     values.push(v);
                 }
             }
-            "assignment_expression" => {
+            "assignment_expression" | "assignment" => {
                 let left = n.part("left");
                 if left.is_some_and(|l| field_name(&l).is_some_and(|x| x == name))
                     && let Some(v) = n.part("right")
@@ -71,7 +100,7 @@ fn setup<D: Doc>(root: &Node<D>, name: &str) -> String {
                     values.push(v);
                 }
             }
-            "method_invocation"
+            "method_invocation" | "member_call_expression"
                 if n.part("object")
                     .is_some_and(|o| field_name(&o).is_some_and(|x| x == name)) =>
             {
@@ -84,6 +113,14 @@ fn setup<D: Doc>(root: &Node<D>, name: &str) -> String {
     for v in values {
         text.push_str(&v.text());
         text.push('\n');
+        if deeper > 0 {
+            let given = v.dfs().skip(1).filter(|x| {
+                matches!(x.kind().as_ref(), "identifier" | "variable_name") && x.text() != name
+            });
+            for g in given {
+                text.push_str(&setup(root, &g.text(), deeper - 1));
+            }
+        }
         // `= createMapper()`: that method's body.
         if v.kind() == "method_invocation"
             && v.part("object").is_none_or(|o| o.kind() == "this")

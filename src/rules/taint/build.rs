@@ -130,6 +130,7 @@ impl TaintRule {
                 .transpose()?,
             source_types: srctypes::SourceTypes::new(&cfg.id, &cfg.source_types, &cfg.source_text)?,
             configured: configured::Configured::new(&cfg.id, &cfg.sink_configured)?,
+            sink_texts: configured::SinkTexts::new(&cfg.id, &cfg.sink_texts)?,
             valued: valued::Valued::new(&cfg.id, &cfg.values)?,
             fixed_routes: routes::FixedRoutes {
                 sources: cfg
@@ -186,7 +187,9 @@ impl TaintRule {
                 .map(regex::Regex::new)
                 .transpose()
                 .with_context(|| format!("taint `{}`: handler_decorators", cfg.id))?,
-            typed: typed.with_strict(&cfg.id, &cfg.strict_sink_types)?,
+            typed: typed
+                .with_strict(&cfg.id, &cfg.strict_sink_types)?
+                .with_excluded(&cfg.id, &cfg.excluded_sink_types)?,
             responds: cfg
                 .response_returns
                 .as_ref()

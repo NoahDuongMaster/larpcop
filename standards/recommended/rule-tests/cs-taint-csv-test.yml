@@ -1,0 +1,8 @@
+id: cs-taint-csv
+file: Export.cs
+valid:
+- "class Export {\n  void E([FromQuery] string name, CsvWriter csv) {\n    csv.WriteField(int.Parse(name));\n\
+  \  }\n}\n"
+invalid:
+- "class Export {\n  void E([FromQuery] string name, CsvWriter csv) {\n    csv.WriteField(name);\n\
+  \  }\n}\n"

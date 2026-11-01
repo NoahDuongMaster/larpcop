@@ -1,0 +1,15 @@
+id: php-taint-stored-sql
+file: app/users.php
+valid:
+- "<?php\nfunction name_of($conn, $login) {\n  $st = $conn->prepare(\"SELECT firstname\
+  \ FROM users WHERE login = ?\");\n  $st->bind_param(\"s\", $login);\n  $st->execute();\n\
+  \  return $st->get_result()->fetch_assoc()[\"firstname\"];\n}\nfunction similar($conn,\
+  \ $login) {\n  $first = name_of($conn, $login);\n  $st = $conn->prepare(\"SELECT\
+  \ * FROM users WHERE firstname LIKE ?\");\n  $st->bind_param(\"s\", $first);\n \
+  \ return $st->execute();\n}\n"
+invalid:
+- "<?php\nfunction name_of($conn, $login) {\n  $st = $conn->prepare(\"SELECT firstname\
+  \ FROM users WHERE login = ?\");\n  $st->bind_param(\"s\", $login);\n  $st->execute();\n\
+  \  return $st->get_result()->fetch_assoc()[\"firstname\"];\n}\nfunction similar($conn,\
+  \ $login) {\n  $first = name_of($conn, $login);\n  $q = \"SELECT * FROM users WHERE\
+  \ firstname LIKE '%\" . $first . \"%'\";\n  return mysqli_query($conn, $q);\n}\n"

@@ -1,0 +1,24 @@
+id: php-no-insecure-random
+file: app/page.php
+valid:
+- '<?php
+
+  $token = bin2hex(random_bytes(32));
+
+  '
+- '<?php
+
+  $n = random_int(1, 6);
+
+  '
+invalid:
+- '<?php
+
+  $_SESSION["session_token"] = md5(uniqid());
+
+  '
+- '<?php
+
+  $code = mt_rand(100000, 999999);
+
+  '

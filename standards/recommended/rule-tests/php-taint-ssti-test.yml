@@ -1,0 +1,61 @@
+id: php-taint-ssti
+file: app/page.php
+valid:
+- '<?php
+
+  $loader = new \Twig\Loader\FilesystemLoader("templates");
+
+  $twig = new \Twig\Environment($loader);
+
+  echo $twig->render("hello.twig", ["name" => $_GET["name"]]);
+
+  '
+- '<?php
+
+  $twig = new Twig_Environment(new Twig_Loader_Filesystem("tpl"));
+
+  echo $twig->render($_GET["page"] . ".twig");
+
+  '
+- '<?php
+
+  $twig = new \Twig\Environment(new \Twig\Loader\FilesystemLoader("t"));
+
+  $tpl = $twig->createTemplate("Hello {{ name }}");
+
+  echo $tpl->render(["name" => $_GET["name"]]);
+
+  '
+invalid:
+- '<?php
+
+  $loader = new Twig_Loader_String();
+
+  $twig = new Twig_Environment($loader);
+
+  $result = $twig->render($_GET["name"]);
+
+  '
+- '<?php
+
+  $twig = new \Twig\Environment(new \Twig\Loader\ArrayLoader([]));
+
+  $tpl = $twig->createTemplate("Hello " . $_POST["name"]);
+
+  echo $tpl->render([]);
+
+  '
+- '<?php
+
+  $smarty = new Smarty();
+
+  $smarty->display("string:" . $_GET["t"]);
+
+  '
+- '<?php
+
+  $twig = new \Twig\Environment(new \Twig\Loader\ArrayLoader([]));
+
+  echo $twig->render($_GET["tpl"]);
+
+  '

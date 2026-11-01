@@ -1,0 +1,43 @@
+id: php-taint-csv
+file: app/export.php
+valid:
+- '<?php
+
+  $out = fopen("php://output", "w");
+
+  fputcsv($out, array("id", "name"));
+
+  fputcsv($out, array((int) $_GET["id"], intval($_GET["n"])));
+
+  '
+- '<?php
+
+  $out = fopen("php://output", "w");
+
+  $name = $_GET["q"];
+
+  if (in_array($name, $cities, true)) { fputcsv($out, array($name)); }
+
+  '
+invalid:
+- '<?php
+
+  $out = fopen("php://output", "w");
+
+  fputcsv($out, array($_GET["name"], $_POST["city"]));
+
+  '
+- '<?php
+
+  $r = mysqli_query($db, "SELECT name FROM users");
+
+  while ($row = mysqli_fetch_assoc($r)) { fputcsv($out, $row); }
+
+  '
+- '<?php
+
+  $out = fopen("php://output", "w");
+
+  fputcsv($out, array(htmlspecialchars($_GET["q"])));
+
+  '

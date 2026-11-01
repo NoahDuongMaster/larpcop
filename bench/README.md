@@ -13,6 +13,8 @@ Chạy lại được bằng một lệnh: `bench/run.sh` (cần git, python3, n
 | GoVWA | [0c34/govwa](https://github.com/0c34/govwa) `4058f79` (Go, net/http + html/template) | [`govwa-truth.json`](govwa-truth.json): 4 dòng theo comment đánh dấu lỗ hổng của chính dự án trong `vulnerability/sqli` và `vulnerability/xss` (IDOR và client-side auth là lỗi logic; module XXE là file rỗng) |
 | DVWS-Node | [snoopysecurity/dvws-node](https://github.com/snoopysecurity/dvws-node) `e83689c` (Express + MongoDB + MySQL + GraphQL + SOAP/XML-RPC) | [`dvws-truth.json`](dvws-truth.json): 15 dòng theo `CHALLENGES.md`, mỗi challenge mà lỗi nằm ở một dòng code (bỏ IDOR, CORS, rate limit… là lỗi thiết kế) |
 | vulnerable-node | [cr0hn/vulnerable-node](https://github.com/cr0hn/vulnerable-node) `d68f2a3`, thư mục `sast/seeds/` | Do chính dự án viết (`sast/ground-truth.yaml`) và chấm bằng script của dự án (`sast/tests/score.js`): 12 file, mỗi file một lỗ hổng, cộng 2 file sạch để đo báo nhầm |
+| XVWA | [s4n7h0/xvwa](https://github.com/s4n7h0/xvwa) `fb30fa5` (PHP thuần) | [`xvwa-truth.json`](xvwa-truth.json): 19 lỗi README của dự án liệt kê, mỗi lỗi một module |
+| WackoPicko | [adamdoupe/WackoPicko](https://github.com/adamdoupe/WackoPicko) `cabc1b3` (PHP thuần) | [`wackopicko-truth.json`](wackopicko-truth.json): 14 lỗi README liệt kê (mật khẩu admin nằm trong database, không tính) |
 
 - **Một dòng tính là tìm thấy** khi có finding của công cụ phủ dòng đó, chấp nhận lệch ±3 dòng, áp dụng như nhau cho mọi công cụ. Với vulnerable-node, một file tính là tìm thấy khi công cụ báo bất kỳ finding nào trong file (cách chấm của dự án); cột thứ hai bỏ các rule báo cho mọi handler Express bất kể lỗi (`validate-request-input` của larpcop, kiểm middleware CSRF của Semgrep).
 - **Công cụ**: larpcop với bộ [`standards/recommended`](../standards/recommended), chỉ tính rule bảo mật; Semgrep OSS 1.183.0 với gói `p/default` (1073 rule), tải về một lần trước khi đo; gitleaks 8.30.1, chỉ để so phần secrets.
@@ -55,7 +57,10 @@ Một bộ chỉ đo được độ tổng quát khi rule chưa được viết 
 
 20. **NIST SARD PHP Vulnerability Test Suite** (2015-10-27, sha256 `3407473f…`): 20.856 ca một file có dữ liệu từ request (`$_GET`, `$_POST`, qua mảng, qua object, `unserialize`) ở 8 loại (XSS, SQL, XPath, LDAP, redirect, file inclusion, lệnh OS, `eval`), nhãn bad/good của từng file. Bộ chọn ca và scorer (`sard_php.py`) commit (d94970f, 2d73792) trước khi chạy bất kỳ công cụ nào. Lần đầu: larpcop **+5,3%** (16,9 s), Semgrep `p/default` **+0,1%** (98,1 s). Nguyên nhân chính: phần lớn ca là file trộn HTML với `<?php … ?>`, mà grammar PHP-only của ast-grep đọc phần HTML như code; object giữ dữ liệu request trong field (constructor rồi getter); sanitizer chưa biết hay đọc sai (ép kiểu, `settype`, `filter_var`, allow-list `preg_match` qua biến cục bộ và `== 1`, `preg_replace` bỏ mọi ký tự khác); `sprintf("%d", …)`; escape SQL dùng ngoài dấu nháy hay tính cho LDAP/XPath; `preg_replace` bị coi là thực thi code với mọi đối số. Sau khi sửa: **+56,4%** (`results/sard-php.md`). Phần còn lại phần lớn là ca có nhãn trái với code: 768 ca "bad" kiểm và chép `$sanitized` chưa từng được gán, 272 ca chỉ in literal, các ca `span_Style` in hằng `checked_data` chứ không phải dữ liệu request, 48 ca "good" làm sạch `$tained` (gõ sai) trong khi `$tainted` thô tới `system()`, và 1.328 ca "good" dùng hàm escape làm cho sink khác (`addslashes` cho XPath, shell, đường dẫn; `htmlspecialchars` cho LDAP). DVWA giữ +80,0% (bớt báo nhầm, thêm đúng hai dòng query của mức SQLi medium); 12 app thật và các bench khác không đổi.
 
-Kết quả dưới đây là sau bước 20: chỉ có ý nghĩa *không thụt lùi* trên cả hai mươi bộ. Rule mới cần một bộ chưa ai nhìn.
+21. **XVWA** (`s4n7h0/xvwa` `fb30fa5`, PHP): 19 module, mỗi module một lỗi mà README của dự án liệt kê. Đáp án [`xvwa-truth.json`](xvwa-truth.json) (kèm `php-taint-stored-xss` và `foreach` của PHP, commit 9083607, trước khi chạy bất kỳ công cụ nào). Lần đầu: larpcop **12/19** (11 đúng loại), Semgrep 5/19. Sau khi sửa: **17/19** (`results/php-apps.md`); hai dòng còn lại là IDOR và `delete` thiếu kiểm tra admin.
+22. **WackoPicko** (`adamdoupe/WackoPicko` `cabc1b3`, PHP): 14 lỗi README liệt kê (mật khẩu admin/admin nằm trong database, không có trong code). Đáp án [`wackopicko-truth.json`](wackopicko-truth.json), commit cùng bước 21. Lần đầu: larpcop **9/14**, Semgrep 1/14. Sau khi sửa: **11/14**; ba dòng còn lại là forceful browsing, trang xem không cần đăng nhập và coupon dùng lại được.
+
+Kết quả dưới đây là sau bước 22: chỉ có ý nghĩa *không thụt lùi* trên cả hai mươi hai bộ. Rule mới cần một bộ chưa ai nhìn.
 
 ## Kết quả (01/11/2026)
 
@@ -84,6 +89,8 @@ Kết quả dưới đây là sau bước 20: chỉ có ý nghĩa *không thụt
 | Juliet Java stored XSS (148 ca, dữ liệu từ database): điểm trung bình (TPR − FPR) | **+75,0%** (held-out, CWE81 `sendError` cố ý bỏ qua) | +0,0% (`p/default`, `p/java`) | – |
 | Juliet C# stored XSS (148 ca, dữ liệu từ database): điểm trung bình (TPR − FPR) | **+100,0%** (held-out) | +0,0% (`p/default`) | – |
 | Juliet C (6.080 ca lệnh OS và format string): thời gian / điểm (TPR − FPR) | **21,7 s / +100,0%** (held-out lần đầu +84,7%) | 32,5 s / +0,0% (`p/default`) | – |
+| XVWA (PHP): dòng tìm thấy (/19) | **17** (12 lúc đầu; 16 đúng loại, dòng CSRF được tính nhờ một finding khác cách một dòng) | 5 | – |
+| WackoPicko (PHP): dòng tìm thấy (/14) | **11** (9 lúc đầu) | 1 | – |
 | SARD PHP (20.856 ca): thời gian / điểm (TPR − FPR) | **23,6 s / +56,4%** (held-out lần đầu 16,9 s / +5,3%) | 98,1 s / +0,1% (`p/default`) | – |
 | Semgrep Kotlin tests (9 ca lỗi, 3 ca sạch): điểm (TPR − FPR) | **+88,9%** (lần đầu +55,6%) | – (test của chính Semgrep) | – |
 | OWASP Benchmark Java: điểm trung bình (TPR − FPR) | **+91,9%** (lần đầu +37,5%) | +34,9% (`p/default`), +17,7% (`p/java`) | – |

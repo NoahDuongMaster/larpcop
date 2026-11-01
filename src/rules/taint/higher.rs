@@ -43,17 +43,20 @@ pub(super) fn applications<D: Doc>(f: &Node<D>, p: &str) -> Vec<Range<usize>> {
         .collect()
 }
 
-/// `exported`'s summaries with a function argument clean, named `local#k`.
+/// `exported`'s variant summaries, named after `local`: with a function
+/// argument clean (`local#k`), with a flag set (`local!k=true`, flags.rs).
 pub(super) fn import_variants(
     theirs: &Summaries,
     exported: &str,
     local: &str,
     out: &mut Summaries,
 ) {
-    let variants = format!("{exported}#");
-    for (name, s) in theirs.iter() {
-        if let Some(k) = name.strip_prefix(&variants) {
-            out.insert(format!("{local}#{k}"), s.clone());
+    for mark in ['#', '!'] {
+        let variants = format!("{exported}{mark}");
+        for (name, s) in theirs.iter() {
+            if let Some(k) = name.strip_prefix(&variants) {
+                out.insert(format!("{local}{mark}{k}"), s.clone());
+            }
         }
     }
 }

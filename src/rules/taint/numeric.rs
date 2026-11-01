@@ -89,7 +89,7 @@ pub(super) fn formatted<D: Doc>(call: &Node<D>) -> Option<Vec<Range<usize>>> {
 }
 
 /// PHP and C# wrap an argument: `argument` → the expression.
-fn inner<'a, D: Doc>(a: &Node<'a, D>) -> Node<'a, D> {
+pub(super) fn inner<'a, D: Doc>(a: &Node<'a, D>) -> Node<'a, D> {
     let named = (a.kind() == "argument").then(|| a.children().find(|c| c.is_named()));
     named.flatten().unwrap_or_else(|| a.clone())
 }

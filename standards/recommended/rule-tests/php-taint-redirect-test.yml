@@ -11,6 +11,23 @@ valid:
   header("Location: /home");
 
   '
+- '<?php
+
+  http_redirect(".." . Pictures::$VIEW_PIC_URL . "?picid=" . $_POST["picid"]);
+
+  '
+- '<?php
+
+  header("Location: index.php?page=" . $_GET["p"]);
+
+  '
+- '<?php
+
+  function go($url) { header("Location: $url"); exit(); }
+
+  go("../pictures/view.php?picid=" . $_POST["picid"]);
+
+  '
 invalid:
 - '<?php
 
@@ -25,5 +42,22 @@ invalid:
 - '<?php
 
   http_redirect($_GET["u"]);
+
+  '
+- '<?php
+
+  header("Location: /" . $_GET["u"]);
+
+  '
+- '<?php
+
+  header("Location: $base?x=" . $_GET["u"]);
+
+  '
+- '<?php
+
+  function go($url) { header("Location: $url"); exit(); }
+
+  go($_POST["next"]);
 
   '

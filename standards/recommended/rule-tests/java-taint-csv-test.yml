@@ -1,0 +1,10 @@
+id: java-taint-csv
+file: src/Export.java
+valid:
+- "import org.apache.commons.csv.*;\nclass Export {\n  void e(@RequestParam String\
+  \ name, CSVPrinter p) throws Exception {\n    p.printRecord(\"x\", Integer.parseInt(name));\n\
+  \  }\n}\n"
+invalid:
+- "import org.apache.commons.csv.*;\nclass Export {\n  void e(@RequestParam String\
+  \ name, CSVPrinter p) throws Exception {\n    p.printRecord(\"x\", name);\n  }\n\
+  }\n"

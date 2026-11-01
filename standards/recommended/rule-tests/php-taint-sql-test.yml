@@ -38,6 +38,17 @@ valid:
   mysqli_query($db, "SELECT * FROM t WHERE name = ''$u''");
 
   '
+- '<?php
+
+  $xpath = new DOMXPath($doc);
+
+  $result = $xpath->query("/a[@id=''" . $_POST["s"] . "'']");
+
+  '
+- "<?php\nfunction add($name, $vuln = False) {\n  if ($vuln) {\n    $query = \"INSERT\
+  \ INTO g VALUES ('\" . $name . \"')\";\n  } else {\n    $query = \"INSERT INTO g\
+  \ VALUES ('\" . mysql_real_escape_string($name) . \"')\";\n  }\n  return mysql_query($query);\n\
+  }\nadd($_POST[\"name\"], False);\nadd($_POST[\"name\"]);\n"
 invalid:
 - '<?php
 
@@ -76,3 +87,7 @@ invalid:
   mysqli_query($db, "SELECT * FROM t WHERE id = $t");
 
   '
+- "<?php\nfunction add($name, $vuln = False) {\n  if ($vuln) {\n    $query = \"INSERT\
+  \ INTO g VALUES ('\" . $name . \"')\";\n  } else {\n    $query = \"INSERT INTO g\
+  \ VALUES ('\" . mysql_real_escape_string($name) . \"')\";\n  }\n  return mysql_query($query);\n\
+  }\nadd($_POST[\"name\"], True);\n"

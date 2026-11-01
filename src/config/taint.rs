@@ -121,6 +121,10 @@ pub struct TaintConfig {
     /// (declared, or `new T(…)` at the sink).
     #[serde(default)]
     pub strict_sink_types: std::collections::BTreeMap<String, String>,
+    /// Sink metavariable → regex over a type that is not the sink's: the sink
+    /// is dropped when the declared type matches (`DB: '^DOMXPath$'`).
+    #[serde(default)]
+    pub excluded_sink_types: std::collections::BTreeMap<String, String>,
     /// Guard or sanitizer metavariable → regex every value it can hold must
     /// match (see valued.rs): `ALLOW: '^/\^\[a-z]*\$/$'`.
     #[serde(default)]
@@ -129,6 +133,10 @@ pub struct TaintConfig {
     /// the file (see configured.rs).
     #[serde(default)]
     pub sink_configured: std::collections::BTreeMap<String, String>,
+    /// Sink metavariable → regex over its text: a sink for a cookie named
+    /// `session` only (`N: "^[\"']?(session|sid)"`).
+    #[serde(default)]
+    pub sink_texts: std::collections::BTreeMap<String, String>,
     /// Source metavariable → regex over the type its name is declared with in
     /// the file; an undeclared name does not count (see srctypes.rs).
     #[serde(default)]

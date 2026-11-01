@@ -1,0 +1,22 @@
+id: no-document-write
+file: src/page.js
+valid:
+- 'document.write("<p>Loading</p>");
+
+  '
+- 'el.insertAdjacentHTML("beforeend", "<li>x</li>");
+
+  '
+- 'document.write(DOMPurify.sanitize(html));
+
+  '
+invalid:
+- 'document.write("<option>" + lang + "</option>");
+
+  '
+- 'list.insertAdjacentHTML("beforeend", `<li>${item.name}</li>`);
+
+  '
+- 'document.writeln(banner);
+
+  '

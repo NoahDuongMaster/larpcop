@@ -191,10 +191,10 @@ fn annotations<D: Doc>(p: &Node<D>) -> Vec<String> {
     out
 }
 
-fn name_of<D: Doc>(p: &Node<D>) -> Option<String> {
+pub(super) fn name_of<D: Doc>(p: &Node<D>) -> Option<String> {
     let n = match p.kind().as_ref() {
-        // Java, C#
-        "formal_parameter" | "parameter" => p.part("name")?,
+        // Java, C#, Kotlin, Go
+        "formal_parameter" | "parameter" | "parameter_declaration" => p.part("name")?,
         "identifier" => p.clone(),
         "typed_parameter" => p.children().find(|c| c.kind() == "identifier")?,
         "default_parameter" | "typed_default_parameter" => p.part("name")?,
@@ -228,7 +228,7 @@ fn is_input<D: Doc>(p: &Node<D>, name: &str) -> bool {
 }
 
 /// A parameter's declared type, without `:` or a nullable `?`.
-fn type_of<D: Doc>(p: &Node<D>) -> Option<String> {
+pub(super) fn type_of<D: Doc>(p: &Node<D>) -> Option<String> {
     let ty = p.part("type")?.text().to_string();
     Some(
         ty.trim_start_matches(':')

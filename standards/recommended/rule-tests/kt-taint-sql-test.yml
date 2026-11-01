@@ -13,3 +13,5 @@ invalid:
   \   }\n    }\n}\n"
 - "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
   \ {\n        val conn = dataSource.connection\n        conn.createStatement().executeQuery(\"SELECT * FROM t WHERE n = '\" + request.getParameter(\"n\") + \"'\")\n        return \"ok\"\n    }\n}\n"
+- "class UserService(private val jdbc: JdbcTemplate) : UserGrpcKt.UserCoroutineImplBase() {\n    override suspend fun find(request: FindRequest): User {\n        jdbc.queryForList(\"SELECT * FROM users\
+  \ WHERE name = '${request.name}'\")\n        return User.getDefaultInstance()\n    }\n}\n"

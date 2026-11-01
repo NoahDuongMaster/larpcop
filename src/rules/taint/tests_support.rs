@@ -66,6 +66,9 @@ pub(super) fn guarded_config(
         exclude: Default::default(),
         sink_types: Default::default(),
         response_returns: None,
+        handler_classes: None,
+        input_types: None,
+        escape_contexts: false,
     }
 }
 

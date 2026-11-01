@@ -7,7 +7,7 @@ use super::scan::FileIndex;
 use super::summary::{self, Summaries};
 use super::{IMPORT_DEPTH, TaintRule, prefix};
 use crate::files::SourceFile;
-use ast_grep_core::{Doc, Language, NodeMatch};
+use ast_grep_core::{Doc, Language, Node, NodeMatch};
 use ast_grep_language::LanguageExt;
 use ast_grep_language::SupportLang;
 use std::ops::Range;
@@ -48,14 +48,26 @@ impl TaintRule {
         let ranges = |ms: Vec<NodeMatch<'a, D>>| -> Vec<Range<usize>> {
             ms.iter().map(|m| m.range()).collect()
         };
-        let cleaned: Vec<Range<usize>> = ranges(sanitizers)
-            .into_iter()
+        // An HTML escaper in an attribute without quotes, a handler or a
+        // script does not clean.
+        let misplaced = |n: &Node<'a, D>| {
+            self.escape_contexts
+                && super::contexts::html_escaper(n)
+                && n.ancestors()
+                    .find(|a| crate::rules::complexity::is_function(a))
+                    .is_some_and(|f| super::contexts::misplaced(n, &super::constant::Env::new(&f)))
+        };
+        let cleaned: Vec<Range<usize>> = sanitizers
+            .iter()
+            .map(|m| m.get_node().clone())
             .chain(
                 self.sanitizer_names
                     .as_ref()
                     .map(|re| index.calls_named(re))
                     .unwrap_or_default(),
             )
+            .filter(|n| !misplaced(n))
+            .map(|n| n.range())
             .collect();
         let mut hits: Vec<Hit<_>> = Vec::new();
         {
@@ -260,5 +272,10 @@ impl TaintRule {
             || (self.handler_decorators.is_some()
                 && (content.contains('@') || content.contains('[')))
             || (self.resolver_args && (content.contains("args") || content.contains("info")))
+            || super::services::may_serve(
+                content,
+                self.handler_classes.as_ref(),
+                self.input_types.is_some(),
+            )
     }
 }

@@ -9,6 +9,7 @@ valid:
 - "from flask import Flask, request, render_template, jsonify\napp = Flask(__name__)\n\n@app.route('/j')\ndef j():\n    return jsonify(name=request.args['n'])\n"
 - "from flask import Flask, request, render_template, jsonify\napp = Flask(__name__)\n\ndef helper():\n    return '<b>' + request.args['n'] + '</b>'\n"
 - "from flask import Flask, request\napp = Flask(__name__)\n\n@app.route('/u/<int:id>')\ndef user(id):\n    return db.get_or_404(User, id).to_dict()\n"
+- "from flask import Flask, request, make_response\nimport html\napp = Flask(__name__)\n\n@app.route('/x')\ndef x():\n    return make_response(\"<p>%s</p>\" % html.escape(request.args['q']))\n"
 invalid:
 - "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
   \ view():\n    name = request.args.get(\"name\", \"\")\n    return make_response(f\"<p>Hello {name}</p>\")\n"
@@ -16,3 +17,4 @@ invalid:
   \ view():\n    return Markup(\"<p>\" + request.form[\"comment\"] + \"</p>\")\n"
 - "from flask import Flask, request, render_template, jsonify\napp = Flask(__name__)\n\n@app.route('/h')\ndef h():\n    return '<h1>Hello ' + request.args.get('name', '') + '</h1>'\n"
 - "from flask import Flask, request, render_template, jsonify\napp = Flask(__name__)\n\n@app.route('/f')\ndef f():\n    q = request.args['q']\n    return f'<p>Results for {q}</p>'\n"
+- "from flask import Flask, request, make_response\nimport html\napp = Flask(__name__)\n\n@app.route('/x')\ndef x():\n    return make_response(\"<script>var q = '%s';</script>\" % html.escape(request.args['q']))\n"

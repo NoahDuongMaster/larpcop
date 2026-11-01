@@ -72,7 +72,7 @@ Kết quả dưới đây là sau bước 15: chỉ có ý nghĩa *không thụt
 | Juliet C# (1.443 ca web): thời gian | **4,96 s** | 16,1 s (`p/default`) | – |
 | RailsGoat (Ruby): dòng tìm thấy (/14) | **13** (lần đầu 10) | 9 | – |
 | java-sec-code (76 endpoint): điểm trung bình (TPR − FPR) | **+84,6%** (lần đầu +6,6%) | +20,8% (p/default) | – |
-| VulnerableApp (97 handler): điểm trung bình (TPR − FPR) | **+75,1%** (lần đầu +7,2%) | +16,5% | – |
+| VulnerableApp (97 handler): điểm trung bình (TPR − FPR) | **+77,5%** (lần đầu +7,2%) | +16,5% | – |
 | Juliet C# (1.443 ca web): điểm trung bình (TPR − FPR) | **+93,8%** (lần đầu +43,9%) | +0,8% (`p/default`, `p/csharp`) | – |
 | Juliet Java (1.665 ca servlet): điểm trung bình (TPR − FPR) | **+91,2%** (lần đầu +68,6%) | +22,4% (`p/default`), +33,0% (`p/java`) | – |
 | OWASP Benchmark Java: điểm trung bình (TPR − FPR) | **+86,8%** (lần đầu +37,5%) | +34,9% (`p/default`), +17,7% (`p/java`) | – |

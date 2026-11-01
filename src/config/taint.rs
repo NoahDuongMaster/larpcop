@@ -62,6 +62,20 @@ pub struct TaintConfig {
     /// JS/TS, the parameters after `(root, info)` in Python.
     #[serde(default)]
     pub resolver_args: bool,
+    /// Regex over a class header (`class A extends B`, up to its body): the
+    /// parameters of its methods are request data (gRPC `ImplBase`,
+    /// `Servicer`). A method taking a `StreamObserver`/`ServerCallContext` is
+    /// one without it.
+    #[serde(default)]
+    pub handler_classes: Option<String>,
+    /// Regex over a parameter's declared type that makes it request data
+    /// (Go gRPC `*pb.HelloRequest`).
+    #[serde(default)]
+    pub input_types: Option<String>,
+    /// XSS: an HTML escaper does not clean a value placed in an unquoted
+    /// attribute, an event handler, a script or a URL attribute.
+    #[serde(default)]
+    pub escape_contexts: bool,
     /// Sink metavariable → regex over its type as the project's language server
     /// shows it (`DB: "Pool|PoolClient"`). Without a server the sink counts.
     #[serde(default)]

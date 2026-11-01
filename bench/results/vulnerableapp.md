@@ -29,9 +29,9 @@
 | shell (5/1) | 5/5 TP, 0/1 FP (+100%) |
 | sql (8/11) | 8/8 TP, 2/11 FP (+82%) |
 | ssrf (6/1) | 6/6 TP, 0/1 FP (+100%) |
-| xss (14/7) | 5/14 TP, 0/7 FP (+36%) |
+| xss (14/7) | 8/14 TP, 0/7 FP (+57%) |
 | xxe (3/4) | 3/3 TP, 0/4 FP (+100%) |
-| **average** | **+75.1%** |
-| **total** | 51/64 TP, 3/33 FP |
+| **average** | **+77.5%** |
+| **total** | 54/64 TP, 3/33 FP |
 
-Still wrong: a lambda that checks a value derived from the input (`Paths.get(BASE + fileName).normalize().startsWith(base)`) does not clean the input; a lambda check `!name.contains("..")` counts as a guard, as it does in an `if`. Stored XSS through the database (6 handlers): the database is not a source. HTML-escaped input in an unquoted attribute (`<img src=%s>`): escaping is not judged by context. Jackson `readValue` behind a project util: `java-no-jackson-default-typing` reports the mapper's configuration, outside the handlers. SQL levels 3/4 concatenate after stripping quotes; `java-no-sql-concat` forbids the concatenation itself. Fixed since the first write-up: JAXB `Unmarshaller.unmarshal(stream)` is XXE; external general entities off without parameter entities off is not a fix.
+Still wrong: a lambda that checks a value derived from the input (`Paths.get(BASE + fileName).normalize().startsWith(base)`) does not clean the input; a lambda check `!name.contains("..")` counts as a guard, as it does in an `if`. Stored XSS through the database (6 handlers): the database is not a source. Jackson `readValue` behind a project util: `java-no-jackson-default-typing` reports the mapper's configuration, outside the handlers. SQL levels 3/4 concatenate after stripping quotes; `java-no-sql-concat` forbids the concatenation itself. Fixed since the first write-up: HTML escaping is judged by where the value lands (`<img src=%s>` with `escapeHtml4` is reported, 3 handlers); JAXB `Unmarshaller.unmarshal(stream)` is XXE; external general entities off without parameter entities off is not a fix.

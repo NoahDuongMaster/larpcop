@@ -3,8 +3,10 @@ valid:
 - "def h():\n    cur.execute('select * from u where id = %s', (request.args['id'],))\n"
 - "from flask import Flask, request\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    sort = request.args['sort']\n    if sort not in ALLOWED_COLUMNS:\n        return 'bad'\n    cursor.execute('SELECT\
   \ * FROM users ORDER BY ' + sort)\n"
+- "class UserService(user_pb2_grpc.UserServicer):\n    def Find(self, request, context):\n        cursor.execute(\"SELECT * FROM users WHERE name = %s\", (request.name,))\n"
 invalid:
 - "def h():\n    uid = request.args.get('id')\n    cur.execute(f'select * from u where id = {uid}')\n"
 - "async def create(request):\n    data = await request.post()\n    q = \"INSERT INTO students (name) VALUES ('\" + data['name'] + \"')\"\n    await cur.execute(q)\n"
 - "from django.views import View\nfrom django.db import connection\n\nclass Search(View):\n    def get(self, request):\n        q = self.request.GET.get('q')\n        with connection.cursor() as c:\n  \
   \          c.execute(\"SELECT * FROM t WHERE name = '\" + q + \"'\")\n"
+- "class UserService(user_pb2_grpc.UserServicer):\n    def Find(self, request, context):\n        cursor.execute(\"SELECT * FROM users WHERE name = '%s'\" % request.name)\n"

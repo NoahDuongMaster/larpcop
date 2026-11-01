@@ -7,3 +7,4 @@ valid:
 invalid:
 - app.get('/u', (req, res) => db.query('select * from u where id = ' + req.query.id));
 - function h(req) { const name = req.body.name; return pool.query(`select * from u where name = '${name}'`); }
+- "function find(call, callback) {\n  db.query(\"SELECT * FROM users WHERE name = '\" + call.request.name + \"'\");\n}\n"

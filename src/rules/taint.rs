@@ -35,6 +35,9 @@ pub struct TaintRule {
     param_decorators: Vec<String>,
     handler_decorators: Option<regex::Regex>,
     resolver_args: bool,
+    handler_classes: Option<regex::Regex>,
+    input_types: Option<regex::Regex>,
+    escape_contexts: bool,
     exclude: globset::GlobSet,
     /// `sink_types`: metavariables whose type the project's language server must confirm.
     typed: typed::Typed,
@@ -63,6 +66,11 @@ impl TaintRule {
             &self.param_decorators,
             self.handler_decorators.as_ref(),
             self.resolver_args,
+        ));
+        out.extend(services::params(
+            f,
+            self.handler_classes.as_ref(),
+            self.input_types.as_ref(),
         ));
         out
     }
@@ -211,6 +219,7 @@ mod build;
 mod callbacks;
 mod constant;
 mod containers;
+mod contexts;
 mod deadcode;
 mod declared;
 mod defs;
@@ -236,6 +245,7 @@ mod resolve;
 mod responds;
 mod returns;
 mod scan;
+mod services;
 pub use scan::FileIndex;
 mod summary;
 mod switches;
@@ -257,6 +267,8 @@ mod tests_kotlin;
 mod tests_methods;
 #[cfg(test)]
 mod tests_ruby;
+#[cfg(test)]
+mod tests_services;
 #[cfg(test)]
 mod tests_support;
 #[cfg(test)]

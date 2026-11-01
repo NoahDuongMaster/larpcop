@@ -12,3 +12,5 @@ invalid:
   \ = '{name}'\");\n        return Ok(users);\n    }\n}\n"
 - "public class UsersController : Controller\n{\n    public IActionResult Find([FromQuery] string email)\n    {\n        _db.Users.FromSqlRaw(\"SELECT * FROM Users WHERE Email = '\" + email + \"'\");\n\
   \        return Ok();\n    }\n}\n"
+- "public class UserService : User.UserBase {\n  public override Task<UserReply> Find(FindRequest request, ServerCallContext context) {\n    var cmd = new SqlCommand(\"SELECT * FROM users WHERE name = '\"\
+  \ + request.Name + \"'\", conn);\n    cmd.ExecuteReader();\n    return null;\n  }\n}\n"

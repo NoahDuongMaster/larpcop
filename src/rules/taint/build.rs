@@ -102,6 +102,19 @@ impl TaintRule {
             param_types: cfg.param_types.clone(),
             param_decorators: cfg.param_decorators.clone(),
             resolver_args: cfg.resolver_args,
+            escape_contexts: cfg.escape_contexts,
+            handler_classes: cfg
+                .handler_classes
+                .as_deref()
+                .map(regex::Regex::new)
+                .transpose()
+                .with_context(|| format!("taint `{}`: handler_classes", cfg.id))?,
+            input_types: cfg
+                .input_types
+                .as_deref()
+                .map(regex::Regex::new)
+                .transpose()
+                .with_context(|| format!("taint `{}`: input_types", cfg.id))?,
             exclude: crate::files::globset(&cfg.exclude)?,
             handler_decorators: cfg
                 .handler_decorators

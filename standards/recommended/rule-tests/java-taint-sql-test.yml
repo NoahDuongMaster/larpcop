@@ -10,6 +10,8 @@ valid:
   \  }\n}\n"
 - "public class T extends HttpServlet {\n  protected void doGet(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String sort = request.getParameter(\"sort\");\n    if (ALLOWED_COLUMNS.contains(sort))\
   \ {\n      stmt.executeQuery(\"SELECT * FROM users ORDER BY \" + sort);\n    }\n  }\n}\n"
+- "class UserService extends UserGrpc.UserImplBase {\n  private Connection conn;\n  public void find(FindRequest req, StreamObserver<User> out) throws Exception {\n    PreparedStatement s = conn.prepareStatement(\"\
+  SELECT * FROM users WHERE name = ?\");\n    s.setString(1, req.getName());\n    s.executeQuery();\n  }\n}\n"
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String name = request.getParameter(\"name\");\n    String\
   \ sql = \"SELECT * FROM users WHERE name = '\" + name + \"'\";\n    statement.executeQuery(sql);\n  }\n}\n"
@@ -18,3 +20,5 @@ invalid:
 - "@RestController\nclass C {\n  @GetMapping(\"/u\")\n  List<User> find(@RequestParam String name) {\n    return em.createQuery(\"from User where name = '\" + name + \"'\").getResultList();\n  }\n}\n"
 - "@RestController\npublic class P {\n  @GetMapping(\"/p\")\n  public List<P> p(@RequestParam String sort) {\n    PExample e = new PExample();\n    e.setOrderByClause(sort);\n    return mapper.selectByExample(e);\n\
   \  }\n}\n"
+- "class UserService extends UserGrpc.UserImplBase {\n  private Connection conn;\n  public void find(FindRequest req, StreamObserver<User> out) throws Exception {\n    conn.createStatement().executeQuery(\"\
+  SELECT * FROM users WHERE name = '\" + req.getName() + \"'\");\n  }\n}\n"

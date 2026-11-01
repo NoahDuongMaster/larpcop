@@ -8,6 +8,11 @@ finding of its category lands in bad code and flagged wrongly when one lands
 in good code; score = found rate - wrongly flagged rate per category.
 
     juliet.py TESTCASES_DIR LARPCOP_JSON SEMGREP_JSON [SEMGREP_JSON ...]
+    juliet.py --stored TESTCASES_DIR LARPCOP_JSON SEMGREP_JSON [...]
+
+`--stored`: the Java XSS cases (CWE80, CWE81, CWE83) whose data comes from a
+database row (`_Servlet_database_`) instead: stored XSS. Selection and the
+rule counted (`java-taint-stored-xss`) were fixed before any tool ran on them.
 """
 import json
 import pathlib
@@ -20,6 +25,8 @@ WEB = re.compile(r"_(QueryString_Web|Params_Get_Web|Get_Cookies_Web|Get_QueryStr
                  r"|getParameter_Servlet|getCookies_Servlet|getQueryString_Servlet)_")
 LARPCOP = {f"{lang}-taint-{c}": c for lang in ("cs", "java")
            for c in ("sql", "shell", "path", "redirect", "xss", "ldap", "xpath")}
+LARPCOP["java-taint-stored-xss"] = "xss"
+STORED = re.compile(r"^CWE(80|81|83)_.*_Servlet_database_")
 CWE = {"89": "sql", "78": "shell", "77": "shell", "22": "path", "23": "path", "36": "path", "73": "path",
        "601": "redirect", "79": "xss", "80": "xss", "90": "ldap", "643": "xpath"}
 METHOD = re.compile(r"^\s*(?:(?:public|private|protected|internal|static|override|virtual|async|final"
@@ -31,12 +38,12 @@ def category(name):
     return next((c for p, c in CATEGORIES.items() if name.startswith(p)), None)
 
 
-def cases(root):
+def cases(root, selected=None):
     """Test case id -> (category, {file: [(line, method)]})."""
     out = {}
     for f in pathlib.Path(root).rglob("*"):
         m, cat = CASE.match(f.name), category(f.name)
-        if not (m and cat and WEB.search(f.name)):
+        if not (m and cat and (selected or WEB).search(f.name)):
             continue
         methods = [(i + 1, mm.group(1)) for i, line in enumerate(f.read_text(errors="replace").splitlines())
                    if (mm := METHOD.match(line))]
@@ -85,10 +92,13 @@ def semgrep(path):
 
 
 def main():
-    all_cases = cases(sys.argv[1])
-    tools = [("larpcop", tally(all_cases, larpcop(sys.argv[2])))]
+    args = sys.argv[1:]
+    stored = args[0] == "--stored"
+    args = args[1:] if stored else args
+    all_cases = cases(args[0], STORED if stored else None)
+    tools = [("larpcop", tally(all_cases, larpcop(args[1])))]
     tools += [(f"Semgrep ({p.rsplit('/', 1)[-1].removesuffix('.json')})", tally(all_cases, semgrep(p)))
-              for p in sys.argv[3:]]
+              for p in args[2:]]
     cats = sorted({c for c, _ in all_cases.values()})
     out = sys.stdout.write
     out("| Category (cases) | " + " | ".join(f"{n}: found / good flagged / score" for n, _ in tools) + " |\n")

@@ -169,6 +169,20 @@ semgrep scan --config "$WORK/p-java.yml" --metrics off --json -o "$OUT/juliet-st
 python3 "$HERE/juliet.py" --stored . "$OUT/juliet-stored-larpcop.json" "$OUT/juliet-stored-semgrep-default.json" \
   "$OUT/juliet-stored-semgrep-java.json" > "$OUT/juliet-java-stored.md"
 
+# Juliet C# stored XSS: the CWE80/81/83 cases whose data comes from a database row.
+if [ ! -d "$WORK/juliet-cs-stored" ]; then
+  (cd "$WORK/juliet-cs/src/testcases" && find CWE80_* CWE81_* CWE83_* -name "*.cs" | grep -E "_Web_Database_" |
+    while read -r f; do mkdir -p "$WORK/juliet-cs-stored/$(dirname "$f")" && cp "$f" "$WORK/juliet-cs-stored/$f"; done)
+  git -C "$WORK/juliet-cs-stored" init -q
+fi
+cd "$WORK/juliet-cs-stored"
+printf "extends: ['%s/standards/recommended']\ndisable: [dependency-vulnerability]\n" "$REPO" > .larpcop.yaml
+"$LARPCOP" check --format json > "$OUT/juliet-cs-stored-larpcop.json" || true
+rm .larpcop.yaml
+semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/juliet-cs-stored-semgrep-default.json" --quiet . || true
+python3 "$HERE/juliet.py" --stored . "$OUT/juliet-cs-stored-larpcop.json" "$OUT/juliet-cs-stored-semgrep-default.json" \
+  > "$OUT/juliet-cs-stored.md"
+
 # java-sec-code (Java/Spring): endpoints labelled by the project's routes and comments.
 cd "$WORK/java-sec-code"
 printf "extends: ['%s/standards/recommended']\ndisable: [dependency-vulnerability]\n" "$REPO" > .larpcop.yaml
@@ -204,4 +218,4 @@ printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
 semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/seeds-semgrep.json" --quiet sast/seeds || true
 python3 "$HERE/seeds.py" "$WORK/vulnerable-node" "$OUT/seeds-larpcop.json" "$OUT/seeds-semgrep.json" > "$OUT/seeds.md"
 
-cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/dvpwa.md" "$OUT/dvws-node.md" "$OUT/govwa.md" "$OUT/railsgoat.md" "$OUT/owasp-benchmark.md" "$OUT/owasp-benchmark-python.md" "$OUT/dvwa.md" "$OUT/juliet-cs.md" "$OUT/juliet-java.md" "$OUT/juliet-java-stored.md" "$OUT/semgrep-kotlin.md" "$OUT/java-sec-code.md" "$OUT/vulnerableapp.md" "$OUT/seeds.md"
+cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/dvpwa.md" "$OUT/dvws-node.md" "$OUT/govwa.md" "$OUT/railsgoat.md" "$OUT/owasp-benchmark.md" "$OUT/owasp-benchmark-python.md" "$OUT/dvwa.md" "$OUT/juliet-cs.md" "$OUT/juliet-java.md" "$OUT/juliet-java-stored.md" "$OUT/juliet-cs-stored.md" "$OUT/semgrep-kotlin.md" "$OUT/java-sec-code.md" "$OUT/vulnerableapp.md" "$OUT/seeds.md"

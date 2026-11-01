@@ -10,9 +10,10 @@ in good code; score = found rate - wrongly flagged rate per category.
     juliet.py TESTCASES_DIR LARPCOP_JSON SEMGREP_JSON [SEMGREP_JSON ...]
     juliet.py --stored TESTCASES_DIR LARPCOP_JSON SEMGREP_JSON [...]
 
-`--stored`: the Java XSS cases (CWE80, CWE81, CWE83) whose data comes from a
-database row (`_Servlet_database_`) instead: stored XSS. Selection and the
-rule counted (`java-taint-stored-xss`) were fixed before any tool ran on them.
+`--stored`: the XSS cases (CWE80, CWE81, CWE83) whose data comes from a
+database row instead: stored XSS. Java `_Servlet_database_` (selection and the
+rule counted, `java-taint-stored-xss`, fixed before any tool ran on them), then
+C# `_Web_Database_` (`cs-taint-stored-xss`, likewise fixed before any run).
 """
 import json
 import pathlib
@@ -26,7 +27,8 @@ WEB = re.compile(r"_(QueryString_Web|Params_Get_Web|Get_Cookies_Web|Get_QueryStr
 LARPCOP = {f"{lang}-taint-{c}": c for lang in ("cs", "java")
            for c in ("sql", "shell", "path", "redirect", "xss", "ldap", "xpath")}
 LARPCOP["java-taint-stored-xss"] = "xss"
-STORED = re.compile(r"^CWE(80|81|83)_.*_Servlet_database_")
+LARPCOP["cs-taint-stored-xss"] = "xss"
+STORED = re.compile(r"^CWE(80|81|83)_.*_(Servlet_database|Web_Database)_")
 CWE = {"89": "sql", "78": "shell", "77": "shell", "22": "path", "23": "path", "36": "path", "73": "path",
        "601": "redirect", "79": "xss", "80": "xss", "90": "ldap", "643": "xpath"}
 METHOD = re.compile(r"^\s*(?:(?:public|private|protected|internal|static|override|virtual|async|final"

@@ -200,6 +200,22 @@ rm .larpcop.yaml
 semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/juliet-c-semgrep-default.json" --quiet . || true
 python3 "$HERE/juliet.py" --c . "$OUT/juliet-c-larpcop.json" "$OUT/juliet-c-semgrep-default.json" > "$OUT/juliet-c.md"
 
+# NIST SARD PHP Vulnerability Test Suite (#103): the cases whose data comes from the request.
+if [ ! -d "$WORK/sard-php-sel" ]; then
+  curl -sfL -o "$WORK/sard-php.zip" \
+    https://samate.nist.gov/SARD/downloads/test-suites/2015-10-27-php-vulnerability-test-suite.zip
+  mkdir -p "$WORK/sard-php" && unzip -q -o "$WORK/sard-php.zip" -d "$WORK/sard-php"
+  python3 "$HERE/sard_php.py" --select "$WORK/sard-php" "$WORK/sard-php-sel"
+  git -C "$WORK/sard-php-sel" init -q
+fi
+cd "$WORK/sard-php-sel"
+printf "extends: ['%s/standards/recommended']\ndisable: [dependency-vulnerability]\n" "$REPO" > .larpcop.yaml
+"$LARPCOP" check --format json > "$OUT/sard-php-larpcop.json" || true
+rm .larpcop.yaml
+semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/sard-php-semgrep-default.json" --quiet . || true
+python3 "$HERE/sard_php.py" "$WORK/sard-php" . "$OUT/sard-php-larpcop.json" "$OUT/sard-php-semgrep-default.json" \
+  > "$OUT/sard-php.md"
+
 # java-sec-code (Java/Spring): endpoints labelled by the project's routes and comments.
 cd "$WORK/java-sec-code"
 printf "extends: ['%s/standards/recommended']\ndisable: [dependency-vulnerability]\n" "$REPO" > .larpcop.yaml

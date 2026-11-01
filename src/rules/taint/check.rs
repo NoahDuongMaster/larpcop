@@ -69,7 +69,9 @@ impl TaintRule {
                 }
                 Reached::Field(left) => {
                     if let Some(c) = class_of(&left) {
-                        stored.entry(c).or_default().insert(left.text().to_string());
+                        let name =
+                            super::entries::entry(&left).unwrap_or_else(|| left.text().to_string());
+                        stored.entry(c).or_default().insert(name);
                     }
                 }
                 _ => {}
@@ -120,7 +122,7 @@ impl TaintRule {
 }
 
 /// The class a node is in (its range), for the fields its methods share.
-fn class_of<D: Doc>(n: &Node<D>) -> Option<(usize, usize)> {
+pub(super) fn class_of<D: Doc>(n: &Node<D>) -> Option<(usize, usize)> {
     let class = n.ancestors().find(|a| {
         matches!(
             a.kind().as_ref(),

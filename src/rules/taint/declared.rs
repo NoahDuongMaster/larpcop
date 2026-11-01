@@ -89,6 +89,9 @@ pub(super) fn declared_type<D: Doc>(at: &Node<D>) -> Option<String> {
 /// The declared type, and whether it was written as a TypeScript-style
 /// annotation (`: T`).
 fn declared<D: Doc>(at: &Node<D>) -> Option<(String, bool)> {
+    if at.kind() == "variable_name" {
+        return super::phptypes::php_type(at).map(|t| (t, false));
+    }
     if !matches!(at.kind().as_ref(), "identifier" | "simple_identifier") {
         return None;
     }

@@ -1,8 +1,19 @@
 id: rb-taint-redirect
 file: app/controllers/users_controller.rb
 valid:
-- "class UsersController < ApplicationController\n  def show\n    redirect_to \"/users/#{params[:id]}\"\n  end\nend\n"
-- "class UsersController < ApplicationController\n  def show\n    redirect_to root_path\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    redirect_to \"/users/#{params[:id]}\"\
+  \n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    redirect_to root_path\n\
+  \  end\nend\n"
+- "class AController < ApplicationController\n  def show\n    @theme = params[:theme]\n\
+  \    redirect_to fallback\n  end\n\n  def fallback\n    case @theme\n    when \"\
+  dark\" then \"/images/dark.svg\"\n    else \"/images/light.svg\"\n    end\n  end\n\
+  end\n"
 invalid:
-- "class UsersController < ApplicationController\n  def show\n    redirect_to params[:return_to]\n  end\nend\n"
-- "class UsersController < ApplicationController\n  def show\n    url = params[:next]\n    redirect_to url, allow_other_host: true\n  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    redirect_to params[:return_to]\n\
+  \  end\nend\n"
+- "class UsersController < ApplicationController\n  def show\n    url = params[:next]\n\
+  \    redirect_to url, allow_other_host: true\n  end\nend\n"
+- "class BController < ApplicationController\n  def show\n    redirect_to target(params[:t])\n\
+  \  end\n\n  def target(t)\n    case t\n    when \"a\" then \"/a\"\n    else t\n\
+  \    end\n  end\nend\n"

@@ -37,11 +37,13 @@ pub struct TaintRule {
     handler_classes: Option<regex::Regex>,
     input_types: Option<regex::Regex>,
     escape_contexts: bool,
+    quote_escapers: Option<(regex::Regex, String)>,
     own_serialization_safe: bool,
     shell_argv: Option<argv::ShellArgv>,
     fixed_routes: routes::FixedRoutes,
     source_types: srctypes::SourceTypes,
     configured: configured::Configured,
+    valued: valued::Valued,
     path_objects: Option<pathobj::PathObjects>,
     html_fragments: bool,
     /// Sanitizers by name, for functions passed by reference (`map(esc)`).
@@ -126,6 +128,7 @@ mod argv;
 mod build;
 mod callbacks;
 mod check;
+mod choices;
 mod configured;
 pub(crate) mod constant;
 mod containers;
@@ -138,6 +141,7 @@ mod entries;
 mod env;
 mod equality;
 mod events;
+mod exits;
 mod fields;
 pub(crate) mod flow;
 mod fragments;
@@ -146,6 +150,7 @@ mod handlers;
 mod higher;
 mod imports;
 mod iteration;
+mod joins;
 mod kotlin;
 mod lambdas;
 mod lists;
@@ -153,10 +158,13 @@ mod loops;
 mod mapping;
 mod membership;
 mod names;
+mod numeric;
 mod origins;
 mod outputs;
 mod pathobj;
 mod paths;
+mod phptypes;
+mod placements;
 mod pointers;
 mod prefix;
 mod prepare;
@@ -224,4 +232,5 @@ mod tests_validators;
 pub mod typed;
 mod unique;
 mod validators;
+mod valued;
 mod walk;

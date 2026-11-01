@@ -56,6 +56,16 @@ impl Resolve {
     }
 }
 
+/// Does every value `n` can hold match `re`, at least one being known?
+pub fn must_hold<D: Doc>(n: &Node<D>, re: &Regex, settings: &Settings) -> bool {
+    let scope = n
+        .ancestors()
+        .find(|a| is_function(a))
+        .unwrap_or_else(|| top(n));
+    let found = values(n, &Env::new(&scope), settings, 0);
+    !found.is_empty() && found.iter().all(|v| re.is_match(v))
+}
+
 /// Can `n` hold a string matching `re`?
 pub fn may_hold<D: Doc>(n: &Node<D>, re: &Regex, settings: &Settings) -> bool {
     let scope = n
@@ -85,7 +95,7 @@ fn values<'a, D: Doc>(
         return vec![v];
     }
     match n.kind().as_ref() {
-        "identifier" | "simple_identifier" => {
+        "identifier" | "simple_identifier" | "variable_name" => {
             let name = n.text();
             if env.writes(&name) {
                 return env

@@ -7,6 +7,7 @@ pub mod macros;
 mod max_lines;
 pub mod metrics;
 mod pattern_fixes;
+pub(crate) mod php_html;
 pub mod secrets;
 mod settings;
 mod taint;

@@ -2,7 +2,7 @@
 //! language and indexed by node kind, regexes, source texts.
 
 use super::{
-    TaintRule, argv, configured, mapping, outputs, pathobj, routes, scan, srctypes, typed,
+    TaintRule, argv, configured, mapping, outputs, pathobj, routes, scan, srctypes, typed, valued,
 };
 use crate::config::TaintConfig;
 use crate::rules::Level;
@@ -105,6 +105,13 @@ impl TaintRule {
             param_decorators: cfg.param_decorators.clone(),
             resolver_args: cfg.resolver_args,
             escape_contexts: cfg.escape_contexts,
+            quote_escapers: cfg
+                .quote_escapers
+                .as_deref()
+                .map(regex::Regex::new)
+                .transpose()
+                .with_context(|| format!("taint `{}`: quote_escapers", cfg.id))?
+                .map(|re| (re, cfg.quote_chars.clone().unwrap_or_else(|| "'\"`".into()))),
             own_serialization_safe: cfg.own_serialization_safe,
             html_fragments: cfg.html_fragments,
             path_objects: cfg
@@ -123,6 +130,7 @@ impl TaintRule {
                 .transpose()?,
             source_types: srctypes::SourceTypes::new(&cfg.id, &cfg.source_types, &cfg.source_text)?,
             configured: configured::Configured::new(&cfg.id, &cfg.sink_configured)?,
+            valued: valued::Valued::new(&cfg.id, &cfg.values)?,
             fixed_routes: routes::FixedRoutes {
                 sources: cfg
                     .fixed_route_sources

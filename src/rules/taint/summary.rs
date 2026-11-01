@@ -9,7 +9,7 @@ use super::kotlin::Part;
 use crate::files::SourceFile;
 use ast_grep_core::{Doc, Node};
 use ast_grep_language::SupportLang;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 pub use super::defs::{functions, param_names};
 
@@ -156,8 +156,11 @@ impl TaintRule {
     ) -> Summaries {
         let defs = index.functions();
         let mut out = known.clone();
+        // Per class: the fields its methods store source data in.
+        let mut fields: HashMap<(usize, usize), HashSet<String>> = HashMap::new();
         for _ in 0..ROUNDS {
             let before = out.clone();
+            let fields_before = fields.clone();
             let mut round = Ctx {
                 sources: ctx.sources.clone(),
                 sanitizers: ctx.sanitizers.clone(),
@@ -172,6 +175,7 @@ impl TaintRule {
                 cleaners: ctx.cleaners.clone(),
                 writes: ctx.writes.clone(),
                 writes_clean: ctx.writes_clean,
+                numbers: ctx.numbers,
             };
             let validating = super::validators::calls(index, &round);
             round.guards.extend(validating);
@@ -179,7 +183,25 @@ impl TaintRule {
             // An interface's or abstract method says nothing of what runs:
             // leaving it out lets `*.run` stand for the one implementation.
             for (name, f, params) in defs.iter().filter(|(_, f, _)| !super::defs::bodiless(f)) {
-                let s = self.summary_of(&round, &params_only, name, f, params, lang, file, hits);
+                let class = super::check::class_of(f);
+                let mine = class
+                    .and_then(|c| fields_before.get(&c))
+                    .cloned()
+                    .unwrap_or_default();
+                let (s, stored) = self.summary_of(
+                    &round,
+                    &params_only,
+                    name,
+                    f,
+                    params,
+                    lang,
+                    file,
+                    hits,
+                    &mine,
+                );
+                if let Some(c) = class {
+                    fields.entry(c).or_default().extend(stored);
+                }
                 out.insert(name.clone(), s);
                 // `render(rows, f)` running `f.apply(row)`: with a cleaning `f`.
                 for (k, p) in params.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
@@ -191,12 +213,12 @@ impl TaintRule {
                         round.with_sanitizers(&runs),
                         params_only.with_sanitizers(&runs),
                     );
-                    let s = self.summary_of(&r, &po, name, f, params, lang, file, hits);
+                    let (s, _) = self.summary_of(&r, &po, name, f, params, lang, file, hits, &mine);
                     out.insert(super::higher::key(name, k), s);
                 }
             }
             // Nothing new reached this round: later rounds would repeat it.
-            if out == before {
+            if out == before && fields == fields_before {
                 break;
             }
         }
@@ -220,6 +242,7 @@ impl Ctx {
             cleaners: self.cleaners.clone(),
             writes: std::sync::Arc::new(self.writes.copies_only()),
             writes_clean: self.writes_clean,
+            numbers: self.numbers,
         }
     }
 }

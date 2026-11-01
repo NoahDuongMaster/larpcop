@@ -11,19 +11,60 @@ valid:
   echo "Hello";
 
   '
-- |
-  <?php
-  $name = $_GET['name'];
-  $html .= '<pre>Hello ' . htmlspecialchars($name) . '</pre>';
-- |
-  <?php
-  $id = $_GET['id'];
-  $query = "SELECT first_name FROM users WHERE user_id = '" . intval($id) . "'";
-  $label = "Hello " . $_GET['name'];
-- |
-  <?php
-  $source = file_get_contents("docs/" . basename($_GET['page']) . ".php");
+- '<?php
+
+  $name = $_GET[''name''];
+
+  $html .= ''<pre>Hello '' . htmlspecialchars($name) . ''</pre>'';
+
+  '
+- '<?php
+
+  $id = $_GET[''id''];
+
+  $query = "SELECT first_name FROM users WHERE user_id = ''" . intval($id) . "''";
+
+  $label = "Hello " . $_GET[''name''];
+
+  '
+- '<?php
+
+  $source = file_get_contents("docs/" . basename($_GET[''page'']) . ".php");
+
   $html = "<div id=\"code\">" . highlight_string($source, true) . "</div>";
+
+  '
+- '<p><?= htmlspecialchars($_GET["q"]) ?></p>
+
+  <div class="<?= htmlspecialchars($_GET["c"]) ?>"></div>
+
+  '
+- '<?php
+
+  $t = $_GET["t"];
+
+  $t = $t == "a" ? "a" : "b";
+
+  echo $t;
+
+  '
+- "<?php\n$t = $_GET[\"t\"];\nif (settype($t, \"integer\")) {\n  $t = $t;\n} else\
+  \ {\n  $t = 0;\n}\necho $t;\n"
+- '<p><?= filter_var($_GET["q"], FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?></p>
+
+  '
+- '<?php
+
+  $id = $_GET["id"];
+
+  $r = mysqli_query($db, "SELECT name FROM t WHERE id = ''" . mysqli_real_escape_string($db,
+  $id) . "''");
+
+  $row = mysqli_fetch_assoc($r);
+
+  echo "<p>" . $row["name"] . "</p>";
+
+  '
 invalid:
 - '<?php
 
@@ -37,12 +78,40 @@ invalid:
   echo $html;
 
   '
-- |
-  <?php
-  if (array_key_exists("name", $_GET) && $_GET['name'] != NULL) {
-      $html .= '<pre>Hello ' . $_GET['name'] . '</pre>';
-  }
-- |
-  <?php
-  $name = str_replace('<script>', '', $_GET['name']);
+- "<?php\nif (array_key_exists(\"name\", $_GET) && $_GET['name'] != NULL) {\n    $html\
+  \ .= '<pre>Hello ' . $_GET['name'] . '</pre>';\n}\n"
+- '<?php
+
+  $name = str_replace(''<script>'', '''', $_GET[''name'']);
+
   $html .= "<pre>Hello {$name}</pre>";
+
+  '
+- '<script>
+
+  var q = ''<?php echo htmlspecialchars($_GET["q"], ENT_QUOTES); ?>'';
+
+  </script>
+
+  '
+- '<style>
+
+  <?php
+
+  $c = htmlspecialchars($_GET["c"]);
+
+  echo "body { color: " . $c . "; }";
+
+  ?>
+
+  </style>
+
+  '
+- '<div class=<?= htmlspecialchars($_GET["c"]) ?>></div>
+
+  '
+- "<?php\nclass In {\n  function __construct() { $this->v = $_GET[\"v\"]; }\n  function\
+  \ get() { return $this->v; }\n}\n$i = new In();\necho $i->get();\n"
+- '<div onclick="go(''<?= filter_var($_GET["q"], FILTER_SANITIZE_SPECIAL_CHARS) ?>'')"></div>
+
+  '

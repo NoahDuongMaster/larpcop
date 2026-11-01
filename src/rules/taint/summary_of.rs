@@ -23,7 +23,8 @@ impl TaintRule {
         lang: SupportLang,
         file: &SourceFile,
         hits: &Hits<'a, D>,
-    ) -> Summary {
+        fields: &HashSet<String>,
+    ) -> (Summary, Vec<String>) {
         let own = |n: &Node<'a, D>| self.own_names(n);
         let mut s = Summary {
             method: super::defs::class_of(f).is_some(),
@@ -84,14 +85,26 @@ impl TaintRule {
         }
         s.statics.dedup_by(|a, b| a.0 == b.0);
         s.validates = super::validators::validated(f, params, &round.guards);
-        round.run(f, own(f), hits, &own, &mut |r| {
-            if let Reached::Return(_) = r {
-                s.returns_source = true;
+        // The class's fields another method stored source data in
+        // (`$this->input = $_GET[…]` in the constructor) start tainted.
+        let mut start = own(f);
+        start.extend(
+            fields
+                .iter()
+                .filter(|x| x.contains('.') || !super::fields::declares(f, x))
+                .cloned(),
+        );
+        let mut stored = Vec::new();
+        round.run(f, start, hits, &own, &mut |r| match r {
+            Reached::Return(_) => s.returns_source = true,
+            Reached::Field(left) => {
+                stored.push(super::entries::entry(&left).unwrap_or_else(|| left.text().to_string()))
             }
+            _ => {}
         });
         s.sinks.sort();
         s.sinks.dedup_by_key(|(i, _)| *i);
-        s
+        (s, stored)
     }
 
     fn into<D: Doc>(&self, name: &str, arg: &Node<D>, rel: &str) -> String {

@@ -34,10 +34,14 @@ pub(crate) fn eval<D: Doc>(n: &Node<D>, env: &Env<D>, depth: usize) -> Option<Va
         }
         "true" => Some(Value::Bool(true)),
         "false" => Some(Value::Bool(false)),
-        "string" | "string_literal" | "character_literal" | "interpreted_string_literal" => {
-            string(n)
+        "string"
+        | "string_literal"
+        | "character_literal"
+        | "interpreted_string_literal"
+        | "encapsed_string" => string(n),
+        "identifier" | "simple_identifier" | "variable_name" => {
+            env.value(&n.text(), n.range().start, depth)
         }
-        "identifier" | "simple_identifier" => env.value(&n.text(), n.range().start, depth),
         "not_operator" => not(eval(&n.part("argument")?, env, depth)?),
         "unary_operator" | "unary_expression" | "prefix_unary_expression" => {
             let operand = n
@@ -153,11 +157,19 @@ fn char_at(s: &str, i: i64) -> Option<Value> {
 
 /// A string or character literal without interpolation: its text.
 fn string<D: Doc>(n: &Node<D>) -> Option<Value> {
-    if n.dfs()
-        .any(|c| c.kind() == "interpolation" || c.kind() == "template_substitution")
-    {
+    if n.dfs().any(|c| {
+        matches!(
+            c.kind().as_ref(),
+            "interpolation" | "template_substitution" | "variable_name" | "dynamic_variable_name"
+        ) || (c.kind().contains("expression") && c.range() != n.range())
+    }) {
         return None;
     }
+    // PHP and Ruby keep an unknown escape as written (`'/\W/'` is `/\W/`).
+    let literal = n.kind() == "encapsed_string"
+        || (n.kind() == "string"
+            && n.children().any(|c| c.kind() == "string_content")
+            && !n.children().any(|c| c.kind() == "string_start"));
     let text = n.text();
     let body = text.trim_start_matches(|c: char| c.is_ascii_alphabetic());
     let quote = if body.starts_with("\"\"\"") || body.starts_with("'''") {
@@ -175,6 +187,10 @@ fn string<D: Doc>(n: &Node<D>) -> Option<Value> {
         if c == '\\' {
             match chars.next()? {
                 c @ ('\'' | '"' | '\\') => out.push(c),
+                c if literal => {
+                    out.push('\\');
+                    out.push(c);
+                }
                 _ => return None,
             }
         } else {

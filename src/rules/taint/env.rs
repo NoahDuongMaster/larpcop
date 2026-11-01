@@ -36,6 +36,13 @@ const LOOP_KINDS: [&str; 8] = [
 ];
 
 impl<'a, D: Doc> Env<'a, D> {
+    /// No local names: literals only.
+    pub(crate) fn empty() -> Self {
+        Env {
+            writes: HashMap::new(),
+        }
+    }
+
     pub fn new(scope: &Node<'a, D>) -> Self {
         let mut env = Env {
             writes: HashMap::new(),
@@ -51,7 +58,10 @@ impl<'a, D: Doc> Env<'a, D> {
             }
             let kind = c.kind();
             if let Some((left, right)) = super::flow::assignment(&c)
-                && matches!(left.kind().as_ref(), "identifier" | "simple_identifier")
+                && matches!(
+                    left.kind().as_ref(),
+                    "identifier" | "simple_identifier" | "variable_name"
+                )
             {
                 let value = Some(right).filter(|v| {
                     matches!(
@@ -65,7 +75,9 @@ impl<'a, D: Doc> Env<'a, D> {
                 let looping = super::flow::LOOPS.contains(&kind.as_ref());
                 self.push(&left.text(), c.range().end, value, maybe || looping, loops);
             } else if (kind == "update_expression" || kind == "postfix_unary_expression")
-                && let Some(name) = c.children().find(|x| x.kind() == "identifier")
+                && let Some(name) = c
+                    .children()
+                    .find(|x| x.kind() == "identifier" || x.kind() == "variable_name")
             {
                 self.push(&name.text(), c.range().end, None, true, loops);
             }

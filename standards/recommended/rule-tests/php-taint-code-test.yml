@@ -6,6 +6,16 @@ valid:
   eval("return 1 + 1;");
 
   '
+- '<?php
+
+  $s = preg_replace("/[^a-z]/", "", $_GET["s"]);
+
+  '
+- '<?php
+
+  eval("\$name = ''" . addslashes($_GET["n"]) . "'';");
+
+  '
 invalid:
 - '<?php
 
@@ -17,5 +27,27 @@ invalid:
   $f = $_GET["fn"];
 
   call_user_func($f, 1);
+
+  '
+- '<?php
+
+  $s = preg_replace($_GET["p"], "", "x");
+
+  '
+- '<?php
+
+  $s = preg_replace("/(.*)/e", $_GET["r"], "x");
+
+  '
+- '<?php
+
+  eval("\$name = \"" . addslashes($_GET["n"]) . "\";");
+
+  '
+- '<?php
+
+  $v = addslashes($_GET["v"]);
+
+  eval("return " . $v . ";");
 
   '

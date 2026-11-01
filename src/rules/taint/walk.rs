@@ -33,11 +33,23 @@ impl Ctx {
         let mut origins = super::origins::Origins::default();
         // C `p = &data`: `p` and `data` are one place.
         let pointers = super::pointers::groups(&events);
+        // `if` nodes whose every branch assigns these names, and the names
+        // an assignment inside tainted (joins.rs).
+        let mut joined: Vec<(std::ops::Range<usize>, HashSet<String>, HashSet<String>)> =
+            Vec::new();
         for (at, e) in events.iter() {
             super::pointers::spread(&pointers, &mut names);
             until.retain(|(end, name)| {
                 let over = *end <= *at;
-                let kept = settled.iter().any(|(e, s)| e == end && s.contains(name));
+                let both = |(r, set, dirty): &(
+                    std::ops::Range<usize>,
+                    HashSet<String>,
+                    HashSet<String>,
+                )| {
+                    r.start < *end && *end <= r.end && set.contains(name) && !dirty.contains(name)
+                };
+                let kept = settled.iter().any(|(e, s)| e == end && s.contains(name))
+                    || joined.iter().any(both);
                 if over && !kept {
                     names.insert(name.clone());
                 }
@@ -61,8 +73,12 @@ impl Ctx {
                 // The other path proved these safe: a clean value assigned in
                 // the branch stays (`if (!ok(x)) x = fallback;`).
                 Event::Settle(end, safe) => settled.push((*end, safe.clone())),
+                Event::Both(range, set) => {
+                    joined.push((range.clone(), set.clone(), HashSet::new()))
+                }
                 Event::Assign(left, right, branch, true) => {
                     if self.tainted(right, &names) {
+                        mark(&mut joined, *at, &left.text());
                         names.insert(left.text().to_string());
                         on(Seen::Reached(Reached::Field(left.clone())));
                     } else if names.remove(left.text().as_ref())
@@ -86,7 +102,15 @@ impl Ctx {
                             prefixed.remove(&name);
                         }
                     }
-                    let tainted = !safe_start && self.tainted(right, &names);
+                    // PHP `$t += 0`: a number, whatever `$t` held.
+                    let numeric = self.numbers
+                        && left.parent().is_some_and(|p| {
+                            p.kind() == "augmented_assignment_expression"
+                                && super::numeric::arithmetic(&p)
+                        });
+                    let appended = appended && !numeric;
+                    let branch = if numeric { &None } else { branch };
+                    let tainted = !numeric && !safe_start && self.tainted(right, &names);
                     // Built from tainted names only, or from a source itself.
                     let from = (tainted && !self.tainted(right, &HashSet::new())).then(|| {
                         let used = super::guards::names(right);
@@ -102,6 +126,10 @@ impl Ctx {
                     // `m['k'] = v`: that entry only.
                     if let Some(entry) = super::entries::entry(left) {
                         if tainted {
+                            // `$this->input[1] = …`: an entry of an own field.
+                            if super::fields::is_field(&left.child(0).unwrap_or(left.clone())) {
+                                on(Seen::Reached(Reached::Field(left.clone())));
+                            }
                             names.insert(entry);
                         } else if names.remove(&entry)
                             && let Some(end) = branch
@@ -121,6 +149,7 @@ impl Ctx {
                                 from.clone(),
                                 adds && names.contains(v.text().as_ref()),
                             );
+                            mark(&mut joined, *at, &v.text());
                             names.insert(v.text().to_string());
                         } else if NAMES.contains(&left.kind().as_ref())
                             && names.remove(v.text().as_ref())
@@ -236,5 +265,19 @@ impl Ctx {
             .iter()
             .any(|s| s.start <= r.start && r.end <= s.end)
             || super::prefix::leading(value).is_some_and(|start| safe.is_match(&start))
+    }
+}
+
+/// An assignment at `at` tainted `name`: inside an `if` whose branches all
+/// assign it, the name is no longer clean whatever the branches end with.
+fn mark(
+    joined: &mut [(std::ops::Range<usize>, HashSet<String>, HashSet<String>)],
+    at: usize,
+    name: &str,
+) {
+    for (r, set, dirty) in joined.iter_mut() {
+        if r.contains(&at) && set.contains(name) {
+            dirty.insert(name.to_string());
+        }
     }
 }

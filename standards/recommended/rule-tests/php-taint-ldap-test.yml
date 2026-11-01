@@ -8,11 +8,25 @@ valid:
   $r = ldap_search($conn, "ou=people,dc=x", "(uid=$u)");
 
   '
+- '<?php
+
+  $n = preg_replace("/[^a-zA-Z0-9 _-]/", "", $_GET["n"]);
+
+  ldap_search($ds, "o=x", "(cn=" . $n . ")");
+
+  '
 invalid:
 - '<?php
 
   $u = $_GET["user"];
 
   $r = ldap_search($conn, "ou=people,dc=x", "(uid=" . $u . ")");
+
+  '
+- '<?php
+
+  $n = addslashes($_GET["n"]);
+
+  ldap_search($ds, "o=x", "(cn=" . $n . ")");
 
   '

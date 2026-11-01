@@ -127,8 +127,15 @@ fn constructions<D: Doc>(f: &Node<D>) -> HashMap<String, Option<String>> {
         let Some((left, right)) = super::flow::assignment(&n) else {
             continue;
         };
+        // PHP `new Input()` names the class in an unnamed child.
         let class = (right.kind() == "object_creation_expression")
-            .then(|| right.part("type"))
+            .then(|| {
+                right.part("type").or_else(|| {
+                    right
+                        .children()
+                        .find(|c| matches!(c.kind().as_ref(), "name" | "qualified_name"))
+                })
+            })
             .flatten()
             .and_then(|t| {
                 let ty = t.text();

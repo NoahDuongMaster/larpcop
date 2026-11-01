@@ -35,6 +35,8 @@ pub(super) enum Event<'a, D: Doc> {
     Restore,
     /// Names whose clean value from the `if` ending there outlives it.
     Settle(usize, HashSet<String>),
+    /// Every branch of this `if` assigns these names (joins.rs).
+    Both(std::ops::Range<usize>, HashSet<String>),
 }
 
 /// A scope's events, by position.
@@ -129,6 +131,9 @@ impl<'a, D: Doc> Hits<'a, D> {
                 Shape::Return(n) => Event::Return(n.clone()),
                 Shape::Nested(n) => Event::Nested(n.clone()),
                 Shape::If(n) => {
+                    if let Some(names) = super::joins::both(n) {
+                        events.push((n.range().start, Event::Both(n.range(), names)));
+                    }
                     for guard in super::guards::of(n, guards) {
                         match guard {
                             Guard::After(at, names) => events.push((at, Event::Clean(names))),

@@ -1,11 +1,13 @@
-//! HTML escaping protects element text and quoted attribute values only.
-//! An escaped value placed in an unquoted attribute (`<img src=%s>`: a space
-//! starts a new attribute, `onerror=…`), an event handler (`onclick="…"`), a
-//! `<script>`/`<style>` block, or at the start of a URL attribute (`href="…"`:
-//! `javascript:` needs no escaped character) is not made safe by it. The
+//! HTML escaping protects element text, comments and quoted attribute values
+//! only. An escaped value placed in an unquoted attribute (`<img src=%s>`: a
+//! space starts a new attribute, `onerror=…`), a tag or attribute name, an
+//! event handler (`onclick="…"`), a `style` attribute, a `<script>`/`<style>`
+//! block, or at the start of a URL attribute (`href="…"`: `javascript:`
+//! needs no escaped character) is not made safe by it. The
 //! text before the value is read from the concatenation, format string
 //! (through local constants: `fmt = "<img src=%s>"; format(fmt, esc(x))`)
-//! or template it is part of.
+//! or template it is part of, and for PHP from the page's HTML before the
+//! `echo` (`<script>…<?= htmlspecialchars($x) ?>`, see php_html.rs).
 
 use super::constant::{Env, Value, eval};
 use super::kotlin::Part;
@@ -18,6 +20,8 @@ static PLACEHOLDER: LazyLock<regex::Regex> = LazyLock::new(|| {
 static HANDLER: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r#"\son[a-z]+\s*=\s*("[^"]*|'[^']*|[^\s"'>]*)$"#).expect("regex")
 });
+static STYLE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r#"\sstyle\s*=\s*("[^"]*|'[^']*)$"#).expect("regex"));
 static URL_START: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r#"\s(href|action|formaction|xlink:href)\s*=\s*["']?$"#).expect("regex")
 });
@@ -54,18 +58,15 @@ static OTHER_ESCAPER: LazyLock<regex::Regex> = LazyLock::new(|| {
 /// Is `call` an HTML (element text) escaper: `escapeHtml4`, `htmlEscape`,
 /// `encodeForHTML`, `html.escape`, not `encodeForHTMLAttribute`?
 pub(super) fn html_escaper<D: Doc>(call: &Node<D>) -> bool {
-    super::summary::called_name(call)
-        .is_some_and(|n| HTML_ESCAPER.is_match(&n) && !OTHER_ESCAPER.is_match(&n))
-}
-
-/// Is `escaped` (an HTML-escaping call) placed where HTML escaping does not
-/// protect?
-pub(super) fn misplaced<'a, D: Doc>(escaped: &Node<'a, D>, env: &Env<'a, D>) -> bool {
-    prefix(escaped, env).is_some_and(|p| unsafe_context(&p.to_lowercase()))
+    super::summary::called_name(call).is_some_and(|n| {
+        (HTML_ESCAPER.is_match(&n) && !OTHER_ESCAPER.is_match(&n))
+            // PHP `filter_var($x, FILTER_SANITIZE_SPECIAL_CHARS)`.
+            || (n == "filter_var" && call.text().contains("SPECIAL_CHARS"))
+    })
 }
 
 /// The text before the value in the string it is put in, as far as known.
-fn prefix<'a, D: Doc>(value: &Node<'a, D>, env: &Env<'a, D>) -> Option<String> {
+pub(super) fn prefix<'a, D: Doc>(value: &Node<'a, D>, env: &Env<'a, D>) -> Option<String> {
     let mut cur = value.clone();
     for _ in 0..8 {
         let parent = cur.parent()?;
@@ -80,7 +81,7 @@ fn prefix<'a, D: Doc>(value: &Node<'a, D>, env: &Env<'a, D>) -> Option<String> {
                     return before_placeholder(&text(&left, env)?, index_in(&right, &cur));
                 }
                 if right.range() == cur.range() && matches!(op.as_str(), "+" | ".") {
-                    return Some(pieces(&left, env));
+                    return Some(page(&parent) + &pieces(&left, env));
                 }
             }
             "argument_list" | "arguments" | "value_arguments" => {
@@ -89,14 +90,46 @@ fn prefix<'a, D: Doc>(value: &Node<'a, D>, env: &Env<'a, D>) -> Option<String> {
             }
             k if TEMPLATES.contains(&k) => {
                 let start = parent.range().start;
-                return Some(parent.text()[..cur.range().start.checked_sub(start)?].to_string());
+                let before = &parent.text()[..cur.range().start.checked_sub(start)?];
+                // Without the literal's own opening quote (`"…`, `f"…`, `"""…`).
+                let body = before
+                    .trim_start_matches(|c: char| c.is_ascii_alphabetic() || c == '$' || c == '@');
+                let body = ["\"\"\"", "'''", "\"", "'", "`"]
+                    .iter()
+                    .find_map(|q| body.strip_prefix(q))
+                    .unwrap_or(body);
+                return Some(page(&parent) + body);
             }
+            "echo_statement" | "print_intrinsic" => return Some(page(&cur)),
             _ if kind.contains("interpolation") || kind.contains("substitution") => {}
             _ => return None,
         }
         cur = parent;
     }
     None
+}
+
+/// PHP: the page's HTML before the `echo` that `n` reaches through
+/// concatenations and strings only.
+fn page<D: Doc>(n: &Node<D>) -> String {
+    let mut cur = n.clone();
+    for _ in 0..16 {
+        let Some(p) = cur.parent() else { break };
+        let kind = p.kind();
+        if kind == "echo_statement" || kind == "print_intrinsic" {
+            let root = p.ancestors().last().unwrap_or_else(|| p.clone());
+            let at = p.range().start - root.range().start;
+            return crate::rules::php_html::page_before(&root.text(), at);
+        }
+        let through = CONCATS.contains(&kind.as_ref())
+            || TEMPLATES.contains(&kind.as_ref())
+            || kind == "parenthesized_expression";
+        if !through {
+            break;
+        }
+        cur = p;
+    }
+    String::new()
 }
 
 /// `String.format(fmt, a, esc(x))`, `fmt.Sprintf(…)`, `"…".format(…)`: the
@@ -181,7 +214,7 @@ fn operator<D: Doc>(n: &Node<D>, l: &Node<D>, r: &Node<D>) -> String {
 }
 
 /// Does lowercased HTML `before` end where escaping does not protect?
-fn unsafe_context(before: &str) -> bool {
+pub(super) fn unsafe_context(before: &str) -> bool {
     let open = |tag: &str| {
         before
             .rfind(&format!("<{tag}"))
@@ -197,7 +230,27 @@ fn unsafe_context(before: &str) -> bool {
         return false;
     }
     let tag = &before[lt..];
-    tag.trim_end().ends_with('=') || HANDLER.is_match(tag) || URL_START.is_match(tag)
+    // `<!-- … `: an escaped `>` cannot end the comment.
+    if tag.starts_with("<!--") {
+        return false;
+    }
+    // A tag or attribute name, an unquoted value: `onmouseover=alert(1)`
+    // needs no escaped character. A quoted value protects, unless it is a
+    // handler, a URL or a style.
+    !quoted_value(tag) || HANDLER.is_match(tag) || URL_START.is_match(tag) || STYLE.is_match(tag)
+}
+
+/// Does the open tag `tag` end inside a quoted attribute value?
+fn quoted_value(tag: &str) -> bool {
+    let mut quote = None;
+    for c in tag.chars() {
+        match quote {
+            None if c == '"' || c == '\'' => quote = Some(c),
+            Some(q) if c == q => quote = None,
+            _ => {}
+        }
+    }
+    quote.is_some()
 }
 
 #[cfg(test)]
@@ -214,5 +267,11 @@ mod tests {
         assert!(!unsafe_context("<p>hello "));
         assert!(!unsafe_context("<img alt=\""));
         assert!(!unsafe_context("<script>x</script><p>"));
+        assert!(unsafe_context("<div "));
+        assert!(unsafe_context("<"));
+        assert!(unsafe_context("<div title=\"a\" "));
+        assert!(unsafe_context("<div style=\"color: "));
+        assert!(!unsafe_context("<!-- note: "));
+        assert!(!unsafe_context("<input value='"));
     }
 }

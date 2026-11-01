@@ -20,8 +20,13 @@ static DEFINE: LazyLock<Regex> = LazyLock::new(|| {
 /// Alias chains followed at most this deep (`EXECL` → `_execl`).
 const DEPTH: usize = 5;
 
-/// The text to parse: `content` with renaming macros applied, for C and C++.
+/// The text to parse: `content` with renaming macros applied, for C and C++;
+/// for PHP, its code without the HTML around it.
 pub fn expand(lang: SupportLang, content: &str) -> Cow<'_, str> {
+    // PHP: the HTML around the code blanked (php_html.rs).
+    if lang == SupportLang::Php {
+        return super::php_html::code(content);
+    }
     if !matches!(lang, SupportLang::C | SupportLang::Cpp) || !content.contains("define") {
         return Cow::Borrowed(content);
     }

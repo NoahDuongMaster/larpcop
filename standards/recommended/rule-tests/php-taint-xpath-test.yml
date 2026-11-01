@@ -8,6 +8,24 @@ valid:
   $n = $xp->query("//user[@id=" . intval($_GET["id"]) . "]");
 
   '
+- '<?php
+
+  $n = htmlspecialchars($_GET["n"], ENT_QUOTES);
+
+  $xml->xpath("//user[name=''" . $n . "'']");
+
+  '
+- '<?php
+
+  $db = new SQLite3("a.db");
+
+  $db->query("SELECT * FROM t WHERE id = " . intval($_GET["id"]));
+
+  $r = $db->query("SELECT 1");
+
+  $x = $conn->query($_GET["q"]);
+
+  '
 invalid:
 - '<?php
 
@@ -16,3 +34,26 @@ invalid:
   $n = $xp->query("//user[name=''" . $_GET["name"] . "'']");
 
   '
+- '<?php
+
+  $n = addslashes($_GET["n"]);
+
+  $xml->xpath("//user[name=''" . $n . "'']");
+
+  '
+- '<?php
+
+  $n = htmlspecialchars($_GET["n"], ENT_QUOTES);
+
+  $xml->xpath("//user[id=" . $n . "]");
+
+  '
+- '<?php
+
+  $xp = new DOMXPath($doc);
+
+  $xp->query("//user[@id=''" . $_GET["id"] . "'']");
+
+  '
+- "<?php\nfunction find(\\DOMXPath $xp) {\n  return $xp->evaluate(\"//user[name='\"\
+  \ . $_POST[\"n\"] . \"']\");\n}\n"

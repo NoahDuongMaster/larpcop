@@ -93,6 +93,7 @@ impl Ctx {
             cleaners: self.cleaners.clone(),
             writes: self.writes.clone(),
             writes_clean: self.writes_clean,
+            numbers: self.numbers,
         }
     }
 }

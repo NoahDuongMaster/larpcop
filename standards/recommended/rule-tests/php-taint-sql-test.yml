@@ -15,6 +15,29 @@ valid:
   $st->execute([$_POST["name"]]);
 
   '
+- '<?php
+
+  $n = mysqli_real_escape_string($db, $_GET["n"]);
+
+  mysqli_query($db, "SELECT * FROM t WHERE name = ''" . $n . "''");
+
+  '
+- '<?php
+
+  $q = sprintf("SELECT * FROM t WHERE id = %d", $_GET["id"]);
+
+  mysqli_query($db, $q);
+
+  '
+- "<?php\n$id = $_GET[\"id\"];\nif (preg_match(\"/^[0-9]+$/\", $id) == 1) {\n  mysqli_query($db,\
+  \ \"SELECT * FROM t WHERE id = \" . $id);\n}\n"
+- '<?php
+
+  $u = mysqli_real_escape_string($db, $_GET["u"]);
+
+  mysqli_query($db, "SELECT * FROM t WHERE name = ''$u''");
+
+  '
 invalid:
 - '<?php
 
@@ -30,4 +53,26 @@ invalid:
   $rows = DB::select("SELECT * FROM users WHERE name = ''" . $name . "''");
 
   '
-- "<?php\nfunction find($pdo) {\n  $q = \"SELECT * FROM t WHERE c = \" . $_REQUEST[\"c\"];\n  return $pdo->query($q);\n}\n"
+- "<?php\nfunction find($pdo) {\n  $q = \"SELECT * FROM t WHERE c = \" . $_REQUEST[\"\
+  c\"];\n  return $pdo->query($q);\n}\n"
+- '<?php
+
+  $id = mysqli_real_escape_string($db, $_GET["id"]);
+
+  mysqli_query($db, "SELECT * FROM t WHERE id = " . $id);
+
+  '
+- '<?php
+
+  $q = sprintf("SELECT * FROM t WHERE name = ''%s''", $_GET["n"]);
+
+  mysqli_query($db, $q);
+
+  '
+- '<?php
+
+  $t = mysqli_real_escape_string($db, $_GET["t"]);
+
+  mysqli_query($db, "SELECT * FROM t WHERE id = $t");
+
+  '

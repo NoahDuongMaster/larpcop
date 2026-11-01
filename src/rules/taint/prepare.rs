@@ -28,12 +28,12 @@ impl TaintRule {
         depth: usize,
     ) -> Option<(Ctx, Hits<'a, D>)> {
         let [sources, sinks, sanitizers, guards, rejects] = self.patterns(lang)?.scan(index);
+        let [sinks, sanitizers, guards] = [sinks, sanitizers, guards].map(|m| self.valued.keep(m));
         let plain = |ms: Vec<(NodeMatch<'a, D>, usize)>| -> Vec<NodeMatch<'a, D>> {
             ms.into_iter().map(|(m, _)| m).collect()
         };
         let (sources, sinks, sanitizers) = (plain(sources), plain(sinks), plain(sanitizers));
-        // A bare-name source (`params`) is not one where the function has a
-        // parameter of that name (`def error_messages_for(*params)`).
+        // A bare-name source (`params`) is not one in a function with a parameter so named.
         let sources: Vec<NodeMatch<'a, D>> = sources
             .into_iter()
             .filter(|m| {
@@ -59,11 +59,7 @@ impl TaintRule {
         // An HTML escaper in an attribute without quotes, a handler or a
         // script does not clean.
         let misplaced = |n: &Node<'a, D>| {
-            self.escape_contexts
-                && super::contexts::html_escaper(n)
-                && n.ancestors()
-                    .find(|a| crate::rules::complexity::is_function(a))
-                    .is_some_and(|f| super::contexts::misplaced(n, &super::constant::Env::new(&f)))
+            super::placements::misplaced(n, self.escape_contexts, self.quote_escapers.as_ref())
         };
         let cleaned: Vec<Range<usize>> = sanitizers
             .iter()
@@ -141,8 +137,7 @@ impl TaintRule {
             }
         }
         hits.extend(self.extra_sinks(index));
-        // Overlapping sink patterns (and Go's wrapped patterns) find a call more
-        // than once; the match with the fewest type constraints is kept.
+        // Overlapping sink patterns (and Go's wrapped ones) find a call more than once: keep the match with the fewest type constraints.
         hits.sort_by_key(|(at, n, typed)| (*at, n.range().start, n.range().end, typed.len()));
         hits.dedup_by_key(|(at, node, _)| (*at, node.range().start, node.range().end));
         let hits = Hits::new(hits, &index.root, index.skeletons.clone());
@@ -168,6 +163,7 @@ impl TaintRule {
             cleaners: self.cleaners.clone(),
             writes: self.writes.clone(),
             writes_clean: self.own_serialization_safe,
+            numbers: lang == SupportLang::Php,
         };
         let known = summary::with_unique_methods(self.imported_summaries(lang, index, file, depth));
         // The file being checked (not an import, whose callers need its

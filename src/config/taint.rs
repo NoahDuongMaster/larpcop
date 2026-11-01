@@ -76,6 +76,15 @@ pub struct TaintConfig {
     /// attribute, an event handler, a script or a URL attribute.
     #[serde(default)]
     pub escape_contexts: bool,
+    /// Regex over the text of sanitizer calls that escape quotes only
+    /// (`mysqli_real_escape_string(`): they clean a value placed inside a
+    /// quoted string, not one placed outside (see placements.rs).
+    #[serde(default)]
+    pub quote_escapers: Option<String>,
+    /// The quotes `quote_escapers` protect inside (default `'"` and
+    /// backquote): `'` alone for PHP code, where `"…"` interpolates `{$…}`.
+    #[serde(default)]
+    pub quote_chars: Option<String>,
     /// Deserialization: bytes the program serialized itself
     /// (`out.writeObject(x)`) hold `x`'s content, not a structure the
     /// sender chose, so a stream write does not carry taint for this rule.
@@ -112,6 +121,10 @@ pub struct TaintConfig {
     /// (declared, or `new T(…)` at the sink).
     #[serde(default)]
     pub strict_sink_types: std::collections::BTreeMap<String, String>,
+    /// Guard or sanitizer metavariable → regex every value it can hold must
+    /// match (see valued.rs): `ALLOW: '^/\^\[a-z]*\$/$'`.
+    #[serde(default)]
+    pub values: std::collections::BTreeMap<String, String>,
     /// Sink metavariable → regex over how the object it names is set up in
     /// the file (see configured.rs).
     #[serde(default)]

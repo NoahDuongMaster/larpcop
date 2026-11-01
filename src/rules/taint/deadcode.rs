@@ -278,9 +278,10 @@ impl Branches {
 pub(super) fn sides<'a, D: Doc>(
     n: &Node<'a, D>,
 ) -> Option<(Node<'a, D>, Node<'a, D>, Node<'a, D>)> {
+    // PHP names the first result `body`.
     if let (Some(c), Some(a), Some(b)) = (
         n.part("condition"),
-        n.part("consequence"),
+        n.part("consequence").or_else(|| n.part("body")),
         n.part("alternative"),
     ) {
         return Some((c, a, b));

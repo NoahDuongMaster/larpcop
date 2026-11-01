@@ -22,35 +22,6 @@ pub(super) const IFS: [&str; 6] = [
     "if_modifier",
     "unless_modifier",
 ];
-/// Calls that end the request: PHP `die()`, Go `panic()`, Flask `abort()`.
-const EXIT_CALLS: [&str; 14] = [
-    "raise ",
-    "raise(",
-    "fail ",
-    "halt",
-    "die(",
-    "exit(",
-    "panic(",
-    "abort(",
-    "sys.exit(",
-    "os.Exit(",
-    "process.exit(",
-    "log.Fatal(",
-    "log.Fatalf(",
-    "log.Fatalln(",
-];
-const EXITS: [&str; 9] = [
-    "exit_statement",
-    // Kotlin `return`, `throw`, `break`, `continue`.
-    "jump_expression",
-    "return",
-    "return_statement",
-    "return_expression",
-    "throw_statement",
-    "raise_statement",
-    "continue_statement",
-    "break_statement",
-];
 /// Negations: JS/TS/Java/Go/Rust `!x`, C# `!x`, PHP `!x`, Python `not x`.
 const NOTS: [&str; 6] = [
     "unary",
@@ -72,18 +43,6 @@ const BINARIES: [&str; 9] = [
     "equality_expression",
     "comparison_expression",
 ];
-/// Blocks that may end in the exit: Go's `statement_list`, the block of an `else`.
-const BLOCKS: [&str; 7] = [
-    "statement_list",
-    "block",
-    "statement_block",
-    "compound_statement",
-    "else_clause",
-    // Kotlin `if (…) { … }`.
-    "control_structure_body",
-    "statements",
-];
-
 /// A guard match: its range, whether it holds when the value is safe
 /// (`guards:`) rather than unsafe (`rejects:`), and its pattern's specificity.
 pub(super) type Check = (Range<usize>, bool, usize);
@@ -127,7 +86,7 @@ pub(super) fn of<D: Doc>(n: &Node<D>, checks: &[Check]) -> Vec<Guard> {
         (holds, fails)
     };
     let otherwise = n.part("alternative");
-    if exits(&then) && !fails.is_empty() {
+    if super::exits::exits(&then) && !fails.is_empty() {
         out.push(Guard::After(n.range().end, fails.clone()));
     } else if otherwise.is_none() && !fails.is_empty() {
         out.push(Guard::Settle(n.range(), fails.clone()));
@@ -137,7 +96,7 @@ pub(super) fn of<D: Doc>(n: &Node<D>, checks: &[Check]) -> Vec<Guard> {
             alt.kind().as_ref(),
             "elif_clause" | "else_if_clause" | "if_statement"
         )
-        && exits(alt)
+        && super::exits::exits(alt)
         && !holds.is_empty()
     {
         out.push(Guard::After(n.range().end, holds.clone()));
@@ -224,7 +183,8 @@ fn binary<'a, D: Doc>(op: &str, l: &Node<'a, D>, r: &Node<'a, D>, checks: &[Chec
             if let Some(sets) = super::equality::literal(op, l, r) {
                 return sets;
             }
-            // `check(x) === false`, `s.indexOf("..") !== -1`, `i < 0`.
+            // `check(x) === false`, `s.indexOf("..") !== -1`, `i < 0`,
+            // PHP `preg_match(…) == 1`.
             let (value, constant) = if is_constant(r) {
                 (l, r.text().to_string())
             } else {
@@ -257,7 +217,18 @@ fn operator<'a, D: Doc>(n: &Node<'a, D>, l: &Node<'a, D>, r: &Node<'a, D>) -> St
 fn is_constant<D: Doc>(n: &Node<D>) -> bool {
     matches!(
         n.text().as_ref(),
-        "true" | "false" | "True" | "False" | "null" | "nil" | "None" | "-1" | "0" | "\"\"" | "''"
+        "true"
+            | "false"
+            | "True"
+            | "False"
+            | "null"
+            | "nil"
+            | "None"
+            | "-1"
+            | "0"
+            | "1"
+            | "\"\""
+            | "''"
     )
 }
 
@@ -270,26 +241,4 @@ pub(super) fn names<D: Doc>(n: &Node<D>) -> HashSet<String> {
         .filter(|c| NAMES.contains(&c.kind().as_ref()))
         .map(|c| c.text().to_string())
         .collect()
-}
-
-/// Does this branch always leave (return, throw, …)?
-fn exits<D: Doc>(branch: &Node<D>) -> bool {
-    if EXITS.contains(&branch.kind().as_ref()) {
-        return true;
-    }
-    let last = branch
-        .children()
-        .filter(|c| c.is_named() && c.kind() != "comment")
-        .last();
-    last.is_some_and(|l| {
-        (BLOCKS.contains(&l.kind().as_ref()) && exits(&l))
-            || EXITS.contains(&l.kind().as_ref())
-            || (l.kind() == "expression_statement"
-                && l.children().any(|c| EXITS.contains(&c.kind().as_ref())))
-            || (matches!(l.kind().as_ref(), "expression_statement" | "call" | "identifier")
-                && EXIT_CALLS.iter().any(|e| l.text().starts_with(e)))
-            // Ruby: `redirect_to root_path and return`.
-            || (l.kind() == "binary"
-                && l.part("right").is_some_and(|r| EXITS.contains(&r.kind().as_ref())))
-    })
 }

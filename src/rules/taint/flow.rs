@@ -121,6 +121,8 @@ pub(super) struct Ctx {
     pub writes: std::sync::Arc<super::outputs::Writes>,
     /// Stream writes do not carry taint (deserialization rules).
     pub writes_clean: bool,
+    /// PHP: `+ - * / % **` make numbers (`.` joins strings).
+    pub numbers: bool,
 }
 
 fn within(r: &Range<usize>, outer: &Range<usize>) -> bool {
@@ -189,6 +191,9 @@ impl Ctx {
             // `int n = rs.getInt(1)`: a number holds no injected text.
             return !super::declared::scalar(node);
         }
+        if self.numbers && kind == "binary_expression" && super::numeric::arithmetic(node) {
+            return false;
+        }
         // `c ? a : b` is `a` or `b`, never `c`; a guard in `c` cleans the
         // side it protects (`isLocal(u) ? u : "/"`).
         if matches!(
@@ -198,6 +203,10 @@ impl Ctx {
         {
             let (holds, fails) = super::guards::safe(&cond, &self.guards);
             return self.tainted(&a, &(names - &holds)) || self.tainted(&b, &(names - &fails));
+        }
+        // `case x when "a" then "/a"`: a branch's result, not the subject.
+        if let Some(results) = super::choices::results(node) {
+            return results.iter().any(|r| self.tainted(r, names));
         }
         // Ruby: `custom_fields` alone may be a call of a method returning
         // request data.
@@ -236,6 +245,14 @@ impl Ctx {
                 });
             return passed
                 || ((guessed || getter) && receiver.is_some_and(|r| self.tainted(&r, names)));
+        }
+        // `sprintf("… id=%d", $t)`: what `%d` writes is a number.
+        if CALLS.contains(&kind.as_ref())
+            && let Some(numbers) = super::numeric::formatted(node)
+        {
+            return args(node)
+                .iter()
+                .any(|a| !numbers.contains(&a.range()) && self.tainted(a, names));
         }
         node.children().any(|c| self.tainted(&c, names))
     }

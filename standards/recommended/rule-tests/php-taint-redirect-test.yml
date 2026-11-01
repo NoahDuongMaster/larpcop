@@ -22,3 +22,8 @@ invalid:
   return redirect($request->input("return_to"));
 
   '
+- '<?php
+
+  http_redirect($_GET["u"]);
+
+  '

@@ -86,8 +86,11 @@ pub(super) fn entry<D: Doc>(n: &Node<D>) -> Option<String> {
         return None;
     };
     let key = literal(&key)?;
-    (base.kind() == "identifier" || base.kind() == "variable_name")
-        .then(|| format!("{}[{key}]", base.text()))
+    // `m['k']`, and an entry of the object's own field (`$this->input[1]`).
+    (base.kind() == "identifier"
+        || base.kind() == "variable_name"
+        || super::fields::is_field(&base))
+    .then(|| format!("{}[{key}]", base.text()))
 }
 
 /// Between the keys of an entry addressed by two (`conf[s␁k]`).

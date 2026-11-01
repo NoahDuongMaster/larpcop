@@ -6,6 +6,13 @@ valid:
   $data = json_decode($_COOKIE["prefs"], true);
 
   '
+- '<?php
+
+  $blob = serialize($_GET[''q'']);
+
+  $back = unserialize($blob);
+
+  '
 invalid:
 - '<?php
 

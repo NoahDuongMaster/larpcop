@@ -11,6 +11,19 @@ valid:
   echo "Hello";
 
   '
+- |
+  <?php
+  $name = $_GET['name'];
+  $html .= '<pre>Hello ' . htmlspecialchars($name) . '</pre>';
+- |
+  <?php
+  $id = $_GET['id'];
+  $query = "SELECT first_name FROM users WHERE user_id = '" . intval($id) . "'";
+  $label = "Hello " . $_GET['name'];
+- |
+  <?php
+  $source = file_get_contents("docs/" . basename($_GET['page']) . ".php");
+  $html = "<div id=\"code\">" . highlight_string($source, true) . "</div>";
 invalid:
 - '<?php
 
@@ -24,3 +37,12 @@ invalid:
   echo $html;
 
   '
+- |
+  <?php
+  if (array_key_exists("name", $_GET) && $_GET['name'] != NULL) {
+      $html .= '<pre>Hello ' . $_GET['name'] . '</pre>';
+  }
+- |
+  <?php
+  $name = str_replace('<script>', '', $_GET['name']);
+  $html .= "<pre>Hello {$name}</pre>";

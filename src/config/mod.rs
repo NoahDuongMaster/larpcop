@@ -9,6 +9,8 @@ pub use model::{
     DependenciesConfig, ExtendSpec, LinterConfig, LlmCommand, LlmConfig, LlmRule, MaxLinesConfig,
     MetricsConfig, RawConfig, SecretsConfig, TextRuleConfig,
 };
+#[cfg(test)]
+pub use taint::{PathObjectsConfig, ShellArgvConfig};
 pub use taint::{ResponseReturns, TaintConfig};
 
 use anyhow::{Context, Result, bail};

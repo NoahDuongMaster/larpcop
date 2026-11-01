@@ -69,6 +69,13 @@ pub(super) fn guarded_config(
         handler_classes: None,
         input_types: None,
         escape_contexts: false,
+        own_serialization_safe: false,
+        shell_argv: None,
+        fixed_route_sources: Vec::new(),
+        path_objects: None,
+        html_fragments: false,
+        source_writes: Vec::new(),
+        copies: Vec::new(),
     }
 }
 

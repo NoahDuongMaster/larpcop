@@ -4,6 +4,7 @@
 
 use super::kotlin::Part;
 use ast_grep_core::{Doc, Node};
+use std::collections::HashSet;
 
 /// String literal kinds: JS/TS/Python, Go, Rust.
 const STRINGS: [&str; 5] = [
@@ -104,31 +105,57 @@ fn checked<'a, D: Doc>(guard: &Node<'a, D>, literal_at: usize) -> Option<Node<'a
 
 const NORMALIZING: &str = r"(?i)(normalize|canonical|realpath|abspath|normpath|toRealPath|resolve|getFullPath|expand_path|cleanpath|filepath\.(Clean|Abs)|\.Clean\()";
 
+static RE: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| regex::Regex::new(NORMALIZING).expect("regex"));
+
 /// Is `value` a normalized path, or a name assigned one in its function?
 fn normalized<D: Doc>(value: &Node<D>) -> bool {
-    static RE: std::sync::LazyLock<regex::Regex> =
-        std::sync::LazyLock::new(|| regex::Regex::new(NORMALIZING).expect("regex"));
-    if RE.is_match(&value.text()) {
-        return true;
-    }
-    if value.kind() != "identifier" {
-        return false;
+    RE.is_match(&value.text()) || !normalizing(value).is_empty()
+}
+
+/// The normalized paths a name is assigned in its function
+/// (`Path p = Paths.get(BASE + f).normalize()`).
+fn normalizing<'a, D: Doc>(value: &Node<'a, D>) -> Vec<Node<'a, D>> {
+    if !matches!(value.kind().as_ref(), "identifier" | "simple_identifier") {
+        return Vec::new();
     }
     let name = value.text();
     let Some(f) = value
         .ancestors()
         .find(|a| crate::rules::complexity::is_function(a))
     else {
-        return false;
+        return Vec::new();
     };
-    f.dfs().any(|n| {
-        let (left, right) = match n.kind().as_ref() {
-            "variable_declarator" => (n.part("name"), n.part("value")),
-            "assignment" | "assignment_expression" | "short_var_declaration" => {
-                (n.part("left"), n.part("right"))
-            }
-            _ => return false,
-        };
-        left.is_some_and(|l| l.text() == name) && right.is_some_and(|r| RE.is_match(&r.text()))
-    })
+    f.dfs()
+        .filter_map(|n| super::flow::assignment(&n))
+        .filter(|(l, r)| l.text() == name && RE.is_match(&r.text()))
+        .map(|(_, r)| r)
+        .collect()
+}
+
+/// A prefix check on a normalized path proves what the path was built from:
+/// `normalizedTarget.startsWith(base)` with `normalizedTarget =
+/// Paths.get(BASE + fileName).normalize()` keeps `fileName` inside `BASE`.
+pub(super) fn derived<D: Doc>(guard: &Node<D>) -> HashSet<String> {
+    let prefix_check = super::summary::called_name(guard).is_some_and(|m| {
+        matches!(
+            m.as_str(),
+            "startsWith"
+                | "startswith"
+                | "starts_with"
+                | "StartsWith"
+                | "start_with?"
+                | "HasPrefix"
+        )
+    });
+    if !prefix_check {
+        return HashSet::new();
+    }
+    let at = usize::from(super::summary::called_name(guard).as_deref() == Some("HasPrefix"));
+    checked(guard, at)
+        .map(|c| normalizing(&c))
+        .unwrap_or_default()
+        .iter()
+        .flat_map(|r| super::guards::names(r))
+        .collect()
 }

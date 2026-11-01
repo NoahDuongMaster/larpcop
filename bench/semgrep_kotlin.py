@@ -19,12 +19,14 @@ import sys
 import urllib.request
 
 COMMIT = "16b9e6d45f10649f6a531ec4838ed9924372c3bc"
-# Semgrep test file (under kotlin/lang/security/) -> (Semgrep rule id, larpcop rule id).
+# Semgrep test file (under kotlin/lang/security/) -> (Semgrep rule id, larpcop rule ids).
+# kt-no-shell-string was added after the first run (see bench/results/semgrep-kotlin.md).
 CASES = {
     "use-of-md5.kt": ("use-of-md5", "kt-no-weak-hash"),
     "use-of-sha1.kt": ("use-of-sha1", "kt-no-weak-hash"),
     "ecb-cipher.kt": ("ecb-cipher", "kt-no-weak-cipher"),
-    "command-injection-formatted-runtime-call.kt": ("command-injection-formatted-runtime-call", "kt-taint-shell"),
+    "command-injection-formatted-runtime-call.kt": ("command-injection-formatted-runtime-call",
+                                                    "kt-taint-shell kt-no-shell-string"),
 }
 LABEL = re.compile(r"//\s*(ruleid|ok)\s*:\s*([\w.-]+)")
 
@@ -58,22 +60,23 @@ def main():
         return
     root, results = pathlib.Path(sys.argv[1]), sys.argv[2]
     found = {(pathlib.Path(v["file"]).name, v["line"], v["rule"]) for v in json.load(open(results))["violations"]}
-    print("| File (rule) | found | flagged wrongly |\n|---|---|---|")
+    out = sys.stdout.write
+    out("| File (rule) | found | flagged wrongly |\n|---|---|---|\n")
     tp = fn = fp = tn = 0
     for name, (semgrep_id, ours) in CASES.items():
         f_tp = f_fn = f_fp = f_tn = 0
         for line, bad in labels(root / name, semgrep_id):
-            hit = (name, line, ours) in found
+            hit = any((name, line, rule) in found for rule in ours.split())
             f_tp += bad and hit
             f_fn += bad and not hit
             f_fp += (not bad) and hit
             f_tn += (not bad) and not hit
-        print(f"| {name} (`{ours}`) | {f_tp}/{f_tp + f_fn} | {f_fp}/{f_fp + f_tn} |")
+        out(f"| {name} (`{'`, `'.join(ours.split())}`) | {f_tp}/{f_tp + f_fn} | {f_fp}/{f_fp + f_tn} |\n")
         tp, fn, fp, tn = tp + f_tp, fn + f_fn, fp + f_fp, tn + f_tn
     tpr = tp / max(tp + fn, 1)
     fpr = fp / max(fp + tn, 1)
-    print(f"| **total** | {tp}/{tp + fn} ({tpr:.0%}) | {fp}/{fp + tn} ({fpr:.0%}) |")
-    print(f"\nscore (TPR - FPR): **{tpr - fpr:+.1%}**")
+    out(f"| **total** | {tp}/{tp + fn} ({tpr:.0%}) | {fp}/{fp + tn} ({fpr:.0%}) |\n")
+    out(f"\nscore (TPR - FPR): **{tpr - fpr:+.1%}**\n")
 
 
 if __name__ == "__main__":

@@ -3,10 +3,12 @@
 mod ast;
 mod complexity;
 mod linters;
+pub mod macros;
 mod max_lines;
 pub mod metrics;
 mod pattern_fixes;
 pub mod secrets;
+mod settings;
 mod taint;
 pub mod testing;
 mod text;
@@ -199,7 +201,7 @@ impl Engine {
         else {
             return Vec::new();
         };
-        let grep = lang.ast_grep(&file.content);
+        let grep = lang.ast_grep(macros::expand(lang, &file.content));
         let index = taint::FileIndex::new(grep.root());
         self.taint
             .iter()

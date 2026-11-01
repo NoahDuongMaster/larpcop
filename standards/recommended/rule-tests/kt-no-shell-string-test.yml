@@ -1,0 +1,13 @@
+id: kt-no-shell-string
+valid:
+- |
+  fun a(dir: String) { Runtime.getRuntime().exec("ls $dir") }
+- |
+  fun a() { Runtime.getRuntime().exec("sh -c ls") }
+invalid:
+- |
+  fun a(input: String) { Runtime.getRuntime().exec("/bin/sh -c some_tool $input") }
+- |
+  fun a(input: String) { r.exec("sh -c tool " + input) }
+- |
+  fun a(input: String) { r.exec(String.format("sh -c tool %s", input)) }

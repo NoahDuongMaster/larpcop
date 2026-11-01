@@ -66,6 +66,23 @@ impl<'a, D: Doc> FileIndex<'a, D> {
     }
 
     /// Ranges of the calls whose called name (its last segment) matches.
+    /// The nodes of the file of these kinds.
+    pub(super) fn of_kinds<'s>(
+        &'s self,
+        kinds: &'s [&str],
+    ) -> impl Iterator<Item = &'s Node<'a, D>> {
+        self.nodes
+            .iter()
+            .filter(move |n| kinds.contains(&n.kind().as_ref()))
+    }
+
+    /// Every call of the file.
+    pub(super) fn calls(&self) -> impl Iterator<Item = &Node<'a, D>> {
+        self.nodes
+            .iter()
+            .filter(|n| super::flow::CALLS.contains(&n.kind().as_ref()))
+    }
+
     pub(super) fn calls_named(&self, re: &regex::Regex) -> Vec<Node<'a, D>> {
         self.nodes
             .iter()

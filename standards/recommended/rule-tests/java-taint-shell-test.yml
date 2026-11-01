@@ -7,3 +7,9 @@ invalid:
   ping -c 1 \" + host);\n  }\n}\n"
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String[] args = {\"sh\", \"-c\", request.getParameter(\"\
   cmd\")};\n    new ProcessBuilder(args).start();\n  }\n}\n"
+- |
+  public class T extends HttpServlet {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) {
+      System.loadLibrary(String.format("%s.dll", request.getParameter("lib")));
+    }
+  }

@@ -17,6 +17,7 @@ CWE = {"22": "pathtraver", "78": "cmdi", "79": "xss", "89": "sqli", "90": "ldapi
        "94": "codeinj", "95": "codeinj", "502": "deserialization", "601": "redirect", "611": "xxe"}
 LARPCOP = {
     "java-taint-sql": "sqli", "java-no-sql-concat": "sqli", "java-taint-shell": "cmdi",
+    "java-no-shell-string": "cmdi",
     "java-taint-path": "pathtraver", "java-taint-xss": "xss", "java-taint-ldap": "ldapi",
     "java-taint-xpath": "xpathi", "java-taint-trust-boundary": "trustbound", "java-no-weak-hash": "hash",
     "java-no-weak-cipher": "crypto", "java-no-insecure-random": "weakrand", "java-no-insecure-cookie": "securecookie",

@@ -108,7 +108,7 @@ impl AstRules {
         if rules.is_empty() {
             return Vec::new();
         }
-        let grep = lang.ast_grep(&file.content);
+        let grep = lang.ast_grep(super::macros::expand(lang, &file.content));
         let mut out = Vec::new();
         for rule in rules {
             let note = match (&rule.note, rule.fixer.is_empty()) {

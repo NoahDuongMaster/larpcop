@@ -5,6 +5,8 @@ valid:
   \  }\n}\n"
 - "class H {\n  byte[] h(byte[] in, String algorithm) throws Exception {\n    return MessageDigest.getInstance(algorithm).digest(in);\n  }\n}\n"
 - "class H {\n  byte[] h(byte[] in) throws Exception {\n    String algorithm = \"MD5\";\n    algorithm = \"SHA-256\";\n    return MessageDigest.getInstance(algorithm).digest(in);\n  }\n}\n"
+- |
+  class A { String h(byte[] b) { return org.apache.commons.codec.digest.DigestUtils.sha256Hex(b); } }
 invalid:
 - "class T {\n  void f(String name, int id) throws Exception {\n    MessageDigest md = MessageDigest.getInstance(\"MD5\");\n  }\n}\n"
 - "class T {\n  void f(String name, int id) throws Exception {\n    java.security.MessageDigest.getInstance(\"SHA1\");\n  }\n}\n"
@@ -14,3 +16,9 @@ invalid:
   \  }\n}\n"
 - "class H {\n  byte[] h(byte[] in, boolean legacy) throws Exception {\n    String algorithm = \"SHA-256\";\n    if (legacy) {\n      algorithm = \"MD5\";\n    }\n    try {\n      return MessageDigest.getInstance(algorithm).digest(in);\n\
   \    } catch (Exception e) {\n      return null;\n    }\n  }\n}\n"
+- |
+  class A { String h(byte[] b) { return DigestUtils.md5Hex(b); } }
+- |
+  class A { byte[] h(byte[] b) { return DigestUtils.getSha1Digest().digest(b); } }
+- |
+  class A { Object h() { return com.google.common.hash.Hashing.md5(); } }

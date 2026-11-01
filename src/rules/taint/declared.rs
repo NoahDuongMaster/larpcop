@@ -38,10 +38,58 @@ const PARAMETERS: [&str; 7] = [
     "optional_parameter",
 ];
 
+/// Types whose values cannot carry an injected string.
+const SCALARS: [&str; 30] = [
+    "int",
+    "long",
+    "short",
+    "byte",
+    "double",
+    "float",
+    "boolean",
+    "Integer",
+    "Long",
+    "Short",
+    "Byte",
+    "Double",
+    "Float",
+    "Boolean",
+    "BigDecimal",
+    "BigInteger",
+    "UUID",
+    "bool",
+    "decimal",
+    "uint",
+    "ulong",
+    "ushort",
+    "sbyte",
+    "Guid",
+    "Int",
+    "UInt",
+    "ULong",
+    "Int32",
+    "Int64",
+    "Char",
+];
+
+/// Is `at` a name declared with a numeric, boolean or UUID type, in a
+/// language that holds a value to its declared type at run time (Java, C#,
+/// Kotlin)? A TypeScript annotation (`id: number`) is not checked when the
+/// program runs, so it does not count.
+pub(super) fn scalar<D: Doc>(at: &Node<D>) -> bool {
+    declared(at).is_some_and(|(ty, annotation)| !annotation && SCALARS.contains(&ty.as_str()))
+}
+
 /// The type `name` is declared with in a scope enclosing `at`, nearest first.
 /// Only the direct members of each enclosing scope are read (statements of a
 /// block, fields of a class, parameters of a function), not whole subtrees.
 pub(super) fn declared_type<D: Doc>(at: &Node<D>) -> Option<String> {
+    declared(at).map(|(ty, _)| ty)
+}
+
+/// The declared type, and whether it was written as a TypeScript-style
+/// annotation (`: T`).
+fn declared<D: Doc>(at: &Node<D>) -> Option<(String, bool)> {
     if !matches!(at.kind().as_ref(), "identifier" | "simple_identifier") {
         return None;
     }
@@ -75,13 +123,13 @@ pub(super) fn declared_type<D: Doc>(at: &Node<D>) -> Option<String> {
             .is_some_and(|o| o.range() == at.range())
     });
     if is_receiver && name.chars().next().is_some_and(char::is_uppercase) {
-        return Some(name.to_string());
+        return Some((name.to_string(), false));
     }
     None
 }
 
-/// The type of `name` if `decl` declares it.
-fn typed<D: Doc>(decl: &Node<D>, name: &str) -> Option<String> {
+/// The type of `name` if `decl` declares it, and whether it is an annotation.
+fn typed<D: Doc>(decl: &Node<D>, name: &str) -> Option<(String, bool)> {
     // Java/C# locals and fields: `T a = …, b;` (C# nests a variable_declaration).
     let declarators: Vec<Node<D>> = decl
         .dfs()
@@ -101,9 +149,10 @@ fn typed<D: Doc>(decl: &Node<D>, name: &str) -> Option<String> {
         let declarator = declarators.iter().find(|d| declares(d))?;
         // TypeScript keeps the annotation on the declarator: `const db: Pool`.
         let ty = ty.or_else(|| declarator.part("type"))?.text().to_string();
+        let annotation = ty.starts_with(':');
         let ty = ty.trim_start_matches(':').trim().to_string();
         if ty != "var" {
-            return Some(ty);
+            return Some((ty, annotation));
         }
         // `var x = new T(…)`.
         let created = declarator.part("value").or_else(|| {
@@ -111,7 +160,7 @@ fn typed<D: Doc>(decl: &Node<D>, name: &str) -> Option<String> {
                 .children()
                 .find(|c| c.kind().contains("creation"))
         })?;
-        return Some(created.part("type")?.text().to_string());
+        return Some((created.part("type")?.text().to_string(), false));
     }
     // Parameters: `T name`, `name: T`.
     let named = decl
@@ -122,7 +171,8 @@ fn typed<D: Doc>(decl: &Node<D>, name: &str) -> Option<String> {
         return None;
     }
     let ty = ty?.text().to_string();
-    Some(ty.trim_start_matches(':').trim().to_string())
+    let annotation = ty.starts_with(':');
+    Some((ty.trim_start_matches(':').trim().to_string(), annotation))
 }
 
 /// The classes the locals of function `f` are built as, by name
@@ -131,16 +181,15 @@ fn typed<D: Doc>(decl: &Node<D>, name: &str) -> Option<String> {
 pub(super) fn constructions<D: Doc>(f: &Node<D>) -> HashMap<String, Option<String>> {
     let mut out: HashMap<String, Option<String>> = HashMap::new();
     for n in f.dfs() {
-        let (left, right) = match n.kind().as_ref() {
-            "variable_declarator" => match (n.part("name"), n.part("value")) {
-                (Some(l), Some(r)) => (l, r),
-                _ => continue,
-            },
-            "assignment_expression" => match (n.part("left"), n.part("right")) {
-                (Some(l), Some(r)) => (l, r),
-                _ => continue,
-            },
-            _ => continue,
+        if !matches!(
+            n.kind().as_ref(),
+            "variable_declarator" | "assignment_expression"
+        ) {
+            continue;
+        }
+        // C#'s `T b = new Impl()` leaves the value without a field name.
+        let Some((left, right)) = super::flow::assignment(&n) else {
+            continue;
         };
         let class = (right.kind() == "object_creation_expression")
             .then(|| right.part("type"))
@@ -158,7 +207,7 @@ pub(super) fn constructions<D: Doc>(f: &Node<D>) -> HashMap<String, Option<Strin
 
 #[cfg(test)]
 mod tests {
-    use super::declared_type;
+    use super::{declared_type, scalar};
     use ast_grep_core::tree_sitter::LanguageExt;
     use ast_grep_language::SupportLang;
 
@@ -210,5 +259,42 @@ mod tests {
             type_at(SupportLang::TypeScript, ts, "c", 1).as_deref(),
             Some("PoolClient")
         );
+    }
+
+    #[test]
+    fn scalars_where_the_type_is_enforced() {
+        let is_scalar = |lang: SupportLang, src: &str, kind: &str, name: &str| {
+            let root = lang.ast_grep(src);
+            let node = root
+                .root()
+                .dfs()
+                .filter(|n| n.kind() == kind && n.text() == name)
+                .last()
+                .unwrap();
+            scalar(&node)
+        };
+        let java = "class A { void f(String s, long id) { int n = 1; Integer m = 2; s.go(n, m, id, s); } }";
+        for name in ["n", "m", "id"] {
+            assert!(
+                is_scalar(SupportLang::Java, java, "identifier", name),
+                "{name}"
+            );
+        }
+        assert!(!is_scalar(SupportLang::Java, java, "identifier", "s"));
+        let cs = "class A { void F(string s) { int n = 1; Guid g = Guid.NewGuid(); s.Go(n, g); } }";
+        assert!(is_scalar(SupportLang::CSharp, cs, "identifier", "n"));
+        assert!(is_scalar(SupportLang::CSharp, cs, "identifier", "g"));
+        let kt = "fun f(id: Long) { val n: Int = 1; go(n, id) }";
+        assert!(is_scalar(SupportLang::Kotlin, kt, "simple_identifier", "n"));
+        assert!(is_scalar(
+            SupportLang::Kotlin,
+            kt,
+            "simple_identifier",
+            "id"
+        ));
+        // Not checked when the program runs: `req.query.id` is still a string.
+        let ts = "function f(id: number) { const n: number = req.query.n; go(id, n); }";
+        assert!(!is_scalar(SupportLang::TypeScript, ts, "identifier", "id"));
+        assert!(!is_scalar(SupportLang::TypeScript, ts, "identifier", "n"));
     }
 }

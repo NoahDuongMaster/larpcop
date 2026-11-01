@@ -13,8 +13,10 @@ use std::collections::HashSet;
 use std::ops::Range;
 
 /// Targets (left) and value (right) of the assignment kinds we follow.
-pub(super) const ASSIGNMENTS: [(&str, &str, &str); 15] = [
+pub(super) const ASSIGNMENTS: [(&str, &str, &str); 16] = [
     ("variable_declarator", "name", "value"),
+    // C/C++ `char *p = …`, `char data[100] = …`.
+    ("init_declarator", "declarator", "value"),
     ("property_declaration", "name", "value"),
     ("let_declaration", "pattern", "value"),
     ("var_spec", "name", "value"),
@@ -32,6 +34,25 @@ pub(super) const ASSIGNMENTS: [(&str, &str, &str); 15] = [
     ("for_statement", "left", "right"),
     ("range_clause", "left", "right"),
 ];
+
+/// The target and value of an assignment (any kind in `ASSIGNMENTS`). C#'s
+/// `var x = …` leaves the value without a field name: the last other child.
+pub(crate) fn assignment<'a, D: Doc>(n: &Node<'a, D>) -> Option<(Node<'a, D>, Node<'a, D>)> {
+    let kind = n.kind();
+    let (_, l, r) = ASSIGNMENTS.iter().find(|(k, ..)| kind == *k)?;
+    let mut left = n.part(l)?;
+    // C declarators wrap the name: `*p`, `data[100]`.
+    if kind == "init_declarator" {
+        let name = left.dfs().find(|c| c.kind() == "identifier");
+        left = name?;
+    }
+    let right = n.part(r).or_else(|| {
+        n.children()
+            .filter(|c| c.is_named() && c.range() != left.range())
+            .last()
+    })?;
+    Some((left, right))
+}
 
 /// Loop kinds among `ASSIGNMENTS`: they bind before the body, not at the end.
 pub(super) const LOOPS: [&str; 4] = [
@@ -94,6 +115,12 @@ pub(super) struct Ctx {
     /// Per function (by start): the classes its locals are built as.
     pub built:
         std::cell::RefCell<std::collections::HashMap<usize, std::rc::Rc<super::resolve::Built>>>,
+    /// The rule's sanitizers by name, for functions passed by reference.
+    pub cleaners: std::sync::Arc<super::mapping::Cleaners>,
+    /// Calls writing into an argument (`fgets(buf, …)`, `strcpy(dst, src)`).
+    pub writes: std::sync::Arc<super::outputs::Writes>,
+    /// Stream writes do not carry taint (deserialization rules).
+    pub writes_clean: bool,
 }
 
 fn within(r: &Range<usize>, outer: &Range<usize>) -> bool {
@@ -159,7 +186,8 @@ impl Ctx {
         }
         let kind = node.kind();
         if (NAMES.contains(&kind.as_ref()) || is_field(node)) && names.contains(text.as_ref()) {
-            return true;
+            // `int n = rs.getInt(1)`: a number holds no injected text.
+            return !super::declared::scalar(node);
         }
         // `c ? a : b` is `a` or `b`, never `c`; a guard in `c` cleans the
         // side it protects (`isLocal(u) ? u : "/"`).

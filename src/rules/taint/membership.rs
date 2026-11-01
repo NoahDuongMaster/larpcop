@@ -89,6 +89,34 @@ pub(super) fn not_in<D: Doc>(n: &Node<D>) -> Option<HashSet<String>> {
     matches!(op.as_str(), "not in" | "!in").then(|| super::guards::names(&left))
 }
 
+/// `".." in p` rejects `p`: the names the searched value is read from, not
+/// those passed to a call that produces it (`"k" in form.getlist(name)` says
+/// nothing of `name`).
+pub(super) fn haystack<D: Doc>(n: &Node<D>) -> Option<HashSet<String>> {
+    let (_, op) = infix(n)?;
+    if op != "in" {
+        return None;
+    }
+    let right = n.children().filter(|c| c.is_named()).nth(1)?;
+    Some(
+        right
+            .dfs()
+            .filter(|c| super::NAMES.contains(&c.kind().as_ref()))
+            .filter(|c| {
+                !c.ancestors()
+                    .take_while(|a| a.range() != right.range())
+                    .any(|a| {
+                        matches!(
+                            a.kind().as_ref(),
+                            "argument_list" | "value_arguments" | "arguments"
+                        )
+                    })
+            })
+            .map(|c| c.text().to_string())
+            .collect(),
+    )
+}
+
 /// The left operand and operator of a Python comparison or a Kotlin `in` check.
 fn infix<'a, D: Doc>(n: &Node<'a, D>) -> Option<(Node<'a, D>, String)> {
     if !matches!(

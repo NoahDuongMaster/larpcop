@@ -29,6 +29,8 @@ impl Ctx {
         // Objects this scope builds (`req = new PayRequest()`): what their
         // setters are given, they hold.
         let mut built: HashSet<String> = HashSet::new();
+        // What each tainted local was built from, for checks made after.
+        let mut origins = super::origins::Origins::default();
         for (at, e) in events.iter() {
             until.retain(|(end, name)| {
                 let over = *end <= *at;
@@ -39,8 +41,12 @@ impl Ctx {
                 !over
             });
             match e {
-                Event::Clean(guarded) => names.retain(|n| !guarded.contains(n)),
+                Event::Clean(guarded) => {
+                    let guarded = origins.widen(guarded, &names);
+                    names.retain(|n| !guarded.contains(n))
+                }
                 Event::Enter(guarded) => {
+                    let guarded = origins.widen(guarded, &names);
                     let was: Vec<String> = guarded
                         .iter()
                         .filter(|g| names.remove(*g))
@@ -78,6 +84,15 @@ impl Ctx {
                         }
                     }
                     let tainted = !safe_start && self.tainted(right, &names);
+                    // Built from tainted names only, or from a source itself.
+                    let from = (tainted && !self.tainted(right, &HashSet::new())).then(|| {
+                        let used = super::guards::names(right);
+                        names
+                            .iter()
+                            .filter(|n| used.contains(*n))
+                            .cloned()
+                            .collect()
+                    });
                     if right.kind() == "object_creation_expression" && left.kind() == "identifier" {
                         built.insert(left.text().to_string());
                     }
@@ -97,6 +112,12 @@ impl Ctx {
                         .filter(|n| VARIABLES.contains(&n.kind().as_ref()))
                     {
                         if tainted {
+                            let adds = appended || branch.is_some();
+                            origins.record(
+                                &v.text(),
+                                from.clone(),
+                                adds && names.contains(v.text().as_ref()),
+                            );
                             names.insert(v.text().to_string());
                         } else if NAMES.contains(&left.kind().as_ref())
                             && names.remove(v.text().as_ref())
@@ -115,6 +136,9 @@ impl Ctx {
                 }
                 Event::Nested(f) => on(Seen::Nested(f.clone(), names.clone())),
                 Event::Call(call) => {
+                    // `fgets(buf, …)`, `strcat(dst, src)`: the written argument.
+                    let written = self.writes.written(call, |a| self.tainted(a, &names));
+                    names.extend(written);
                     // `list.push(x)`, `map.set(k, x)`, `Object.assign(o, x)`: the
                     // container now holds what was put in.
                     // `m.put("k", v)`: that entry only.
@@ -126,10 +150,12 @@ impl Ctx {
                         } else {
                             names.remove(&entry);
                         }
-                    } else if let Some(container) =
-                        filled(call).or_else(|| super::containers::set_on(call, &built))
+                    } else if let Some(container) = filled(call)
+                        .filter(|_| !(self.writes_clean && super::containers::writes(call)))
+                        .or_else(|| super::containers::set_on(call, &built))
                         && args(call).iter().any(|a| self.tainted(a, &names))
                     {
+                        names.extend(super::containers::wrapped(call, &container));
                         names.insert(container.clone());
                         on(Seen::Reached(Reached::Filled(container)));
                     } else if let Some(object) = super::containers::setter_object(call)
@@ -172,6 +198,12 @@ impl Ctx {
                             if !checked {
                                 on(Seen::Reached(Reached::Call(a.clone(), into.clone())));
                             }
+                        }
+                    }
+                    // A static field the callee reads, tainted here.
+                    for (key, into) in &s.statics {
+                        if super::statics::held(call, key, &names) {
+                            on(Seen::Reached(Reached::Call(call.clone(), into.clone())));
                         }
                     }
                 }

@@ -5,6 +5,9 @@ valid:
   \ Prefs.class);\n  }\n}\n"
 - "@RestController\nclass C {\n  @PostMapping(\"/d\")\n  public String d(@RequestBody String params) {\n    User u = JSON.parseObject(params, User.class);\n    return u.getName();\n  }\n}\n"
 - "@RestController\nclass C {\n  @GetMapping(\"/y\")\n  public void y(String content) {\n    Yaml y = new Yaml(new SafeConstructor());\n    y.load(content);\n  }\n}\n"
+- "class C {\n  void f(HttpServletRequest request) throws Exception {\n    String data = request.getParameter(\"q\");\n    ByteArrayOutputStream bytes = new ByteArrayOutputStream();\n    ObjectOutputStream\
+  \ out = new ObjectOutputStream(bytes);\n    out.writeObject(data);\n    ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()));\n    String back = (String) in.readObject();\n\
+  \  }\n}\n"
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    ObjectInputStream in = new ObjectInputStream(request.getInputStream());\n\
   \    Object o = in.readObject();\n  }\n}\n"

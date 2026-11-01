@@ -1,0 +1,45 @@
+id: cs-taint-stored-xss
+valid:
+- |
+  public class Comments : Controller {
+    public void Index() {
+      using var cmd = new SqlCommand("select body from comments", conn);
+      using var dr = cmd.ExecuteReader();
+      while (dr.Read()) {
+        Response.Write(HtmlEncoder.Default.Encode(dr.GetString(0)));
+      }
+    }
+  }
+- |
+  public class Count : Controller {
+    public void Index() {
+      int n = (int)cmd.ExecuteScalar();
+      Response.Write("<p>" + n + "</p>");
+    }
+  }
+invalid:
+- |
+  public class Comments : Controller {
+    public void Index() {
+      using var cmd = new SqlCommand("select body from comments", conn);
+      using var dr = cmd.ExecuteReader();
+      while (dr.Read()) {
+        Response.Write("<li>" + dr.GetString(0) + "</li>");
+      }
+    }
+  }
+- |
+  public class Profile : Controller {
+    public void Index() {
+      var bio = conn.QueryFirst<string>("select bio from users where id = 1");
+      Response.Write("<div>" + bio + "</div>");
+    }
+  }
+- |
+  public class Names : Controller {
+    public void Index() {
+      SqlDataReader dr = cmd.ExecuteReader();
+      dr.Read();
+      Response.Write("<b>" + dr["name"] + "</b>");
+    }
+  }

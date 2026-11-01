@@ -44,6 +44,12 @@ impl TaintRule {
                         .find(|a| crate::rules::complexity::is_function(a))
                         .is_some_and(|f| summary::param_names(&f).contains(n.text().as_ref()))
             })
+            .filter(|m| {
+                let routes = (&self.fixed_routes, self.handler_decorators.as_ref());
+                !routes
+                    .1
+                    .is_some_and(|h| routes.0.is_constant(m.get_node(), h, &self.root))
+            })
             .collect();
         let ranges = |ms: Vec<NodeMatch<'a, D>>| -> Vec<Range<usize>> {
             ms.iter().map(|m| m.range()).collect()
@@ -128,8 +134,10 @@ impl TaintRule {
                 hits.push((m.range().start, node, typed));
             }
         }
-        // Overlapping sink patterns (and Go's wrapped patterns) find a call more than once.
-        hits.sort_by_key(|(at, node, _)| (*at, node.range().start, node.range().end));
+        hits.extend(self.extra_sinks(index));
+        // Overlapping sink patterns (and Go's wrapped patterns) find a call more
+        // than once; the match with the fewest type constraints is kept.
+        hits.sort_by_key(|(at, n, typed)| (*at, n.range().start, n.range().end, typed.len()));
         hits.dedup_by_key(|(at, node, _)| (*at, node.range().start, node.range().end));
         let hits = Hits::new(hits, &index.root, index.skeletons.clone());
         let base = Ctx {
@@ -151,6 +159,9 @@ impl TaintRule {
             safe_prefix: self.safe_prefix.clone(),
             summarized: Default::default(),
             built: Default::default(),
+            cleaners: self.cleaners.clone(),
+            writes: self.writes.clone(),
+            writes_clean: self.own_serialization_safe,
         };
         let known = summary::with_unique_methods(self.imported_summaries(lang, index, file, depth));
         // The file being checked (not an import, whose callers need its
@@ -162,6 +173,7 @@ impl TaintRule {
             && !self.source_texts.iter().any(|s| property(s) == Some(true))
             && !known.values().any(|s| s.returns_source)
             && !self.decorated_input(&file.content)
+            && !self.writes.reads_input(&index.root.text())
         {
             return None;
         }
@@ -258,7 +270,7 @@ impl TaintRule {
             .to_string_lossy()
             .replace('\\', "/");
         let file = SourceFile { rel, content };
-        let grep = lang.ast_grep(&file.content);
+        let grep = lang.ast_grep(crate::rules::macros::expand(lang, &file.content));
         let (ctx, _) = self.prepare(lang, &FileIndex::new(grep.root()), &file, depth)?;
         Some(Arc::new(ctx.summaries))
     }

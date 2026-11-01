@@ -9,7 +9,7 @@
     "kind": "call",
     "has": {
       "field": "function",
-      "regex": "^(random|numpy\\.random|np\\.random)\\.(random|randint|randrange|choice|choices|sample|getrandbits|uniform|randbytes|shuffle|triangular|gauss|rand|randn)$"
+      "regex": "^(random|numpy\\.random|np\\.random)\\.(random|randint|randrange|choice|choices|sample|getrandbits|uniform|randbytes|shuffle|triangular|gauss|\\w+variate|rand|randn)$"
     }
   },
   "ignores": [

@@ -37,6 +37,66 @@ pub(super) fn class_of<D: Doc>(f: &Node<D>) -> Option<String> {
     Some(name.text().split('<').next()?.trim().to_string())
 }
 
+/// The direct supertypes of the class a method is defined in: what it
+/// `extends`/`implements` (Java, TS), its base list (C#, Kotlin, Python,
+/// PHP, Ruby), without type arguments.
+pub(super) fn supers_of<D: Doc>(f: &Node<D>) -> Vec<String> {
+    let Some(class) = f.ancestors().take_while(|a| !is_function(a)).find(|a| {
+        matches!(
+            a.kind().as_ref(),
+            "class_definition" | "class_declaration" | "class"
+        )
+    }) else {
+        return Vec::new();
+    };
+    let skip = |k: &str| {
+        matches!(
+            k,
+            "modifiers"
+                | "type_parameters"
+                | "type_parameter_list"
+                | "decorator"
+                | "annotation"
+                | "marker_annotation"
+                | "attribute_list"
+                | "type_arguments"
+                | "type_argument_list"
+                | "class_body"
+                | "declaration_list"
+                | "block"
+                | "body"
+                | "body_statement"
+        )
+    };
+    let name = class.part("name").map(|n| n.range());
+    let mut out = Vec::new();
+    for c in class
+        .children()
+        .filter(|c| c.is_named() && !skip(&c.kind()))
+    {
+        if Some(c.range()) == name {
+            continue;
+        }
+        let mut stack = vec![c];
+        while let Some(n) = stack.pop() {
+            let kind = n.kind();
+            if skip(&kind) {
+                continue;
+            }
+            if matches!(
+                kind.as_ref(),
+                "type_identifier" | "identifier" | "constant" | "name" | "simple_identifier"
+            ) {
+                out.push(n.text().to_string());
+                continue;
+            }
+            stack.extend(n.children().filter(|x| x.is_named()));
+        }
+    }
+    out.retain(|s| s.chars().next().is_some_and(char::is_uppercase));
+    out
+}
+
 /// No body (`void run(String x);`), or one that only stands in for an
 /// implementation (`pass`, `...`, `raise NotImplementedError`).
 pub(super) fn bodiless<D: Doc>(f: &Node<D>) -> bool {
@@ -66,21 +126,40 @@ fn named<'a, D: Doc>(
     root: &Node<'a, D>,
 ) -> impl Iterator<Item = (String, Node<'a, D>, Vec<String>)> {
     root.dfs().filter(|n| is_function(n)).filter_map(|f| {
-        let name = f.part("name").map(|n| n.text().to_string()).or_else(|| {
-            // `const f = (…) => …`, `f := func(…)`
-            let parent = f.parent()?;
-            (parent.kind() == "variable_declarator")
-                .then(|| parent.part("name"))
-                .flatten()
+        let c_name = || {
+            c_declarator(&f)?
+                .field("declarator")
                 .map(|n| n.text().to_string())
-                .or_else(|| rails_scope(&f))
-        })?;
+        };
+        let name = f
+            .part("name")
+            .map(|n| n.text().to_string())
+            .or_else(c_name)
+            .or_else(|| {
+                // `const f = (…) => …`, `f := func(…)`
+                let parent = f.parent()?;
+                (parent.kind() == "variable_declarator")
+                    .then(|| parent.part("name"))
+                    .flatten()
+                    .map(|n| n.text().to_string())
+                    .or_else(|| rails_scope(&f))
+            })?;
         let default = f.parent().is_some_and(|p| {
             p.kind() == "export_statement" && p.text().starts_with("export default")
         });
         let name = if default { "default".to_string() } else { name };
         Some((name, f.clone(), params(&f)))
     })
+}
+
+/// C/C++ `char *f(int a)`: the `function_declarator` holding the name and the
+/// parameters, under any pointer declarators.
+fn c_declarator<'a, D: Doc>(f: &Node<'a, D>) -> Option<Node<'a, D>> {
+    let mut d = f.field("declarator")?;
+    while d.kind() == "pointer_declarator" {
+        d = d.field("declarator")?;
+    }
+    (d.kind() == "function_declarator").then_some(d)
 }
 
 /// Rails `scope :recent, ->(n) { … }` defines the class method `recent`.
@@ -108,7 +187,14 @@ fn params<D: Doc>(f: &Node<D>) -> Vec<String> {
     if let Some(one) = f.part("parameter") {
         return vec![one.text().to_string()]; // `x => …`
     }
-    let Some(list) = f.part("parameters") else {
+    // C# `x => …`.
+    if let Some(one) = f.children().find(|c| c.kind() == "implicit_parameter") {
+        return vec![one.text().to_string()];
+    }
+    let Some(list) = f
+        .part("parameters")
+        .or_else(|| c_declarator(f)?.field("parameters"))
+    else {
         // Kotlin `{ q(it) }`.
         return if f.kind() == "lambda_literal" {
             vec!["it".to_string()]

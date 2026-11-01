@@ -44,18 +44,33 @@ pub fn compound(p: String) -> Vec<String> {
 
 /// `(context, selector)` for a Go pattern that does not parse on its own.
 pub fn context(p: &str) -> Option<(String, String)> {
-    let lang = SupportLang::Go;
+    context_in(p, SupportLang::Go)
+}
+
+/// `(context, selector)` for a pattern of a language whose statements only
+/// parse inside a function (Go; C and C++, where `system($X)` at file scope
+/// reads as a declaration): the pattern as the first statement of a body.
+pub fn context_in(p: &str, lang: SupportLang) -> Option<(String, String)> {
+    let (context, block) = match lang {
+        SupportLang::Go => (format!("func _() {{\n{p}\n}}"), "block"),
+        SupportLang::C | SupportLang::Cpp => {
+            (format!("void _() {{\n{p};\n}}"), "compound_statement")
+        }
+        _ => return None,
+    };
     let alone = lang.ast_grep(lang.pre_process_pattern(p).as_ref());
-    if !alone.root().get_inner_node().has_error() {
+    // At C file scope `f($X)` parses without error, as something else.
+    let call_like =
+        matches!(lang, SupportLang::C | SupportLang::Cpp) && p.trim_end().ends_with(')');
+    if !alone.root().get_inner_node().has_error() && !call_like {
         return None;
     }
-    let context = format!("func _() {{\n{p}\n}}");
     let grep = lang.ast_grep(lang.pre_process_pattern(&context).as_ref());
     // The first statement of the body (newer grammars wrap them in `statement_list`).
     let statement = grep
         .root()
         .dfs()
-        .find(|n| n.kind() == "block")?
+        .find(|n| n.kind() == block)?
         .dfs()
         .skip(1)
         .find(|c| c.is_named() && c.kind() != "statement_list")?;

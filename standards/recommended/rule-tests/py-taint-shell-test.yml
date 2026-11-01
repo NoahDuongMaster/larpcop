@@ -6,6 +6,17 @@ valid:
 - "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
   \ view():\n    host = request.args[\"host\"]\n    os.system(\"ping -c 1 \" + shlex.quote(host))\n"
 - "from flask import Flask, request\nimport subprocess\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    subprocess.run(['git', 'status'], capture_output=True)\n"
+- |
+  from flask import Flask, request
+  import subprocess
+  app = Flask(__name__)
+
+  @app.route('/x')
+  def view():
+      name = request.args['name']
+      args = ['sh', '-c', 'echo "$0"']
+      args.append(name)
+      subprocess.run(args)
 invalid:
 - "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
   \ view():\n    host = request.args[\"host\"]\n    os.system(\"ping -c 1 \" + host)\n"
@@ -15,3 +26,20 @@ invalid:
   \ view():\n    out = subprocess.check_output(\"dig \" + request.form[\"d\"], shell=True, text=True)\n"
 - "from flask import Flask, request\nimport subprocess\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    subprocess.run(['sh', '-c', f\"echo {request.form['m']}\"], capture_output=True)\n"
 - "from flask import Flask, request\nimport subprocess\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    tool = request.args['tool']\n    subprocess.run([tool, '--version'])\n"
+- |
+  from flask import Flask, request
+  import os, subprocess
+  app = Flask(__name__)
+
+  @app.route('/x')
+  def view():
+      name = request.args['name']
+      args = []
+      if 'Windows' in os.name:
+          args.append('cmd.exe')
+          args.append('/c')
+      else:
+          args.append('/bin/bash')
+          args.append('-lc')
+      args.append(f'echo {name}')
+      subprocess.run(args, capture_output=True)

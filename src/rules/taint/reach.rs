@@ -35,7 +35,7 @@ fn entry(path: &Path, repo: &Path) -> Option<Arc<Entry>> {
     let computed = (|| {
         let lang = SupportLang::from_path(path)?;
         let text = std::fs::read_to_string(path).ok()?;
-        let grep = lang.ast_grep(&text);
+        let grep = lang.ast_grep(crate::rules::macros::expand(lang, &text));
         let imports = super::imports::imports(lang, &grep.root(), path, repo)
             .into_iter()
             .map(|i| i.path)
@@ -99,7 +99,7 @@ impl TaintRule {
         if !worded {
             return false;
         }
-        let grep = lang.ast_grep(&entry.text);
+        let grep = lang.ast_grep(crate::rules::macros::expand(lang, &entry.text));
         let [sources, sinks, ..] = patterns.scan(&super::scan::FileIndex::new(grep.root()));
         !sources.is_empty() || !sinks.is_empty()
     }

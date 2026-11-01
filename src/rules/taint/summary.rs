@@ -29,6 +29,11 @@ pub struct Summary {
     /// (parameter, parameter it is stored in): `fill(o, x)` calling
     /// `o.setNote(x)` is (1, 0).
     pub fills: BTreeSet<(usize, usize)>,
+    /// The direct supertypes of its class (`class DbStore implements Store`).
+    pub supers: Vec<String>,
+    /// (static field of another class it reads, as `Cls[field]`; where it
+    /// ends up), see statics.rs.
+    pub statics: Vec<(String, String)>,
 }
 
 /// Callee as written (`f`, `db.run`, `utils.clean`) → its summary.
@@ -165,6 +170,9 @@ impl TaintRule {
                 safe_prefix: ctx.safe_prefix.clone(),
                 summarized: Default::default(),
                 built: Default::default(),
+                cleaners: ctx.cleaners.clone(),
+                writes: ctx.writes.clone(),
+                writes_clean: ctx.writes_clean,
             };
             let validating = super::validators::calls(index, &round);
             round.guards.extend(validating);
@@ -174,6 +182,7 @@ impl TaintRule {
             for (name, f, params) in defs.iter().filter(|(_, f, _)| !super::defs::bodiless(f)) {
                 let mut s = Summary {
                     method: super::defs::class_of(f).is_some(),
+                    supers: super::defs::supers_of(f),
                     ..Summary::default()
                 };
                 for (i, p) in params.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
@@ -215,6 +224,20 @@ impl TaintRule {
                         s.conditions.insert(i, g);
                     }
                 }
+                for key in super::statics::read(f) {
+                    let start: HashSet<String> = [key.clone()].into();
+                    params_only.run(f, start, hits, &|_| HashSet::new(), &mut |r| match r {
+                        Reached::Sink(arg, typed) if self.typed.holds(lang, file, &typed) => {
+                            s.statics
+                                .push((key.clone(), self.into(name, &arg, &file.rel)));
+                        }
+                        Reached::Call(_, into) => {
+                            s.statics.push((key.clone(), format!("`{name}` → {into}")))
+                        }
+                        _ => {}
+                    });
+                }
+                s.statics.dedup_by(|a, b| a.0 == b.0);
                 s.validates = super::validators::validated(f, params, &round.guards);
                 round.run(f, own(f), hits, &own, &mut |r| {
                     if let Reached::Return(_) = r {
@@ -265,6 +288,9 @@ impl Ctx {
             safe_prefix: self.safe_prefix.clone(),
             summarized: Default::default(),
             built: Default::default(),
+            cleaners: self.cleaners.clone(),
+            writes: std::sync::Arc::new(self.writes.copies_only()),
+            writes_clean: self.writes_clean,
         }
     }
 }

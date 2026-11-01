@@ -1,0 +1,15 @@
+id: java-no-shell-string
+valid:
+- |
+  class A { void a(String dir) throws Exception { Runtime.getRuntime().exec("ls " + dir); } }
+- |
+  class A { void a() throws Exception { Runtime.getRuntime().exec("sh -c ls"); } }
+- |
+  class A { void a(String f) throws Exception { new ProcessBuilder("tool", f).start(); } }
+invalid:
+- |
+  class A { void a(String input) throws Exception { Runtime.getRuntime().exec("/bin/sh -c some_tool " + input); } }
+- |
+  class A { void a(String input) throws Exception { r.exec(String.format("cmd.exe /C type %s", input)); } }
+- |
+  class A { void a(String input) throws Exception { r.exec("bash -lc 'grep %s log'".formatted(input)); } }

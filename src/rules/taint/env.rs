@@ -2,8 +2,6 @@
 //! point, when its last write before it is unconditional.
 
 use super::constant::{Value, eval};
-use super::flow::ASSIGNMENTS;
-use super::kotlin::Part;
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashMap;
@@ -52,14 +50,16 @@ impl<'a, D: Doc> Env<'a, D> {
                 continue;
             }
             let kind = c.kind();
-            if let Some((_, l, r)) = ASSIGNMENTS.iter().find(|(k, ..)| kind == *k)
-                && let Some(left) = c.part(l)
-                && left.kind() == "identifier"
+            if let Some((left, right)) = super::flow::assignment(&c)
+                && matches!(left.kind().as_ref(), "identifier" | "simple_identifier")
             {
-                let value = c.part(r).filter(|v| {
+                let value = Some(right).filter(|v| {
                     matches!(
                         kind.as_ref(),
-                        "variable_declarator" | "assignment" | "assignment_expression"
+                        "variable_declarator"
+                            | "assignment"
+                            | "assignment_expression"
+                            | "property_declaration"
                     ) && !super::paths::compound(&c, &left, v)
                 });
                 let looping = super::flow::LOOPS.contains(&kind.as_ref());

@@ -1,0 +1,18 @@
+id: kt-no-weak-hash
+valid:
+- |
+  fun h(b: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(b)
+- |
+  fun h(b: ByteArray, alg: String): ByteArray = MessageDigest.getInstance(alg).digest(b)
+- |
+  fun h(b: ByteArray): String = DigestUtils.sha256Hex(b)
+invalid:
+- |
+  fun h(b: ByteArray): ByteArray = MessageDigest.getInstance("MD5").digest(b)
+- |
+  const val ALG = "SHA-1"
+  fun h(b: ByteArray): ByteArray = java.security.MessageDigest.getInstance(ALG).digest(b)
+- |
+  fun h(b: ByteArray): ByteArray = DigestUtils.getMd5Digest().digest(b)
+- |
+  fun h() = Hashing.sha1()

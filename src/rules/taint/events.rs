@@ -5,9 +5,8 @@
 //! parameters, summary rounds or callers ask about it.
 
 use super::fields::{class_field, is_field};
-use super::flow::{ASSIGNMENTS, CALLS, LOOPS, enclosing};
+use super::flow::{CALLS, LOOPS, enclosing};
 use super::guards::{Check, Guard};
-use super::kotlin::Part;
 use super::paths::{CONDITIONAL, compound};
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
@@ -173,19 +172,12 @@ fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
         }
         let kind = n.kind();
         if super::guards::IFS.contains(&kind.as_ref())
+            || super::loops::WHILES.contains(&kind.as_ref())
             || super::switches::SWITCHES.contains(&kind.as_ref())
         {
             out.push((n.range().start, Shape::If(n.clone())));
         }
-        if let Some((_, l, r)) = ASSIGNMENTS.iter().find(|(k, ..)| kind == *k)
-            && let Some(left) = n.part(l)
-            // C#'s `var x = …` leaves the value without a field name.
-            && let Some(right) = n.part(r).or_else(|| {
-                n.children()
-                    .filter(|c| c.is_named() && c.range() != left.range())
-                    .last()
-            })
-        {
+        if let Some((left, right)) = super::flow::assignment(n) {
             // `x = c ? a : b` with `c` known: only the side taken.
             let right = lists.resolve(branches.live(right));
             // `x += v` adds to `x`: a clean `v` cleans `x` up to the

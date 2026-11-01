@@ -24,3 +24,6 @@ invalid:
   code = random.randint(100000, 999999)
 
   '
+- |
+  import random
+  code = str(random.normalvariate(0, 1))[2:]

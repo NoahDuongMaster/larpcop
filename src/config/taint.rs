@@ -76,6 +76,34 @@ pub struct TaintConfig {
     /// attribute, an event handler, a script or a URL attribute.
     #[serde(default)]
     pub escape_contexts: bool,
+    /// Deserialization: bytes the program serialized itself
+    /// (`out.writeObject(x)`) hold `x`'s content, not a structure the
+    /// sender chose, so a stream write does not carry taint for this rule.
+    #[serde(default)]
+    pub own_serialization_safe: bool,
+    /// Argument vectors that run a command string through a shell (see
+    /// argv.rs): `calls` (regex over the callee), `shells`, `flags`.
+    #[serde(default)]
+    pub shell_argv: Option<ShellArgvConfig>,
+    /// Sources that are the route itself in a handler whose routes have no
+    /// variables (`request.path` under `@app.route('/a/b')`; see routes.rs).
+    #[serde(default)]
+    pub fixed_route_sources: Vec<String>,
+    /// Path objects used on the file system (see pathobj.rs): `types`
+    /// (regex over the constructor), `uses` (regex over the methods).
+    #[serde(default)]
+    pub path_objects: Option<PathObjectsConfig>,
+    /// Values placed into HTML markup that is assigned to a variable are
+    /// sinks (PHP pages printed by a shared template; see fragments.rs).
+    #[serde(default)]
+    pub html_fragments: bool,
+    /// Calls that write outside data into an argument, `name:index` or
+    /// `name:index..` (`fgets:0`, `recv:1`, `scanf:1..`; see outputs.rs).
+    #[serde(default)]
+    pub source_writes: Vec<String>,
+    /// Calls that copy what they are given into an argument (`strcpy:0`).
+    #[serde(default)]
+    pub copies: Vec<String>,
     /// Sink metavariable → regex over its type as the project's language server
     /// shows it (`DB: "Pool|PoolClient"`). Without a server the sink counts.
     #[serde(default)]
@@ -103,4 +131,28 @@ pub struct ResponseReturns {
     pub types: Option<String>,
     /// Regex over the returned node's kind (`^(string|binary_operator)$`).
     pub values: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ShellArgvConfig {
+    /// Regex over the callee (`subprocess.run`, `ProcessBuilder`, `exec`).
+    pub calls: String,
+    /// Regex over the first element: a shell (`sh`, `/bin/bash`, `cmd.exe`).
+    pub shells: String,
+    /// Regex over the second element: the flag that runs a string (`-c`).
+    pub flags: String,
+    /// Where a call takes its vector: `execv:1` (an array), `execl:1..` (the
+    /// arguments from there on). The first argument otherwise.
+    #[serde(default)]
+    pub vectors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PathObjectsConfig {
+    /// Regex over a constructor's callee or an annotation: `^(pathlib\.)?Path$`.
+    pub types: String,
+    /// Regex over the method names that touch the file system.
+    pub uses: String,
 }

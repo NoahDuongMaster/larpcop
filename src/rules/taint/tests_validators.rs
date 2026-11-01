@@ -185,3 +185,58 @@ class A {
         .collect();
     assert_eq!(lines, [15, 18]);
 }
+
+/// A loop runs until its condition fails: after `while (p has "..")` with no
+/// `break`, `p` has none; inside the loop the condition holds.
+#[test]
+fn loop_conditions() {
+    let js = "\
+function a(req) {
+  let p = req.query.p;
+  while (p.includes('..')) {
+    p = p.replace('..', '');
+  }
+  fs.readFile(p);
+}
+function b(req) {
+  let p = req.query.p;
+  while (p.includes('..')) {
+    if (p.length > 9) break;
+    p = p.replace('..', '');
+  }
+  fs.readFile(p);
+}
+function c(req) {
+  let p = req.query.p;
+  do { p = p.replace('..', ''); } while (p.includes('..'));
+  fs.readFile(p);
+}
+";
+    let rejects = ["$P.includes('$S')"];
+    assert_eq!(
+        reported("JavaScript", "a.js", js, &rejects, "fs.readFile($X)"),
+        [14]
+    );
+    let py = "\
+def a(req):
+    p = req.query
+    while '..' in p:
+        p = p.replace('..', '')
+    open(p)
+";
+    assert_eq!(
+        reported("Python", "a.py", py, &["'$S' in $P"], "open($X)"),
+        Vec::<usize>::new()
+    );
+    let rb = "\
+def a(req)
+  p = req.query
+  p = p.sub('..', '') while p.include?('..')
+  File.read(p)
+end
+";
+    assert_eq!(
+        reported("Ruby", "a.rb", rb, &["$P.include?('$S')"], "File.read($X)"),
+        Vec::<usize>::new()
+    );
+}

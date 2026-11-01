@@ -5,6 +5,7 @@
 //! when it holds (clean in the `then` branch, and after the `if` when the
 //! `else` leaves) and those safe when it fails (clean in the `else` branch,
 //! and after the `if` when the `then` branch leaves: `if (!ok(u)) return;`).
+//! Loops read their condition the same way (loops.rs).
 
 use super::NAMES;
 use super::kotlin::Part;
@@ -101,8 +102,11 @@ pub(super) fn of<D: Doc>(n: &Node<D>, checks: &[Check]) -> Vec<Guard> {
     if super::switches::SWITCHES.contains(&n.kind().as_ref()) {
         return super::switches::arms(n);
     }
+    if super::loops::WHILES.contains(&n.kind().as_ref()) {
+        return super::loops::guards(n, checks);
+    }
     let mut out = Vec::new();
-    if checks.is_empty() || !IFS.contains(&n.kind().as_ref()) {
+    if !IFS.contains(&n.kind().as_ref()) {
         return out;
     }
     let (Some(condition), Some(then)) = (
@@ -112,6 +116,10 @@ pub(super) fn of<D: Doc>(n: &Node<D>, checks: &[Check]) -> Vec<Guard> {
     ) else {
         return out;
     };
+    let text = condition.text();
+    if checks.is_empty() && !text.contains("==") && !text.contains("!=") {
+        return out;
+    }
     let (holds, fails) = safe(&condition, checks);
     let (holds, fails) = if n.kind().starts_with("unless") {
         (fails, holds)
@@ -146,7 +154,7 @@ pub(super) fn of<D: Doc>(n: &Node<D>, checks: &[Check]) -> Vec<Guard> {
     out
 }
 
-type Sets = (HashSet<String>, HashSet<String>);
+pub(super) type Sets = (HashSet<String>, HashSet<String>);
 
 /// Names safe when `n` is true, and names safe when it is false.
 pub(super) fn safe<D: Doc>(n: &Node<D>, checks: &[Check]) -> Sets {
@@ -159,19 +167,21 @@ pub(super) fn safe<D: Doc>(n: &Node<D>, checks: &[Check]) -> Sets {
         .max_by_key(|(_, safe, weight)| (*weight, !*safe));
     if let Some((_, safe, _)) = exact {
         return if *safe {
-            (
-                super::membership::members(n).unwrap_or_else(|| names(n)),
-                HashSet::new(),
-            )
+            let mut held = super::membership::members(n).unwrap_or_else(|| names(n));
+            held.extend(super::prefix::derived(n));
+            (held, HashSet::new())
         } else {
             // `x not in allowed` rejects `x`; `".." in p`, `p.includes("..")` reject `p`.
-            let needle = super::membership::not_in(n);
+            let needle = super::membership::not_in(n).or_else(|| super::membership::haystack(n));
             (HashSet::new(), needle.unwrap_or_else(|| names(n)))
         };
     }
+    // Nothing to read: no configured check in it, no comparison with a literal.
     if !checks
         .iter()
         .any(|(r, ..)| range.start <= r.start && r.end <= range.end)
+        && !n.text().contains("==")
+        && !n.text().contains("!=")
     {
         return Default::default();
     }
@@ -211,6 +221,9 @@ fn binary<'a, D: Doc>(op: &str, l: &Node<'a, D>, r: &Node<'a, D>, checks: &[Chec
             (&lh & &rh, &lf | &rf)
         }
         _ => {
+            if let Some(sets) = super::equality::literal(op, l, r) {
+                return sets;
+            }
             // `check(x) === false`, `s.indexOf("..") !== -1`, `i < 0`.
             let (value, constant) = if is_constant(r) {
                 (l, r.text().to_string())

@@ -1,0 +1,35 @@
+id: c-taint-format
+file: src/log.c
+valid:
+- |
+  void log_line(void) {
+      char line[100];
+      if (fgets(line, 100, stdin) != NULL) {
+          printf("%s\n", line);
+      }
+  }
+- |
+  void banner(void) {
+      printf("hello %s\n", "world");
+  }
+invalid:
+- |
+  void log_line(void) {
+      char line[100];
+      if (fgets(line, 100, stdin) != NULL) {
+          printf(line);
+      }
+  }
+- |
+  void log_env(void) {
+      char buf[100] = "";
+      strncat(buf, getenv("MSG"), 99);
+      fprintf(stderr, buf);
+  }
+- |
+  void log_net(int s) {
+      char buf[100];
+      char out[200];
+      recv(s, buf, 99, 0);
+      snprintf(out, 200, buf);
+  }

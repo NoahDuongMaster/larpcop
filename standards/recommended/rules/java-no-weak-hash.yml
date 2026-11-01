@@ -6,28 +6,66 @@
   "message": "MD5 / SHA-1 are broken hash functions.",
   "note": "Use SHA-256 for checksums and a password hash (Argon2, bcrypt, PBKDF2) for passwords.",
   "rule": {
-    "kind": "method_invocation",
-    "all": [
+    "any": [
       {
-        "has": {
-          "field": "name",
-          "regex": "^getInstance$"
-        }
-      },
-      {
-        "has": {
-          "field": "object",
-          "regex": "(^|\\.)MessageDigest$"
-        }
-      },
-      {
-        "has": {
-          "field": "arguments",
-          "has": {
-            "nthChild": 1,
-            "pattern": "$ALG"
+        "kind": "method_invocation",
+        "all": [
+          {
+            "has": {
+              "field": "name",
+              "regex": "^getInstance$"
+            }
+          },
+          {
+            "has": {
+              "field": "object",
+              "regex": "(^|\\.)MessageDigest$"
+            }
+          },
+          {
+            "has": {
+              "field": "arguments",
+              "has": {
+                "nthChild": 1,
+                "pattern": "$ALG"
+              }
+            }
           }
-        }
+        ]
+      },
+      {
+        "kind": "method_invocation",
+        "all": [
+          {
+            "has": {
+              "field": "object",
+              "regex": "(^|\\.)DigestUtils$"
+            }
+          },
+          {
+            "has": {
+              "field": "name",
+              "regex": "^(md2|md5|sha|sha1)(Hex|Digest|DigestAsHex)?$|^get(Md2|Md5|Sha|Sha1)Digest$|^appendMd5DigestAsHex$"
+            }
+          }
+        ]
+      },
+      {
+        "kind": "method_invocation",
+        "all": [
+          {
+            "has": {
+              "field": "object",
+              "regex": "(^|\\.)Hashing$"
+            }
+          },
+          {
+            "has": {
+              "field": "name",
+              "regex": "^(md5|sha1)$"
+            }
+          }
+        ]
       }
     ]
   },

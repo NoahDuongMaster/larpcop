@@ -1,0 +1,16 @@
+id: kt-no-weak-cipher
+valid:
+- |
+  fun c(): Cipher = Cipher.getInstance("AES/GCM/NoPadding")
+- |
+  fun c(): Cipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding")
+invalid:
+- |
+  fun c(): Cipher = Cipher.getInstance("DES/CBC/PKCS5Padding")
+- |
+  fun c(): Cipher = Cipher.getInstance("AES/ECB/PKCS5Padding", "BC")
+- |
+  fun c(): Cipher {
+      val transformation = "AES"
+      return Cipher.getInstance(transformation)
+  }

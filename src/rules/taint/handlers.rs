@@ -148,7 +148,7 @@ fn resolver_args<D: Doc>(list: &Node<D>) -> Vec<String> {
 
 /// Text of the decorators on a function (Python `decorated_definition`, or
 /// decorators before a JS/TS method), without the `@`.
-fn decorators_of<D: Doc>(function: &Node<D>) -> Vec<String> {
+pub(super) fn decorators_of<D: Doc>(function: &Node<D>) -> Vec<String> {
     let holder = function
         .parent()
         .filter(|p| p.kind() == "decorated_definition")

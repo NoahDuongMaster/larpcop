@@ -120,7 +120,7 @@ RULES = [
               "for anything a user must not guess.",
          rule={"kind": "call", "has": {"field": "function", "regex":
                "^(random|numpy\\.random|np\\.random)\\.(random|randint|randrange|choice|choices|sample|getrandbits|"
-               "uniform|randbytes|shuffle|triangular|gauss|rand|randn)$"}}),
+               "uniform|randbytes|shuffle|triangular|gauss|\\w+variate|rand|randn)$"}}),
     dict(id="py-no-insecure-cookie", langs=["Python"], severity="warning",
          message="Cookie set without secure=True or with httponly=False.",
          note="Pass secure=True and httponly=True (and samesite) to set_cookie.",

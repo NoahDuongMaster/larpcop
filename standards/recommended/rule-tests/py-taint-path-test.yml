@@ -5,8 +5,37 @@ valid:
 - "from flask import Flask, request, session\nimport codecs, os\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    f = codecs.open('/srv/static/readme.txt', 'r', 'utf-8')\n"
 - "from flask import Flask, request, send_file\nimport os\napp = Flask(__name__)\n\n@app.route('/f')\ndef f():\n    path = os.path.realpath(os.path.join(BASE, request.args['name']))\n    if not path.startswith(BASE\
   \ + os.sep):\n        return 'no', 400\n    return send_file(path)\n"
+- |
+  from flask import Flask, request
+  import pathlib
+  app = Flask(__name__)
+  BASE = pathlib.Path('/srv/files').resolve()
+
+  @app.route('/x')
+  def view():
+      p = (BASE / request.args['f']).resolve()
+      if not p.is_relative_to(BASE):
+          return 'no', 400
+      return p.read_text()
+- |
+  from flask import Flask, request
+  app = Flask(__name__)
+
+  @app.route('/x')
+  def view():
+      return str(Report.objects.filter(name=request.args['f']).exists())
 invalid:
 - "def h():\n    name = request.args.get('f')\n    with open('/srv/files/' + name) as fh:\n        return fh.read()\n"
 - "from flask import request\n\ndef x():\n    name = request.args.get('f')\n    if '..' in name:\n        return open(name).read()\n"
 - "from flask import Flask, request, session\nimport codecs, os\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    f = codecs.open(f'/srv/files/{request.args[\"f\"]}', 'r', 'utf-8')\n"
 - "from flask import Flask, request, session\nimport codecs, os\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    ok = os.path.exists('/srv/' + request.args['f'])\n"
+- |
+  from flask import Flask, request
+  import pathlib
+  app = Flask(__name__)
+
+  @app.route('/x')
+  def view():
+      files = pathlib.Path('/srv/files')
+      p = files / request.cookies.get('f', '')
+      return 'yes' if p.exists() else 'no'

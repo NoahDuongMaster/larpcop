@@ -1,0 +1,39 @@
+id: java-taint-stored-xss
+valid:
+- |
+  public class Comments extends HttpServlet {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws Exception {
+      try (Connection c = ds.getConnection(); Statement s = c.createStatement()) {
+        ResultSet rs = s.executeQuery("select body from comments");
+        while (rs.next()) {
+          response.getWriter().println(Encode.forHtml(rs.getString("body")));
+        }
+      }
+    }
+  }
+- |
+  public class Count extends HttpServlet {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws Exception {
+      int n = jdbc.queryForObject("select count(*) from comments", Integer.class);
+      response.getWriter().println("<p>" + n + "</p>");
+    }
+  }
+invalid:
+- |
+  public class Comments extends HttpServlet {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws Exception {
+      try (Connection c = ds.getConnection(); Statement s = c.createStatement()) {
+        ResultSet rs = s.executeQuery("select body from comments");
+        while (rs.next()) {
+          response.getWriter().println("<li>" + rs.getString("body") + "</li>");
+        }
+      }
+    }
+  }
+- |
+  public class Profile extends HttpServlet {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws Exception {
+      String bio = jdbc.queryForObject("select bio from users where id = 1", String.class);
+      response.getWriter().write("<div>" + bio + "</div>");
+    }
+  }

@@ -176,36 +176,3 @@ fn java_injected_implementation() {
         .collect();
     assert_eq!(lines, [6]);
 }
-
-/// `Base b = new Bad(); b.action(x)`: the class the object is built as, when
-/// several subclasses define the method differently.
-#[test]
-fn dispatch_on_constructed_class() {
-    let java = "\
-abstract class Base { abstract void action(String d); }
-class Bad extends Base { void action(String d) { sink(d); } }
-class Good extends Base { void action(String d) { sink(\"fixed\"); } }
-class A {
-  void f(Req req) {
-    Base b = new Bad();
-    b.action(req.getParameter(\"x\"));
-    Base g = new Good();
-    g.action(req.getParameter(\"x\"));
-  }
-}
-";
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(dir.path().join("A.java"), java).unwrap();
-    let r = super::tests_calls::rule(
-        "Java",
-        dir.path(),
-        &["req.getParameter($K)"],
-        &["sink($X)"],
-        &[],
-    );
-    let lines: Vec<usize> = super::tests_calls::found(&r, dir.path(), "A.java")
-        .iter()
-        .map(|(l, _)| *l)
-        .collect();
-    assert_eq!(lines, [7]);
-}

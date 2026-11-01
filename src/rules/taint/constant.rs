@@ -37,7 +37,7 @@ pub(crate) fn eval<D: Doc>(n: &Node<D>, env: &Env<D>, depth: usize) -> Option<Va
         "string" | "string_literal" | "character_literal" | "interpreted_string_literal" => {
             string(n)
         }
-        "identifier" => env.value(&n.text(), n.range().start, depth),
+        "identifier" | "simple_identifier" => env.value(&n.text(), n.range().start, depth),
         "not_operator" => not(eval(&n.part("argument")?, env, depth)?),
         "unary_operator" | "unary_expression" | "prefix_unary_expression" => {
             let operand = n

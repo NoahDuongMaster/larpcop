@@ -5,6 +5,7 @@ valid:
   \ view():\n    data = json.loads(request.data)\n"
 - "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
   \ view():\n    cfg = yaml.safe_load(request.data)\n"
+- "from flask import Flask, request\nimport pickle\napp = Flask(__name__)\n\n@app.route('/x')\ndef x():\n    blob = pickle.dumps(request.args['q'])\n    return str(pickle.loads(blob))\n"
 invalid:
 - "from flask import Flask, request, redirect, make_response, url_for\nfrom markupsafe import Markup, escape\nimport os, subprocess, pickle, yaml, base64\napp = Flask(__name__)\n\n@app.route('/x')\ndef\
   \ view():\n    obj = pickle.loads(base64.b64decode(request.cookies[\"session\"]))\n"

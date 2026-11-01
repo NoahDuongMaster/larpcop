@@ -41,7 +41,7 @@ SECURITY = {
     "go-no-unsafe-template-type", "go-taint-sql", "go-taint-shell", "go-taint-path", "go-taint-ssrf",
     "go-taint-redirect", "go-taint-xss",
     "java-taint-sql", "java-taint-shell", "java-taint-path", "java-taint-xss", "java-taint-ldap", "java-taint-xpath",
-    "java-taint-redirect", "java-taint-trust-boundary", "java-no-sql-concat", "java-no-weak-hash",
+    "java-taint-redirect", "java-taint-trust-boundary", "java-no-sql-concat", "java-no-weak-hash", "java-no-shell-string",
     "java-no-weak-cipher", "java-no-insecure-random", "java-no-insecure-cookie",
     "php-taint-sql", "php-taint-shell", "php-taint-code", "php-taint-path", "php-taint-xss", "php-taint-ssrf",
     "php-taint-redirect", "php-taint-deserialization", "php-no-sql-interpolation", "php-no-eval", "php-no-unserialize",

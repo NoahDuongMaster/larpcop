@@ -1,0 +1,45 @@
+id: c-taint-shell
+file: src/run.c
+valid:
+- |
+  void list(void) {
+      char cmd[100] = "ls ";
+      strncat(cmd, "-l", 10);
+      system(cmd);
+  }
+- |
+  void count(void) {
+      char line[20];
+      if (fgets(line, 20, stdin) != NULL) {
+          int n = atoi(line);
+          char cmd[50];
+          snprintf(cmd, 50, "sleep %d", n);
+          system(cmd);
+      }
+  }
+- |
+  void ls(void) {
+      char *dir = getenv("DIR");
+      execl("/bin/ls", "ls", dir, NULL);
+  }
+invalid:
+- |
+  void run(void) {
+      char cmd[100] = "ls ";
+      size_t len = strlen(cmd);
+      if (fgets(cmd + len, (int)(100 - len), stdin) != NULL) {
+          system(cmd);
+      }
+  }
+- |
+  #define SHELL "/bin/sh"
+  void run(void) {
+      char *arg = getenv("ARG");
+      execl(SHELL, "sh", "-c", arg, NULL);
+  }
+- |
+  void serve(int s) {
+      char buf[256];
+      recv(s, buf, sizeof(buf) - 1, 0);
+      FILE *p = popen(buf, "r");
+  }

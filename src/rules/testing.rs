@@ -124,7 +124,7 @@ fn check(rule: &RuleConfig<SupportLang>, fixture: &Fixture) -> Vec<String> {
     let resolve = super::values::Resolve::of(rule).ok().flatten();
     let settings = super::values::Settings::default();
     let hits = |src: &str| {
-        lang.ast_grep(src)
+        lang.ast_grep(super::macros::expand(lang, src))
             .root()
             .find_all(&rule.matcher)
             .filter(|m| resolve.as_ref().is_none_or(|r| r.keeps(m, &settings)))

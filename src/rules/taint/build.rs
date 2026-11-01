@@ -1,7 +1,7 @@
 //! Building a taint rule from its configuration: patterns compiled per
 //! language and indexed by node kind, regexes, source texts.
 
-use super::{TaintRule, scan, typed};
+use super::{TaintRule, argv, mapping, outputs, pathobj, routes, scan, typed};
 use crate::config::TaintConfig;
 use crate::rules::Level;
 use anyhow::{Context, Result};
@@ -103,6 +103,58 @@ impl TaintRule {
             param_decorators: cfg.param_decorators.clone(),
             resolver_args: cfg.resolver_args,
             escape_contexts: cfg.escape_contexts,
+            own_serialization_safe: cfg.own_serialization_safe,
+            html_fragments: cfg.html_fragments,
+            path_objects: cfg
+                .path_objects
+                .as_ref()
+                .map(|p| -> Result<_> {
+                    let re = |s: &str| {
+                        regex::Regex::new(s)
+                            .with_context(|| format!("taint `{}`: path_objects", cfg.id))
+                    };
+                    Ok(pathobj::PathObjects {
+                        types: re(&p.types)?,
+                        uses: re(&p.uses)?,
+                    })
+                })
+                .transpose()?,
+            fixed_routes: routes::FixedRoutes {
+                sources: cfg
+                    .fixed_route_sources
+                    .iter()
+                    .map(|s| s.split_whitespace().collect())
+                    .collect(),
+                prefixed: Default::default(),
+            },
+            shell_argv: cfg
+                .shell_argv
+                .as_ref()
+                .map(|a| -> Result<_> {
+                    let re = |s: &str| {
+                        regex::Regex::new(s)
+                            .with_context(|| format!("taint `{}`: shell_argv", cfg.id))
+                    };
+                    Ok(argv::ShellArgv {
+                        calls: re(&a.calls)?,
+                        vectors: outputs::parse(&a.vectors)?,
+                        shells: re(&a.shells)?,
+                        flags: re(&a.flags)?,
+                    })
+                })
+                .transpose()?,
+            writes: std::sync::Arc::new(
+                outputs::Writes::new(&cfg.source_writes, &cfg.copies)
+                    .with_context(|| format!("taint `{}`: source_writes/copies", cfg.id))?,
+            ),
+            cleaners: std::sync::Arc::new(mapping::Cleaners::new(
+                &cfg.sanitizers,
+                cfg.sanitizer_names
+                    .as_deref()
+                    .map(regex::Regex::new)
+                    .transpose()
+                    .with_context(|| format!("taint `{}`: sanitizer_names", cfg.id))?,
+            )),
             handler_classes: cfg
                 .handler_classes
                 .as_deref()
@@ -139,9 +191,7 @@ impl TaintRule {
 
 /// Go calls written alone (`db.Query($X)`) need a function body as context.
 pub(super) fn pattern(p: &str, lang: SupportLang) -> Result<Pattern> {
-    if lang == SupportLang::Go
-        && let Some((context, selector)) = crate::rules::pattern_fixes::context(p)
-    {
+    if let Some((context, selector)) = crate::rules::pattern_fixes::context_in(p, lang) {
         return Ok(Pattern::contextual(&context, &selector, lang)?);
     }
     Ok(Pattern::try_new(p, lang)?)

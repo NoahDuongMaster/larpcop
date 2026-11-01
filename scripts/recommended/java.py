@@ -21,6 +21,14 @@ def inside_configured(where):
 
 
 
+# Commons Codec `DigestUtils.md5Hex`, `getSha1Digest`; Spring `md5DigestAsHex`.
+DIGEST_UTILS = "^(md2|md5|sha|sha1)(Hex|Digest|DigestAsHex)?$|^get(Md2|Md5|Sha|Sha1)Digest$|^appendMd5DigestAsHex$"
+# A command string handed to a shell: `"sh -c …"`, `"/bin/bash -c …"`, `"cmd /c …"`,
+# also as the format of `String.format`.
+SHELL_STRING = (r'^(String\.format\(\s*)?"\s*((/usr)?/bin/)?(sh|bash|zsh|dash|ksh|ash)\s+-[a-z]*c\b'
+                r'|^(String\.format\(\s*)?"\s*(?i:cmd(\.exe)?\s+/c|(powershell|pwsh)(\.exe)?\s+-(c|command))\b')
+
+
 RULES = [
     dict(id="java-no-sql-concat", langs=["Java"], severity="error",
          message="SQL built by string concatenation.",
@@ -31,13 +39,37 @@ RULES = [
     dict(id="java-no-weak-hash", langs=["Java"], severity="error",
          message="MD5 / SHA-1 are broken hash functions.",
          note="Use SHA-256 for checksums and a password hash (Argon2, bcrypt, PBKDF2) for passwords.",
-         rule={"kind": "method_invocation", "all": [
-             {"has": {"field": "name", "regex": "^getInstance$"}},
-             {"has": {"field": "object", "regex": "(^|\\.)MessageDigest$"}},
-             {"has": {"field": "arguments", "has": {"nthChild": 1, "pattern": "$ALG"}}},
+         rule={"any": [
+             {"kind": "method_invocation", "all": [
+                 {"has": {"field": "name", "regex": "^getInstance$"}},
+                 {"has": {"field": "object", "regex": "(^|\\.)MessageDigest$"}},
+                 {"has": {"field": "arguments", "has": {"nthChild": 1, "pattern": "$ALG"}}},
+             ]},
+             # Apache Commons Codec, Spring; Guava.
+             {"kind": "method_invocation", "all": [
+                 {"has": {"field": "object", "regex": "(^|\\.)DigestUtils$"}},
+                 {"has": {"field": "name", "regex": DIGEST_UTILS}},
+             ]},
+             {"kind": "method_invocation", "all": [
+                 {"has": {"field": "object", "regex": "(^|\\.)Hashing$"}},
+                 {"has": {"field": "name", "regex": "^(md5|sha1)$"}},
+             ]},
          ]},
          # What the argument holds: a literal, a constant, a property file entry.
          resolve={"ALG": "(?i)^(md2|md4|md5|sha|sha-?1)$"}),
+    dict(id="java-no-shell-string", langs=["Java"], severity="error",
+         message="A command string that starts with a shell (`sh -c …`, `cmd /c …`) is built from values: "
+                 "whatever they hold runs as shell code.",
+         note="Run the program itself with an argument array (new ProcessBuilder(\"tool\", arg)); "
+              "`Runtime.exec(String)` without a shell only splits on spaces.",
+         rule={"kind": "method_invocation", "all": [
+             {"has": {"field": "name", "regex": "^exec$"}},
+             {"has": {"field": "arguments", "has": {
+                 "nthChild": 1, "regex": SHELL_STRING,
+                 "any": [{"kind": "binary_expression"}, {"kind": "method_invocation"}],
+                 "has": {"stopBy": "end", "any": [{"kind": "identifier"}, {"kind": "method_invocation"}]},
+             }}},
+         ]}),
     dict(id="java-no-weak-cipher", langs=["Java"], severity="error",
          message="Broken cipher or mode (DES, 3DES, RC2/RC4, Blowfish, ECB; bare \"AES\" means AES/ECB).",
          note="Use AES/GCM/NoPadding (or ChaCha20-Poly1305) with a random IV per message.",

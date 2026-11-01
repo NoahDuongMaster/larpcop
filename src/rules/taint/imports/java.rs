@@ -166,15 +166,20 @@ fn source_roots<D: Doc>(root: &Node<D>, file: &Path, repo: &Path) -> Vec<PathBuf
                 .find(|c| matches!(c.kind().as_ref(), "scoped_identifier" | "identifier"))
         })
         .map(|n| n.text().to_string());
-    if let (Some(package), Some(mut dir)) = (package, file.parent().map(Path::to_path_buf)) {
-        let depth = package.split('.').count();
-        let tail: PathBuf = package.split('.').collect();
-        if dir.ends_with(&tail) {
-            for _ in 0..depth {
-                dir.pop();
+    match (package, file.parent().map(Path::to_path_buf)) {
+        (Some(package), Some(mut dir)) => {
+            let depth = package.split('.').count();
+            let tail: PathBuf = package.split('.').collect();
+            if dir.ends_with(&tail) {
+                for _ in 0..depth {
+                    dir.pop();
+                }
+                roots.push(dir);
             }
-            roots.push(dir);
         }
+        // The default package: the file's own directory.
+        (None, Some(dir)) => roots.push(dir),
+        _ => {}
     }
     for module in std::iter::once(repo.to_path_buf()).chain(modules(repo)) {
         let r = module.join("src/main/java");

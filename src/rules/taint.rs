@@ -10,7 +10,6 @@ use super::{Level, RuleInfo, Violation};
 use crate::files::SourceFile;
 use ast_grep_core::{Doc, Language, Node};
 use ast_grep_language::{LanguageExt, SupportLang};
-use flow::Reached;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -38,6 +37,14 @@ pub struct TaintRule {
     handler_classes: Option<regex::Regex>,
     input_types: Option<regex::Regex>,
     escape_contexts: bool,
+    own_serialization_safe: bool,
+    shell_argv: Option<argv::ShellArgv>,
+    fixed_routes: routes::FixedRoutes,
+    path_objects: Option<pathobj::PathObjects>,
+    html_fragments: bool,
+    /// Sanitizers by name, for functions passed by reference (`map(esc)`).
+    cleaners: std::sync::Arc<mapping::Cleaners>,
+    writes: std::sync::Arc<outputs::Writes>,
     exclude: globset::GlobSet,
     /// `sink_types`: metavariables whose type the project's language server must confirm.
     typed: typed::Typed,
@@ -100,7 +107,7 @@ impl TaintRule {
         let Some(lang) = SupportLang::from_path(&file.rel).filter(|l| self.handles(*l)) else {
             return Vec::new();
         };
-        let grep = lang.ast_grep(&file.content);
+        let grep = lang.ast_grep(crate::rules::macros::expand(lang, &file.content));
         self.check_indexed(file, lang, &FileIndex::new(grep.root()))
     }
 
@@ -108,115 +115,15 @@ impl TaintRule {
         self.patterns(lang).is_some() && !self.companions.contains(&lang)
     }
 
-    /// The check on a file already parsed and indexed for `lang`.
-    pub fn check_indexed<D: Doc>(
-        &self,
-        file: &SourceFile,
-        lang: SupportLang,
-        index: &FileIndex<D>,
-    ) -> Vec<Violation> {
-        if !self.handles(lang) || self.exclude.is_match(&file.rel) {
-            return Vec::new();
-        }
-        let root = &index.root;
-        let Some((ctx, hits)) = self.prepare(lang, index, file, 0) else {
-            return Vec::new();
-        };
-        let mut out = Vec::new();
-        // Fields a method stores request data in, by class: read by the
-        // class's other methods, so a second walk starts them tainted.
-        let mut fields: HashMap<(usize, usize), HashSet<String>> = HashMap::new();
-        for _ in 0..2 {
-            let own = |n: &Node<_>| {
-                let mut names = self.own_names(n);
-                if let Some(f) = class_of(n).and_then(|c| fields.get(&c)) {
-                    // A bare field name is shadowed by a parameter or local.
-                    let own = |f: &&String| f.contains('.') || !fields::declares(n, f);
-                    names.extend(f.iter().filter(own).cloned());
-                }
-                names
-            };
-            let mut stored: HashMap<(usize, usize), HashSet<String>> = HashMap::new();
-            ctx.run(root, own(root), &hits, &own, &mut |r| match r {
-                Reached::Sink(arg, typed) if self.typed.holds(lang, file, &typed) => {
-                    out.push(self.violation(file, &arg, None))
-                }
-                Reached::Call(arg, into) => out.push(self.violation(file, &arg, Some(into))),
-                Reached::Responds(f, value)
-                    if self.responds.as_ref().is_some_and(|r| r.holds(&f, &value)) =>
-                {
-                    out.push(self.violation(file, &value, None))
-                }
-                Reached::Field(left) => {
-                    if let Some(c) = class_of(&left) {
-                        stored.entry(c).or_default().insert(left.text().to_string());
-                    }
-                }
-                _ => {}
-            });
-            let known = |(c, f): (&(usize, usize), &HashSet<String>)| {
-                fields.get(c).is_some_and(|k| f.is_subset(k))
-            };
-            if stored.iter().all(known) {
-                break;
-            }
-            for (c, f) in stored {
-                fields.entry(c).or_default().extend(f);
-            }
-        }
-        // A sink reached directly and through a summary is one finding.
-        out.sort_by_key(|v| (v.line, v.column));
-        out.dedup_by_key(|v| (v.line, v.column));
-        out
-    }
-
     fn patterns(&self, lang: SupportLang) -> Option<&scan::Indexed> {
         self.langs.iter().find(|(l, _)| *l == lang).map(|(_, p)| p)
     }
-
-    fn violation<D: Doc>(
-        &self,
-        file: &SourceFile,
-        at: &Node<D>,
-        into: Option<String>,
-    ) -> Violation {
-        let pos = at.start_pos();
-        let note = match (into, &self.note) {
-            (Some(into), Some(n)) => Some(format!("Reaches the sink through {into}. {n}")),
-            (Some(into), None) => Some(format!("Reaches the sink through {into}.")),
-            (None, n) => n.clone(),
-        };
-        Violation {
-            rule: self.id.clone(),
-            level: self.level,
-            file: file.rel.clone(),
-            line: pos.line() + 1,
-            column: pos.column(at) + 1,
-            message: self.message.clone(),
-            note,
-            snippet: file
-                .content
-                .lines()
-                .nth(pos.line())
-                .map(|l| l.trim().chars().take(120).collect()),
-        }
-    }
 }
 
-/// The class a node is in (its range), for the fields its methods share.
-fn class_of<D: Doc>(n: &Node<D>) -> Option<(usize, usize)> {
-    let class = n.ancestors().find(|a| {
-        matches!(
-            a.kind().as_ref(),
-            "class_declaration" | "class_definition" | "class" | "abstract_class_declaration"
-        )
-    })?;
-    let r = class.range();
-    Some((r.start, r.end))
-}
-
+mod argv;
 mod build;
 mod callbacks;
+mod check;
 pub(crate) mod constant;
 mod containers;
 mod contexts;
@@ -226,9 +133,11 @@ mod defs;
 mod destructure;
 mod entries;
 mod env;
+mod equality;
 mod events;
 mod fields;
-mod flow;
+pub(crate) mod flow;
+mod fragments;
 mod guards;
 mod handlers;
 mod imports;
@@ -236,8 +145,13 @@ mod iteration;
 mod kotlin;
 mod lambdas;
 mod lists;
+mod loops;
+mod mapping;
 mod membership;
 mod names;
+mod origins;
+mod outputs;
+mod pathobj;
 mod paths;
 mod prefix;
 mod prepare;
@@ -245,21 +159,29 @@ mod reach;
 mod resolve;
 mod responds;
 mod returns;
+mod routes;
 mod scan;
 mod services;
+mod statics;
 pub use scan::FileIndex;
 mod summary;
 mod switches;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_argv;
+#[cfg(test)]
 mod tests_branches;
+#[cfg(test)]
+mod tests_c;
 #[cfg(test)]
 mod tests_calls;
 #[cfg(test)]
 mod tests_csharp;
 #[cfg(test)]
 mod tests_deadcode;
+#[cfg(test)]
+mod tests_dispatch;
 /// `DUMP=f.java LANG_=java cargo test dump -- --ignored --nocapture` prints a
 /// syntax tree with its fields.
 #[cfg(test)]
@@ -267,13 +189,25 @@ mod tests_dump;
 #[cfg(test)]
 mod tests_entries;
 #[cfg(test)]
+mod tests_equality;
+#[cfg(test)]
 mod tests_kotlin;
 #[cfg(test)]
+mod tests_mapping;
+#[cfg(test)]
 mod tests_methods;
+#[cfg(test)]
+mod tests_pathobj;
+#[cfg(test)]
+mod tests_routes;
 #[cfg(test)]
 mod tests_ruby;
 #[cfg(test)]
 mod tests_services;
+#[cfg(test)]
+mod tests_sinks;
+#[cfg(test)]
+mod tests_streams;
 #[cfg(test)]
 mod tests_support;
 #[cfg(test)]

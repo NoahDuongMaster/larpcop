@@ -129,6 +129,31 @@ function f(req) {
         ..Default::default()
     };
     assert_eq!(reported("JavaScript", "a.js", js, cfg), [4]);
+    // A check on the normalized path proves what it was built from.
+    let derived = "\
+function g(req) {
+  const name = req.query.f;
+  const target = path.resolve(BASE + name);
+  if (!target.startsWith(BASE)) {
+    return;
+  }
+  sink(BASE + name);
+}
+function h(req) {
+  const name = req.query.f;
+  const target = BASE + name;
+  if (!target.startsWith(BASE)) {
+    return;
+  }
+  sink(BASE + name);
+}
+";
+    let cfg = TaintConfig {
+        sinks: vec!["sink($U)".into()],
+        guards: vec!["$P.startsWith($B)".into()],
+        ..Default::default()
+    };
+    assert_eq!(reported("JavaScript", "a.js", derived, cfg), [15]);
 }
 
 /// In an arm of a `switch`/`when`/`match` on fixed values the subject is one

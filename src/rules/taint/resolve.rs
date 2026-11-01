@@ -44,6 +44,16 @@ impl Ctx {
         {
             return Some((s, false));
         }
+        // `Store s; s.save(x)`: every known implementation of its type.
+        if let Some(object) = receiver_node(call)
+            && let Some(ty) = super::declared::declared_type(&object)
+            && let Some(s) = self.summaries.get(&format!(
+                "{}.{method}",
+                ty.split('<').next().unwrap_or(&ty).trim()
+            ))
+        {
+            return Some((s, false));
+        }
         self.summaries
             .get(&format!("*.{method}"))
             .map(|s| (s, true))
@@ -60,4 +70,17 @@ impl Ctx {
         });
         built.get(name).cloned().flatten()
     }
+}
+
+/// The plain name a method is called on: `s` of `s.save(x)`.
+fn receiver_node<'a, D: Doc>(call: &Node<'a, D>) -> Option<Node<'a, D>> {
+    use super::kotlin::Part;
+    let object = call
+        .part("object")
+        .or_else(|| {
+            call.part("function")
+                .and_then(|f| f.part("object").or_else(|| f.part("expression")))
+        })
+        .or_else(|| call.part("receiver"))?;
+    matches!(object.kind().as_ref(), "identifier" | "simple_identifier").then_some(object)
 }

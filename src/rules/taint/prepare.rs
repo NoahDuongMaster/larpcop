@@ -51,6 +51,8 @@ impl TaintRule {
                     .is_some_and(|h| routes.0.is_constant(m.get_node(), h, &self.root))
             })
             .collect();
+        // `source_types`/`source_text` (`repo.findAll()` on a `*Repository`).
+        let sources = self.source_types.keep(&index.root, sources);
         let ranges = |ms: Vec<NodeMatch<'a, D>>| -> Vec<Range<usize>> {
             ms.iter().map(|m| m.range()).collect()
         };

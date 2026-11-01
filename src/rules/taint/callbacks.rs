@@ -1,7 +1,10 @@
 //! A callback run over a tainted value receives it: `ids.forEach(id => q(id))`,
 //! `list.forEach(x -> q(x))`, Kotlin `name?.let { q(it) }`. Its first parameter
-//! (Kotlin's implicit `it`) is tainted when the receiver is.
+//! (Kotlin's implicit `it`) is tainted when the receiver is. What a callback
+//! writes into the names it captures (`rows.forEach(r -> out.append(r))`)
+//! holds in the scope around it.
 
+use super::events::Hits;
 use super::flow::{CALLS, Ctx};
 use super::kotlin::Part;
 use ast_grep_core::{Doc, Node};
@@ -51,11 +54,48 @@ pub(super) fn bound<D: Doc>(ctx: &Ctx, f: &Node<D>, names: &HashSet<String>) -> 
     if !ITERATES.contains(&method.as_str()) {
         return None;
     }
-    let receiver = at.part("function").and_then(|m| m.part("object"))?;
+    // Java `list.forEach(…)` names its receiver `object`; JS and Python
+    // calls hold it in the callee (`list.forEach` as a member expression).
+    let receiver = at
+        .part("object")
+        .or_else(|| at.part("function").and_then(|m| m.part("object")))?;
     if !ctx.tainted(&receiver, names) {
         return None;
     }
     let params = super::defs::positional_params(f);
     let first = if method == "forEachIndexed" { 1 } else { 0 };
     params.into_iter().nth(first).filter(|p| !p.is_empty())
+}
+
+impl Ctx {
+    /// The names of `scope` that callback `f` taints, given the tainted
+    /// `names` where it is written: `out` in `rows.forEach(r -> out.append(r))`.
+    pub(super) fn captured_writes<'a, D: Doc>(
+        &self,
+        scope: &Node<'a, D>,
+        f: &Node<'a, D>,
+        names: &HashSet<String>,
+        hits: &Hits<'a, D>,
+    ) -> Vec<String> {
+        let params = super::summary::param_names(f);
+        let text = f.text();
+        let start: HashSet<String> = names
+            .iter()
+            .filter(|n| !params.contains(*n) && text.contains(n.as_str()))
+            .cloned()
+            .chain(bound(self, f, names))
+            .collect();
+        if start.is_empty() {
+            return Vec::new();
+        }
+        let end = self.run_scope(f, start.clone(), hits, &mut |_| {});
+        // Only names the scope itself uses, outside the callback.
+        let outer = scope.text();
+        let base = scope.range().start;
+        let (from, to) = (f.range().start - base, f.range().end - base);
+        let around = |n: &str| outer[..from].contains(n) || outer[to..].contains(n);
+        end.into_iter()
+            .filter(|n| !start.contains(n) && !params.contains(n) && around(n))
+            .collect()
+    }
 }

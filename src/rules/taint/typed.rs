@@ -3,6 +3,9 @@
 //! `list.query(x)`. The type a name is declared with in the source decides
 //! (`Yaml y = …`, `db: Pool`); otherwise the project's language server is
 //! asked. No declaration and no server: the syntactic finding stands.
+//! `strict_sink_types` are kept only when the type is known: declared, or
+//! written at the sink (`new URL(u).getContent()`), for methods whose name is
+//! common elsewhere (`getContent()` of a page or an entity).
 
 use crate::files::SourceFile;
 use anyhow::{Context, Result};
@@ -15,8 +18,8 @@ use std::path::PathBuf;
 
 #[derive(Default)]
 pub struct Typed {
-    /// (metavariable, regex over the hover text)
-    constraints: Vec<(String, Regex)>,
+    /// (metavariable, regex over the hover text, type must be known)
+    constraints: Vec<(String, Regex, bool)>,
     root: PathBuf,
     servers: BTreeMap<String, Vec<String>>,
 }
@@ -33,7 +36,7 @@ impl Typed {
             .map(|(var, re)| {
                 let re =
                     Regex::new(re).with_context(|| format!("taint `{id}`: sink_types.{var}"))?;
-                Ok((var.trim_start_matches('$').to_string(), re))
+                Ok((var.trim_start_matches('$').to_string(), re, false))
             })
             .collect::<Result<_>>()?;
         Ok(Self {
@@ -41,6 +44,17 @@ impl Typed {
             root,
             servers,
         })
+    }
+
+    /// Adds constraints that hold only for a known type.
+    pub fn with_strict(mut self, id: &str, strict: &BTreeMap<String, String>) -> Result<Self> {
+        for (var, re) in strict {
+            let re =
+                Regex::new(re).with_context(|| format!("taint `{id}`: strict_sink_types.{var}"))?;
+            self.constraints
+                .push((var.trim_start_matches('$').to_string(), re, true));
+        }
+        Ok(self)
     }
 
     /// The constrained metavariables of one sink match, by constraint index.
@@ -51,7 +65,7 @@ impl Typed {
         self.constraints
             .iter()
             .enumerate()
-            .filter_map(|(i, (var, _))| Some((i, env.get_match(var)?.clone())))
+            .filter_map(|(i, (var, ..))| Some((i, env.get_match(var)?.clone())))
             .collect()
     }
 
@@ -64,8 +78,16 @@ impl Typed {
         nodes: &[(usize, Node<D>)],
     ) -> bool {
         nodes.iter().all(|(i, node)| {
+            let (_, re, strict) = &self.constraints[*i];
             if let Some(declared) = super::declared::declared_type(node) {
-                return self.constraints[*i].1.is_match(&declared);
+                return re.is_match(&declared);
+            }
+            if *strict {
+                let created = node.kind().contains("creation")
+                    && node
+                        .field("type")
+                        .is_some_and(|t| re.is_match(t.text().as_ref()));
+                return created;
             }
             let pos = node.start_pos();
             let at = (pos.line(), pos.column(node));
@@ -86,7 +108,7 @@ impl Typed {
                     at.1 + 1
                 );
             }
-            answer.is_none_or(|text| self.constraints[*i].1.is_match(&text))
+            answer.is_none_or(|text| re.is_match(&text))
         })
     }
 }

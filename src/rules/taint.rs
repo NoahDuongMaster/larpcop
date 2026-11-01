@@ -40,6 +40,7 @@ pub struct TaintRule {
     own_serialization_safe: bool,
     shell_argv: Option<argv::ShellArgv>,
     fixed_routes: routes::FixedRoutes,
+    source_types: srctypes::SourceTypes,
     path_objects: Option<pathobj::PathObjects>,
     html_fragments: bool,
     /// Sanitizers by name, for functions passed by reference (`map(esc)`).
@@ -163,6 +164,7 @@ mod returns;
 mod routes;
 mod scan;
 mod services;
+mod srctypes;
 mod statics;
 pub use scan::FileIndex;
 mod summary;

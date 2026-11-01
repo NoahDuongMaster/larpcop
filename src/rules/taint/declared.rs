@@ -7,7 +7,7 @@ use super::kotlin::Part;
 use ast_grep_core::{Doc, Node};
 
 /// Statements and members that declare names with a type, per grammar.
-const DECLARATIONS: [&str; 7] = [
+pub(super) const DECLARATIONS: [&str; 7] = [
     "local_variable_declaration",
     "field_declaration",
     "local_declaration_statement",
@@ -27,7 +27,7 @@ const PARAMETER_LISTS: [&str; 6] = [
     "function_value_parameters",
     "primary_constructor",
 ];
-const PARAMETERS: [&str; 7] = [
+pub(super) const PARAMETERS: [&str; 7] = [
     "class_parameter",
     "resource",
     "formal_parameter",
@@ -128,7 +128,7 @@ fn declared<D: Doc>(at: &Node<D>) -> Option<(String, bool)> {
 }
 
 /// The type of `name` if `decl` declares it, and whether it is an annotation.
-fn typed<D: Doc>(decl: &Node<D>, name: &str) -> Option<(String, bool)> {
+pub(super) fn typed<D: Doc>(decl: &Node<D>, name: &str) -> Option<(String, bool)> {
     // Java/C# locals and fields: `T a = …, b;` (C# nests a variable_declaration).
     let declarators: Vec<Node<D>> = decl
         .dfs()

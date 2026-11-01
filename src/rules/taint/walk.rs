@@ -16,7 +16,7 @@ impl Ctx {
         mut names: HashSet<String>,
         hits: &Hits<'a, D>,
         on: &mut impl FnMut(Seen<'a, D>),
-    ) {
+    ) -> HashSet<String> {
         let events = hits.events(scope, &self.guards);
         let mut cleaned: Vec<Vec<String>> = Vec::new();
         // Names a branch cleaned, tainted again where the branch ends.
@@ -137,7 +137,12 @@ impl Ctx {
                 Event::Sink(arg, typed) if self.tainted(arg, &names) => {
                     on(Seen::Reached(Reached::Sink(arg.clone(), typed.clone())))
                 }
-                Event::Nested(f) => on(Seen::Nested(f.clone(), names.clone())),
+                Event::Nested(f) => {
+                    on(Seen::Nested(f.clone(), names.clone()));
+                    // `rows.forEach(r -> out.append(r))`: what it writes here.
+                    let written = self.captured_writes(scope, f, &names, hits);
+                    names.extend(written);
+                }
                 Event::Call(call) => {
                     // `fgets(buf, …)`, `strcat(dst, src)`: the written argument.
                     let written = self.writes.written(call, |a| self.tainted(a, &names));
@@ -216,6 +221,7 @@ impl Ctx {
                 _ => {}
             }
         }
+        names
     }
 
     /// Under `safe_prefix`: does the value start with a matching literal, or

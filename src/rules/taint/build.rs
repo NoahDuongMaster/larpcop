@@ -1,7 +1,7 @@
 //! Building a taint rule from its configuration: patterns compiled per
 //! language and indexed by node kind, regexes, source texts.
 
-use super::{TaintRule, argv, mapping, outputs, pathobj, routes, scan, typed};
+use super::{TaintRule, argv, mapping, outputs, pathobj, routes, scan, srctypes, typed};
 use crate::config::TaintConfig;
 use crate::rules::Level;
 use anyhow::{Context, Result};
@@ -119,6 +119,7 @@ impl TaintRule {
                     })
                 })
                 .transpose()?,
+            source_types: srctypes::SourceTypes::new(&cfg.id, &cfg.source_types, &cfg.source_text)?,
             fixed_routes: routes::FixedRoutes {
                 sources: cfg
                     .fixed_route_sources
@@ -174,7 +175,7 @@ impl TaintRule {
                 .map(regex::Regex::new)
                 .transpose()
                 .with_context(|| format!("taint `{}`: handler_decorators", cfg.id))?,
-            typed,
+            typed: typed.with_strict(&cfg.id, &cfg.strict_sink_types)?,
             responds: cfg
                 .response_returns
                 .as_ref()

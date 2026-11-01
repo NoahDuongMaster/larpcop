@@ -29,9 +29,11 @@
 | shell (5/1) | 5/5 TP, 0/1 FP (+100%) |
 | sql (8/11) | 8/8 TP, 2/11 FP (+82%) |
 | ssrf (6/1) | 6/6 TP, 0/1 FP (+100%) |
-| xss (14/7) | 8/14 TP, 0/7 FP (+57%) |
+| xss (14/7) | 14/14 TP, 3/7 FP (+57%) |
 | xxe (3/4) | 3/3 TP, 0/4 FP (+100%) |
 | **average** | **+81.2%** |
-| **total** | 54/64 TP, 2/33 FP |
+| **total** | 60/64 TP, 5/33 FP |
 
-Still wrong: a lambda check `!name.contains("..")` counts as a guard, as it does in an `if`. Stored XSS through the database (6 handlers): the database is not a source. Jackson `readValue` behind a project util: `java-no-jackson-default-typing` reports the mapper's configuration, outside the handlers. SQL levels 3/4 concatenate after stripping quotes; `java-no-sql-concat` forbids the concatenation itself. Fixed since the first write-up: a check on a normalized path built from the input (`Paths.get(BASE + fileName).normalize().startsWith(base)`, in a lambda) proves the input; HTML escaping is judged by where the value lands (`<img src=%s>` with `escapeHtml4` is reported, 3 handlers); JAXB `Unmarshaller.unmarshal(stream)` is XXE; external general entities off without parameter entities off is not a fix.
+Spring Data repositories are sources of `java-taint-stored-xss`: the reading methods (`find*`, `get*`, `stream*`…) of a field, local or parameter declared as a `*Repository`/`*Dao`, so the 6 stored XSS handlers (`postRepository.findByLevelIdentifier(level).forEach(post -> posts.append(…))`) are found. That needed Java callbacks to receive the elements of the list they run over (`list.forEach(p -> …)` named its receiver differently from JS), and what a callback writes into the names it captures (`posts`) to hold after it. The three SECURE levels are reported too: 7 and 9 pass an escaping lambda into the shared helper (`post -> StringEscapeUtils.escapeHtml4(post)`), which the helper applies; 8 rejects `<` and `>` before saving, so what the database holds for that level was checked when it was written, which no reading of the handler can tell.
+
+Still wrong: a lambda check `!name.contains("..")` counts as a guard, as it does in an `if`. Jackson `readValue` behind a project util: `java-no-jackson-default-typing` reports the mapper's configuration, outside the handlers. SQL levels 3/4 concatenate after stripping quotes; `java-no-sql-concat` forbids the concatenation itself. Fixed since the first write-up: a check on a normalized path built from the input (`Paths.get(BASE + fileName).normalize().startsWith(base)`, in a lambda) proves the input; HTML escaping is judged by where the value lands (`<img src=%s>` with `escapeHtml4` is reported, 3 handlers); JAXB `Unmarshaller.unmarshal(stream)` is XXE; external general entities off without parameter entities off is not a fix.

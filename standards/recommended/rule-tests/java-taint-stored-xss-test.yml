@@ -18,7 +18,30 @@ valid:
       response.getWriter().println("<p>" + n + "</p>");
     }
   }
+- |
+  public class Stats extends HttpServlet {
+    private PostRepository posts;
+    private ObjectMapper mapper;
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws Exception {
+      response.getWriter().print("<p>" + posts.count() + " posts</p>");
+      response.getWriter().print("<p>" + mapper.writeValueAsString(request.getParameterMap()).length() + "</p>");
+      List<String> names = finder.findNames();
+      response.getWriter().print("<p>" + names.size() + "</p>");
+    }
+  }
 invalid:
+- |
+  @RestController
+  public class PostController {
+    private final PostRepository postRepository;
+    PostController(PostRepository postRepository) { this.postRepository = postRepository; }
+    @GetMapping("/posts")
+    public String posts(@RequestParam String level) {
+      StringBuilder out = new StringBuilder();
+      this.postRepository.findByLevel(level).forEach(p -> out.append("<div>" + p.getContent() + "</div>"));
+      return out.toString();
+    }
+  }
 - |
   public class Comments extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws Exception {

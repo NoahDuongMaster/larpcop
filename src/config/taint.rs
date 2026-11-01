@@ -108,6 +108,17 @@ pub struct TaintConfig {
     /// shows it (`DB: "Pool|PoolClient"`). Without a server the sink counts.
     #[serde(default)]
     pub sink_types: std::collections::BTreeMap<String, String>,
+    /// Like `sink_types`, but the sink counts only when the type is known
+    /// (declared, or `new T(…)` at the sink).
+    #[serde(default)]
+    pub strict_sink_types: std::collections::BTreeMap<String, String>,
+    /// Source metavariable → regex over the type its name is declared with in
+    /// the file; an undeclared name does not count (see srctypes.rs).
+    #[serde(default)]
+    pub source_types: std::collections::BTreeMap<String, String>,
+    /// Source metavariable → regex over its text (`M: "^find"`).
+    #[serde(default)]
+    pub source_text: std::collections::BTreeMap<String, String>,
     /// Functions whose return value is the response body: a tainted value
     /// they return reaches the sink (Spring `@ResponseBody`, Flask views).
     pub response_returns: Option<ResponseReturns>,

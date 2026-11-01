@@ -119,6 +119,32 @@ fn typed<D: Doc>(decl: &Node<D>, name: &str) -> Option<String> {
     Some(ty.trim_start_matches(':').trim().to_string())
 }
 
+/// The class `name` is built as in the function around `at`
+/// (`Base b = new Impl();` gives `Impl`), when it is built there once.
+pub(super) fn constructed<D: Doc>(at: &Node<D>, name: &str) -> Option<String> {
+    if !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        return None;
+    }
+    let f = at
+        .ancestors()
+        .find(|a| crate::rules::complexity::is_function(a))?;
+    let mut types = f.dfs().filter_map(|n| {
+        let (left, right) = match n.kind().as_ref() {
+            "variable_declarator" => (n.field("name")?, n.field("value")?),
+            "assignment_expression" => (n.field("left")?, n.field("right")?),
+            _ => return None,
+        };
+        (left.text() == name).then_some(right)
+    });
+    let value = types.next()?;
+    if types.next().is_some() || value.kind() != "object_creation_expression" {
+        return None;
+    }
+    let ty = value.field("type")?.text().to_string();
+    let simple = ty.split('<').next()?.rsplit('.').next()?.trim();
+    Some(simple.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::declared_type;

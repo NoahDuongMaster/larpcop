@@ -2,6 +2,8 @@ id: java-taint-xpath
 valid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String id = request.getParameter(\"id\");\n    xp.evaluate(\"\
   /users/user[@id=$id]\", doc);\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doGet(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String name = StringEscapeUtils.escapeXml(request.getParameter(\"\
+  n\"));\n    XPath xPath = XPathFactory.newInstance().newXPath();\n    xPath.evaluate(\"//users/user[name/text()='\" + name + \"']\", doc, XPathConstants.STRING);\n  }\n}\n"
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String id = request.getParameter(\"id\");\n    xp.evaluate(\"\
   /users/user[@id='\" + id + \"']\", doc);\n  }\n}\n"

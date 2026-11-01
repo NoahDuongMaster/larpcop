@@ -119,7 +119,13 @@ impl Ctx {
         if let Some(s) = self.summaries.get(&name) {
             return Some((s, false));
         }
-        let (_, method) = name.rsplit_once('.')?;
+        let (receiver, method) = name.rsplit_once('.')?;
+        // `Base b = new Impl(); b.run(x)`: the class the object was built as.
+        if let Some(class) = super::declared::constructed(call, receiver)
+            && let Some(s) = self.summaries.get(&format!("{class}.{method}"))
+        {
+            return Some((s, false));
+        }
         self.summaries
             .get(&format!("*.{method}"))
             .map(|s| (s, true))

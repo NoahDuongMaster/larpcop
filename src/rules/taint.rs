@@ -244,6 +244,8 @@ mod tests_methods;
 #[cfg(test)]
 mod tests_ruby;
 #[cfg(test)]
+mod tests_support;
+#[cfg(test)]
 mod tests_validators;
 pub mod typed;
 mod validators;

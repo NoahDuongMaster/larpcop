@@ -107,3 +107,26 @@ function a(req, res) {
     };
     assert_eq!(reported("JavaScript", "a.js", js, cfg), [5, 6]);
 }
+
+/// A fixed-prefix check is a path guard only on a resolved path.
+#[test]
+fn prefix_checks_need_a_resolved_path() {
+    let js = "\
+function f(req) {
+  const raw = req.query.f;
+  if (raw.startsWith('/srv/')) {
+    sink(raw);
+  }
+  const resolved = path.resolve(raw);
+  if (resolved.startsWith('/srv/')) {
+    sink(resolved);
+  }
+}
+";
+    let cfg = TaintConfig {
+        sinks: vec!["sink($U)".into()],
+        guards: vec!["$P.startsWith($B)".into()],
+        ..Default::default()
+    };
+    assert_eq!(reported("JavaScript", "a.js", js, cfg), [4]);
+}

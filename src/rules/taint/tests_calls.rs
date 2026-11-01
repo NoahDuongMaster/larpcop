@@ -1,70 +1,7 @@
 //! Taint through function calls: summaries in the same file and across imports.
 
-use super::*;
-use crate::config::TaintConfig;
-use std::path::Path;
-
-pub(super) fn rule(
-    lang: &str,
-    root: &Path,
-    sources: &[&str],
-    sinks: &[&str],
-    sanitizers: &[&str],
-) -> TaintRule {
-    guarded(lang, root, sources, sinks, sanitizers, &[])
-}
-
-pub(super) fn guarded(
-    lang: &str,
-    root: &Path,
-    sources: &[&str],
-    sinks: &[&str],
-    sanitizers: &[&str],
-    guards: &[&str],
-) -> TaintRule {
-    let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect();
-    TaintRule::new(
-        &TaintConfig {
-            id: "taint".into(),
-            languages: vec![lang.into()],
-            severity: None,
-            message: "request data reaches a sink".into(),
-            note: None,
-            sources: s(sources),
-            sinks: s(sinks),
-            sink_arg: Some("X".into()),
-            sanitizers: s(sanitizers),
-            safe_prefix: None,
-            sanitizer_names: None,
-            unless: Vec::new(),
-            guards: s(guards),
-            param_types: Default::default(),
-            source_names: Vec::new(),
-            rejects: Vec::new(),
-            param_decorators: Vec::new(),
-            handler_decorators: None,
-            resolver_args: false,
-            exclude: Default::default(),
-            sink_types: Default::default(),
-            response_returns: None,
-        },
-        typed::Typed::default(),
-        root.to_path_buf(),
-    )
-    .unwrap()
-}
-
-pub(super) fn found(r: &TaintRule, root: &Path, rel: &str) -> Vec<(usize, String)> {
-    let content = std::fs::read_to_string(root.join(rel)).unwrap();
-    let file = SourceFile {
-        rel: rel.into(),
-        content,
-    };
-    r.check(&file)
-        .into_iter()
-        .map(|v| (v.line, v.note.unwrap_or_default()))
-        .collect()
-}
+pub(super) use super::tests_support::{found, guarded, rule};
+use super::tests_support::{guarded_config, with_safe_prefix};
 
 #[test]
 fn calls_in_the_same_file() {
@@ -242,13 +179,16 @@ function c(req, res) {
     )
     .unwrap();
     let guards = ["$X.startsWith($P)"];
-    let r = guarded(
-        "JavaScript",
+    let r = with_safe_prefix(
+        guarded_config(
+            "JavaScript",
+            &["req.query"],
+            &["$R.redirect($X)"],
+            &[],
+            &guards,
+        ),
+        "^/[^/\\\\]",
         dir.path(),
-        &["req.query"],
-        &["$R.redirect($X)"],
-        &[],
-        &guards,
     );
     let lines: Vec<usize> = found(&r, dir.path(), "a.js")
         .iter()

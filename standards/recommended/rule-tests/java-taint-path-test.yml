@@ -4,6 +4,8 @@ valid:
   \ = new File(\"/srv/files\", FilenameUtils.getName(name));\n  }\n}\n"
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    InputStream in = getClass().getResourceAsStream(\"/static/logo.png\"\
   );\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doGet(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    File f = new File(BASE, request.getParameter(\"f\"));\n\
+  \    String canonical = f.getCanonicalPath();\n    if (!canonical.startsWith(\"/srv/files/\")) {\n      throw new SecurityException(\"outside\");\n    }\n    new FileInputStream(canonical);\n  }\n}\n"
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String name = request.getParameter(\"f\");\n    FileInputStream\
   \ in = new FileInputStream(new File(\"/srv/files/\" + name));\n  }\n}\n"
@@ -11,3 +13,6 @@ invalid:
   \    for (javax.servlet.http.Cookie c : cookies) {\n      Files.readAllBytes(Paths.get(\"/srv\", c.getValue()));\n    }\n  }\n}\n"
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    InputStream in = getClass().getResourceAsStream(\"/static/\"\
   \ + request.getParameter(\"f\"));\n  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doGet(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String data = \"\";\n    StringTokenizer st = new StringTokenizer(request.getQueryString(),\
+  \ \"&\");\n    while (st.hasMoreTokens()) {\n      String token = st.nextToken();\n      if (token.startsWith(\"id=\")) {\n        data = token.substring(3);\n        break;\n      }\n    }\n    new FileInputStream(new\
+  \ File(data));\n  }\n}\n"

@@ -47,9 +47,9 @@ Một bộ chỉ đo được độ tổng quát khi rule chưa được viết 
 
 14. **OWASP Benchmark Python** (1.230 ca, nhãn trong `expectedresults-0.1.csv` của dự án) đo các rule Python mới (LDAP, XPath, trust boundary, random, cookie, XXE qua xml.sax) và phần Python của `owasp_benchmark.py`, commit 31c1118 trước khi chạy. Lần đầu: larpcop **+39,8%**, Semgrep p/default +6,9%, p/python −0,8%. Bỏ sót chính: `match`/`case` của Python không được coi là nhánh; chuỗi trả về dựng bằng `+=` không được coi là response HTML; thiếu nguồn `request.cookies`/`headers`/`self.request.*`; `codecs.open`, `os.path.exists`, `elementpath.select` không phải sink; method của class tên viết thường không có summary. Sau khi sửa (cùng với phần tử map theo key cố định và nhánh quyết định bởi giá trị biết trước: `if 7 * 42 - num > 200`, `match "ABC"[0]`, `switch` trên `"ABC".charAt(1)`): **+54,3%**; OWASP Benchmark Java lên +72,6%. Thêm list đọc theo vị trí trong code thẳng (`add("safe"); add(param); remove(0); get(1)`), escaper gọi qua chuỗi (`org.owasp.esapi.ESAPI.encoder().encodeForHTML`) và class Java viết đủ tên không có import: Python **+56,4%** (`results/owasp-benchmark-python.md`), Java **+86,8%**.
 
-15. **NIST Juliet Java 1.3** đo engine sau bước 14 (nhánh quyết định bởi giá trị biết trước, list theo vị trí, map theo key, lambda/method reference làm phép kiểm, implementation của interface, `unless:`, guard allow-list cho mọi rule) trên Java, commit trước khi chạy cùng scorer `juliet.py` (gộp từ `juliet_cs.py`, điểm C# không đổi). Chỉ lấy 1.665 ca servlet (`getParameter`, `getCookies`, `getQueryString`) ở cùng 10 CWE như bộ C#; nhãn là method `bad*`/`good*` của Juliet.
+15. **NIST Juliet Java 1.3** đo engine sau bước 14 (nhánh quyết định bởi giá trị biết trước, list theo vị trí, map theo key, lambda/method reference làm phép kiểm, implementation của interface, `unless:`, guard allow-list cho mọi rule) trên Java, commit trước khi chạy cùng scorer `juliet.py` (gộp từ `juliet_cs.py`, điểm C# không đổi). Chỉ lấy 1.665 ca servlet (`getParameter`, `getCookies`, `getQueryString`) ở cùng 10 CWE như bộ C#; nhãn là method `bad*`/`good*` của Juliet. Lần đầu: larpcop **+68,6%**, Semgrep p/default +22,4%, p/java +33,0%. Bỏ sót chính: Juliet đọc `getQueryString` bằng `token.startsWith("id=")`, mà `startsWith` với chuỗi cố định được coi là guard của path; `StringEscapeUtils.escapeXml` không phải sanitizer của XPath (89% ca good XPath bị báo); lời gọi qua lớp cơ sở (`Base b = new Bad()`, flow 81). Sau khi sửa: **+86,0%** (`results/juliet-java.md`); còn lại là chuỗi 4–5 file, field static của class khác, serialize và `sendError` (CWE81).
 
-Kết quả dưới đây là sau bước 14: chỉ có ý nghĩa *không thụt lùi* trên cả mười bốn bộ. Rule mới cần một bộ chưa ai nhìn.
+Kết quả dưới đây là sau bước 15: chỉ có ý nghĩa *không thụt lùi* trên cả mười lăm bộ. Rule mới cần một bộ chưa ai nhìn.
 
 ## Kết quả (01/11/2026)
 
@@ -74,6 +74,7 @@ Kết quả dưới đây là sau bước 14: chỉ có ý nghĩa *không thụt
 | java-sec-code (76 endpoint): điểm trung bình (TPR − FPR) | **+84,6%** (lần đầu +6,6%) | +20,8% (p/default) | – |
 | VulnerableApp (97 handler): điểm trung bình (TPR − FPR) | **+75,1%** (lần đầu +7,2%) | +16,5% | – |
 | Juliet C# (1.443 ca web): điểm trung bình (TPR − FPR) | **+88,4%** (lần đầu +43,9%) | +0,8% (`p/default`, `p/csharp`) | – |
+| Juliet Java (1.665 ca servlet): điểm trung bình (TPR − FPR) | **+86,0%** (lần đầu +68,6%) | +22,4% (`p/default`), +33,0% (`p/java`) | – |
 | OWASP Benchmark Java: điểm trung bình (TPR − FPR) | **+86,8%** (lần đầu +37,5%) | +34,9% (`p/default`), +17,7% (`p/java`) | – |
 | OWASP Benchmark Python: thời gian | **2,7 s** | 8,1 s (`p/python`) | – |
 | OWASP Benchmark Python: điểm trung bình (TPR − FPR) | **+56,4%** (lần đầu +39,8%) | +6,9% (`p/default`), −0,8% (`p/python`) | – |

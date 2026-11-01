@@ -3,6 +3,8 @@ valid:
 - "def h():\n    return send_file(os.path.join(BASE, secure_filename(request.args['f'])))\n"
 - "from flask import request, abort\n\ndef v():\n    name = request.args.get('f')\n    if '..' in name or name.startswith('/'):\n        abort(400)\n    return open(name).read()\n"
 - "from flask import Flask, request, session\nimport codecs, os\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    f = codecs.open('/srv/static/readme.txt', 'r', 'utf-8')\n"
+- "from flask import Flask, request, send_file\nimport os\napp = Flask(__name__)\n\n@app.route('/f')\ndef f():\n    path = os.path.realpath(os.path.join(BASE, request.args['name']))\n    if not path.startswith(BASE\
+  \ + os.sep):\n        return 'no', 400\n    return send_file(path)\n"
 invalid:
 - "def h():\n    name = request.args.get('f')\n    with open('/srv/files/' + name) as fh:\n        return fh.read()\n"
 - "from flask import request\n\ndef x():\n    name = request.args.get('f')\n    if '..' in name:\n        return open(name).read()\n"

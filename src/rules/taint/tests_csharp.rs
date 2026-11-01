@@ -1,5 +1,6 @@
 //! Taint in C#/Java shapes: classes of the same directory, `new X().M()`,
-//! `+=`, bare class fields, `List.Add`, chains of classes past two imports.
+//! `+=`, bare class fields, `List.Add`, chains of classes past two imports,
+//! helpers that fill the objects they are given.
 
 use super::tests_calls::{found, rule};
 
@@ -97,4 +98,49 @@ fn chains_past_two_imports() {
         .map(|(l, _)| *l)
         .collect();
     assert_eq!(lines, [3]);
+}
+
+/// A helper that stores its argument in an object it is given (`o.setNote(x)`,
+/// `l.add(x)`): the caller's object holds it afterwards.
+#[test]
+fn helpers_filling_their_arguments() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("Svc.java"),
+        "\
+class Order {
+  private String note;
+  public void setNote(String n) { note = n; }
+  public String getNote() { return note; }
+}
+class Svc {
+  static void fill(Order o, String x) { o.setNote(x); }
+  static void fillList(java.util.List<String> l, String x) { l.add(x); }
+  void a(Req req) {
+    Order o = new Order();
+    fill(o, req.getParameter(\"n\"));
+    db.query(o.getNote());
+    Order p = new Order();
+    fill(p, \"fixed\");
+    db.query(p.getNote());
+    java.util.List<String> l = new java.util.ArrayList<>();
+    fillList(l, req.getParameter(\"n\"));
+    db.query(String.join(\",\", l));
+  }
+}
+",
+    )
+    .unwrap();
+    let r = rule(
+        "Java",
+        dir.path(),
+        &["$R.getParameter($K)"],
+        &["db.query($X)"],
+        &[],
+    );
+    let lines: Vec<usize> = found(&r, dir.path(), "Svc.java")
+        .iter()
+        .map(|(l, _)| *l)
+        .collect();
+    assert_eq!(lines, [12, 18]);
 }

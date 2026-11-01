@@ -130,12 +130,29 @@ impl Ctx {
                         filled(call).or_else(|| super::containers::set_on(call, &built))
                         && args(call).iter().any(|a| self.tainted(a, &names))
                     {
-                        names.insert(container);
+                        names.insert(container.clone());
+                        on(Seen::Reached(Reached::Filled(container)));
+                    } else if let Some(object) = super::containers::setter_object(call)
+                        && args(call).iter().any(|a| self.tainted(a, &names))
+                    {
+                        // A setter of an object given to this scope: its
+                        // caller's object holds the value (not this scope's
+                        // view of it: a framework object stays as it is).
+                        on(Seen::Reached(Reached::Filled(object)));
                     }
                     let Some(s) = self.summary(call) else {
                         continue;
                     };
                     let args = args(call);
+                    // `fill(order, x)`: `order` now holds `x`.
+                    for (i, j) in &s.fills {
+                        if let (Some(from), Some(to)) = (args.get(*i), args.get(*j))
+                            && NAMES.contains(&to.kind().as_ref())
+                            && self.tainted(from, &names)
+                        {
+                            names.insert(to.text().to_string());
+                        }
+                    }
                     for (i, into) in &s.sinks {
                         if let Some(a) = args.get(*i).filter(|a| self.tainted(a, &names)) {
                             // `readFile(() -> ALLOWED.contains(f), f)`: the callee

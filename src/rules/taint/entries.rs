@@ -1,5 +1,6 @@
 //! Entries of a map under a literal key: `m['b'] = x` taints `m['b']`, not
-//! `m['a']`; `m.put("b", x)` then `m.get("a")` is clean. Two literal keys
+//! `m['a']`; fields of an object likewise (`o.name = x` taints `o[name]`, not
+//! `o.kind`); `m.put("b", x)` then `m.get("a")` is clean. Two literal keys
 //! address one entry too: Python's `conf.set('s', 'b', x)` /
 //! `conf.get('s', 'a')`. Reading the whole map (`m`, `str(m)`) still sees
 //! every tainted entry.
@@ -20,10 +21,23 @@ const SUBSCRIPTS: [&str; 6] = [
 const READS: [&str; 4] = ["get", "getOrDefault", "getProperty", "get_item"];
 const WRITES: [&str; 6] = ["put", "set", "putIfAbsent", "setdefault", "Add", "TryAdd"];
 
+/// Field reads and writes on a name: JS/TS, Python, Java, Go, C#, PHP, Kotlin.
+const MEMBERS: [&str; 6] = [
+    "member_expression",
+    "attribute",
+    "field_access",
+    "selector_expression",
+    "member_access_expression",
+    "navigation_expression",
+];
+
 /// `m[k]` for a subscript or a get/put-like call on a plain name with a
-/// literal key; `None` for anything else.
+/// literal key, or a field `o.k` of a plain name; `None` for anything else.
 pub(super) fn entry<D: Doc>(n: &Node<D>) -> Option<String> {
     let kind = n.kind();
+    if MEMBERS.contains(&kind.as_ref()) {
+        return field(n);
+    }
     let (base, key) = if SUBSCRIPTS.contains(&kind.as_ref()) {
         let named: Vec<Node<D>> = n.children().filter(|c| c.is_named()).collect();
         (named.first()?.clone(), named.get(1)?.clone())
@@ -132,4 +146,33 @@ fn literal<D: Doc>(n: &Node<D>) -> Option<String> {
         "integer" | "decimal_integer_literal" | "number"
     );
     (quoted || number).then(|| text.trim_matches(['"', '\'', '`']).to_string())
+}
+
+/// `o.name` as the entry `o[name]`: not `this.x`/`self.x` (the class's own
+/// fields), not a method being called (`o.save()` sees the whole object).
+fn field<D: Doc>(n: &Node<D>) -> Option<String> {
+    if super::fields::is_field(n)
+        || n.parent().is_some_and(|p| {
+            super::flow::CALLS.contains(&p.kind().as_ref())
+                && p.part("function").is_some_and(|f| f.range() == n.range())
+        })
+    {
+        return None;
+    }
+    let object = n
+        .part("object")
+        .or_else(|| n.part("operand"))
+        .or_else(|| n.part("expression"))?;
+    let name = n
+        .part("property")
+        .or_else(|| n.part("attribute"))
+        .or_else(|| n.part("field"))
+        .or_else(|| n.part("name"))?;
+    let plain = matches!(
+        object.kind().as_ref(),
+        "identifier" | "variable_name" | "simple_identifier"
+    ) && !matches!(object.text().as_ref(), "self" | "this" | "cls");
+    let key = name.text();
+    (plain && key.chars().all(|c| c.is_alphanumeric() || c == '_'))
+        .then(|| format!("{}[{key}]", object.text()))
 }

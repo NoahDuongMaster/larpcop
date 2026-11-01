@@ -232,6 +232,7 @@ mod paths;
 mod prefix;
 mod prepare;
 mod reach;
+mod resolve;
 mod responds;
 mod returns;
 mod scan;
@@ -261,5 +262,6 @@ mod tests_support;
 #[cfg(test)]
 mod tests_validators;
 pub mod typed;
+mod unique;
 mod validators;
 mod walk;

@@ -26,6 +26,9 @@ pub struct Summary {
     /// Parameter → the function-typed parameter whose call guards every
     /// sink it reaches (`if (cond.get()) read(name)`).
     pub conditions: std::collections::BTreeMap<usize, super::lambdas::Condition>,
+    /// (parameter, parameter it is stored in): `fill(o, x)` calling
+    /// `o.setNote(x)` is (1, 0).
+    pub fills: BTreeSet<(usize, usize)>,
 }
 
 /// Callee as written (`f`, `db.run`, `utils.clean`) → its summary.
@@ -132,34 +135,7 @@ pub fn args<'a, D: Doc>(call: &Node<'a, D>) -> Vec<Node<'a, D>> {
         .collect()
 }
 
-/// Adds `*.method` for every method name the known classes define alike
-/// (one class, or several that behave the same: the same method seen as
-/// `Class.m` and `module.Class.m`).
-pub fn with_unique_methods(mut s: Summaries) -> Summaries {
-    type Behaviour = (Vec<usize>, BTreeSet<usize>, bool, BTreeSet<usize>);
-    let mut seen: HashMap<String, (HashSet<Behaviour>, String)> = HashMap::new();
-    for (key, summary) in s.iter().filter(|(_, v)| v.method) {
-        if let Some((_, method)) = key.rsplit_once('.') {
-            let behaviour = (
-                summary.sinks.iter().map(|(i, _)| *i).collect(),
-                summary.returns.clone(),
-                summary.returns_source,
-                summary.validates.clone(),
-            );
-            let entry = seen.entry(method.to_string()).or_default();
-            entry.0.insert(behaviour);
-            entry.1 = key.clone();
-        }
-    }
-    for (method, (behaviours, key)) in seen {
-        if behaviours.len() == 1
-            && let Some(summary) = s.get(&key).cloned()
-        {
-            s.insert(format!("*.{method}"), summary);
-        }
-    }
-    s
-}
+pub use super::unique::with_unique_methods;
 
 impl TaintRule {
     /// Summaries of the named functions in `root`, given what is known of
@@ -225,6 +201,13 @@ impl TaintRule {
                         }
                         Reached::Return(_) => {
                             s.returns.insert(i);
+                        }
+                        Reached::Filled(object) => {
+                            if let Some(j) = params.iter().position(|p| *p == object)
+                                && j != i
+                            {
+                                s.fills.insert((i, j));
+                            }
                         }
                         Reached::Field(_) | Reached::Responds(..) => {}
                     });

@@ -177,3 +177,21 @@ def f(req):
 ";
     assert_eq!(lines("Python", "a.py", py, &["req.query"]), [7, 10]);
 }
+
+/// An object with a field set from request data carries it when passed on
+/// whole; its other fields stay clean.
+#[test]
+fn objects_with_tainted_fields() {
+    let js = "\
+function save(u) { sink(u.name); }
+function a(req) {
+  const o = {};
+  o.name = req.query.n;
+  o.kind = 'user';
+  save(o);
+  sink(o.kind);
+  sink(o.name);
+}
+";
+    assert_eq!(lines("JavaScript", "a.js", js, &["req.query"]), [6, 8]);
+}

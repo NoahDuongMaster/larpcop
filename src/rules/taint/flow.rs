@@ -6,7 +6,7 @@ use super::NAMES;
 use super::events::Hits;
 use super::fields::is_field;
 use super::kotlin::Part;
-use super::summary::{Summaries, args, callee};
+use super::summary::{Summaries, args};
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
@@ -65,6 +65,9 @@ pub(super) enum Reached<'a, D: Doc> {
     /// A tainted value is stored in a field of the object (`this.x`, `self.x`),
     /// which the other methods of its class read.
     Field(Node<'a, D>),
+    /// A call stored a tainted value in the object of this name
+    /// (`o.setNote(x)`, `list.add(x)`).
+    Filled(String),
 }
 
 /// What a walk of one scope found, before its nested functions are walked.
@@ -89,66 +92,15 @@ pub(super) struct Ctx {
     /// Last segments of the summaries' names (computed on first use).
     pub summarized: std::cell::OnceCell<HashSet<String>>,
     /// Per function (by start): the classes its locals are built as.
-    pub built: std::cell::RefCell<std::collections::HashMap<usize, std::rc::Rc<Built>>>,
+    pub built:
+        std::cell::RefCell<std::collections::HashMap<usize, std::rc::Rc<super::resolve::Built>>>,
 }
-
-type Built = std::collections::HashMap<String, Option<String>>;
 
 fn within(r: &Range<usize>, outer: &Range<usize>) -> bool {
     outer.start <= r.start && r.end <= outer.end
 }
 
 impl Ctx {
-    /// What is known of the function a call calls: by its name, or for
-    /// `obj.method(…)` on an object of unknown class, the one method of that
-    /// name among the known classes (`*.method`).
-    pub fn summary<D: Doc>(&self, call: &Node<D>) -> Option<&super::summary::Summary> {
-        self.summary_guessed(call).map(|(s, _)| s)
-    }
-
-    /// The summary, and whether it was found by method name alone.
-    fn summary_guessed<D: Doc>(&self, call: &Node<D>) -> Option<(&super::summary::Summary, bool)> {
-        // Most calls are of nothing summarized: tell by the called name
-        // before building the whole callee.
-        if let Some(last) = super::summary::called_name(call) {
-            let known = self.summarized.get_or_init(|| {
-                self.summaries
-                    .keys()
-                    .map(|k| k.rsplit('.').next().unwrap_or(k).to_string())
-                    .collect()
-            });
-            if !known.contains(last.as_str()) {
-                return None;
-            }
-        }
-        let name = callee(call)?;
-        if let Some(s) = self.summaries.get(&name) {
-            return Some((s, false));
-        }
-        let (receiver, method) = name.rsplit_once('.')?;
-        // `Base b = new Impl(); b.run(x)`: the class the object was built as.
-        if let Some(class) = self.built_as(call, receiver)
-            && let Some(s) = self.summaries.get(&format!("{class}.{method}"))
-        {
-            return Some((s, false));
-        }
-        self.summaries
-            .get(&format!("*.{method}"))
-            .map(|s| (s, true))
-    }
-
-    fn built_as<D: Doc>(&self, call: &Node<D>, name: &str) -> Option<String> {
-        let f = call.ancestors().find(|a| is_function(a))?;
-        let start = f.range().start;
-        let known = self.built.borrow().get(&start).cloned();
-        let built = known.unwrap_or_else(|| {
-            let b = std::rc::Rc::new(super::declared::constructions(&f));
-            self.built.borrow_mut().insert(start, b.clone());
-            b
-        });
-        built.get(name).cloned().flatten()
-    }
-
     fn any_sourcing(&self) -> bool {
         *self
             .sourcing
@@ -248,7 +200,14 @@ impl Ctx {
                 .and_then(|f| f.part("object"))
                 .or_else(|| node.part("object"))
                 .or_else(|| node.part("receiver"));
-            return passed || (guessed && receiver.is_some_and(|r| self.tainted(&r, names)));
+            // `order.getNote()` on an order holding request data: a getter
+            // reads the object's state, which its summary does not follow.
+            let getter = args(node).is_empty()
+                && super::summary::called_name(node).is_some_and(|m| {
+                    m.len() > 3 && m.starts_with("get") && m[3..].starts_with(char::is_uppercase)
+                });
+            return passed
+                || ((guessed || getter) && receiver.is_some_and(|r| self.tainted(&r, names)));
         }
         node.children().any(|c| self.tainted(&c, names))
     }

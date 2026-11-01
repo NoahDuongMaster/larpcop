@@ -60,13 +60,18 @@ pub(super) fn set_on<D: Doc>(
     if built.is_empty() {
         return None;
     }
+    setter_object(call).filter(|o| built.contains(o))
+}
+
+/// The object a one-argument setter is called on (`order.setNote(x)`).
+pub(super) fn setter_object<D: Doc>(call: &Node<D>) -> Option<String> {
     let object = call.part("object")?;
     let method = call.part("name")?;
     let method = method.text();
     let setter = method.len() > 3
         && method.starts_with("set")
         && method[3..].starts_with(char::is_uppercase);
-    (setter && args(call).len() == 1 && built.contains(object.text().as_ref()))
+    (setter && args(call).len() == 1 && object.kind() == "identifier")
         .then(|| object.text().to_string())
 }
 

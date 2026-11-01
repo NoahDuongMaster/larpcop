@@ -66,3 +66,73 @@ class Search(View):
 ";
     assert_eq!(lines("Python", "v.py", py, &["req.query"]), [4]);
 }
+
+/// Lists by position in straight-line code; a list changed in a branch or
+/// passed on stays one whole.
+#[test]
+fn lists_by_position() {
+    let py = r#"def a(req):
+    param = req.GET.get('q')
+    lst = []
+    lst.append('safe')
+    lst.append(param)
+    lst.append('moresafe')
+    lst.pop(0)
+    bar = lst[1]
+    sink(bar)
+
+def b(req):
+    param = req.GET.get('q')
+    lst = []
+    lst.append('safe')
+    lst.append(param)
+    lst.append('moresafe')
+    lst.pop(0)
+    bar = lst[0]
+    sink(bar)
+
+def c(req):
+    param = req.GET.get('q')
+    lst = []
+    lst.append('safe')
+    if param:
+        lst.append(param)
+    bar = lst[0]
+    sink(bar)
+
+def d(req):
+    param = req.GET.get('q')
+    lst = ['safe', param]
+    helper(lst)
+    bar = lst[0]
+    sink(bar)
+"#;
+    assert_eq!(lines("Python", "l.py", py, &["req.GET"]), [19, 28, 35]);
+    let java = r#"class L {
+  void a(Req req) {
+    String param = req.getParameter("p");
+    java.util.List<String> valuesList = new java.util.ArrayList<String>();
+    valuesList.add("safe");
+    valuesList.add(param);
+    valuesList.add("moresafe");
+    valuesList.remove(0);
+    String bar = valuesList.get(1);
+    sink(bar);
+  }
+  void b(Req req) {
+    String param = req.getParameter("p");
+    java.util.List<String> valuesList = new java.util.ArrayList<String>();
+    valuesList.add("safe");
+    valuesList.add(param);
+    valuesList.add("moresafe");
+    valuesList.remove(0);
+    String bar = valuesList.get(0);
+    sink(bar);
+  }
+}
+"#;
+    assert_eq!(
+        lines("Java", "L.java", java, &["req.getParameter($K)"]),
+        [20]
+    );
+}

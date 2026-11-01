@@ -31,17 +31,17 @@
 | deserialization | 100% / 19% / **+81%** | 100% / 33% / **+67%** | 50% / 17% / **+33%** |
 | hash | 100% / 0% / **+100%** | 0% / 0% / **+0%** | 0% / 0% / **+0%** |
 | ldapi | 100% / 100% / **+0%** | 0% / 0% / **+0%** | 0% / 0% / **+0%** |
-| pathtraver | 78% / 16% / **+63%** | 3% / 2% / **+1%** | 3% / 2% / **+1%** |
-| redirect | 92% / 48% / **+45%** | 8% / 5% / **+3%** | 0% / 0% / **+0%** |
+| pathtraver | 78% / 10% / **+69%** | 3% / 2% / **+1%** | 3% / 2% / **+1%** |
+| redirect | 92% / 38% / **+54%** | 8% / 5% / **+3%** | 0% / 0% / **+0%** |
 | securecookie | 100% / 0% / **+100%** | 100% / 100% / **+0%** | 0% / 0% / **+0%** |
 | sqli | 100% / 0% / **+100%** | 100% / 0% / **+100%** | 0% / 0% / **+0%** |
-| trustbound | 100% / 37% / **+63%** | 0% / 0% / **+0%** | 0% / 0% / **+0%** |
+| trustbound | 100% / 32% / **+68%** | 0% / 0% / **+0%** | 0% / 0% / **+0%** |
 | weakrand | 78% / 0% / **+78%** | 0% / 0% / **+0%** | 0% / 0% / **+0%** |
-| xpathi | 80% / 29% / **+52%** | 0% / 0% / **+0%** | 0% / 0% / **+0%** |
-| xss | 100% / 40% / **+60%** | 0% / 28% / **-28%** | 0% / 0% / **+0%** |
+| xpathi | 80% / 23% / **+57%** | 0% / 0% / **+0%** | 0% / 0% / **+0%** |
+| xss | 100% / 36% / **+64%** | 0% / 28% / **-28%** | 0% / 0% / **+0%** |
 | xxe | 100% / 35% / **+65%** | 0% / 0% / **+0%** | 0% / 0% / **+0%** |
-| **average** | **+54.3%** | **+6.9%** | **-0.8%** |
+| **average** | **+56.4%** | **+6.9%** | **-0.8%** |
 
-Fixed: Python `match`/`case` was not a branch; a returned string built with `+=` and f-strings was not an HTML response; `request.cookies`, `headers`, `data`, `files`, `self.request.*` were not sources; `codecs.open`, `os.path.exists` and other file functions were not path sinks; `elementpath.select` was not an XPath sink; the project's only `get` hid `request.GET.get('q')`; a method of a lowercase class (`request_wrapper.get_form_parameter`) was not summarized; map entries under literal keys were one taint; branches decided by known values (`if 7 * 42 - num > 200`, `match "ABC"[0]`, Java `switch` on `"ABC".charAt(1)`) counted both sides. The last also took OWASP Benchmark Java from +52.6% to +72.6%.
+Fixed: Python `match`/`case` was not a branch; a returned string built with `+=` and f-strings was not an HTML response; `request.cookies`, `headers`, `data`, `files`, `self.request.*` were not sources; `codecs.open`, `os.path.exists` and other file functions were not path sinks; `elementpath.select` was not an XPath sink; the project's only `get` hid `request.GET.get('q')`; a method of a lowercase class (`request_wrapper.get_form_parameter`) was not summarized; map entries under literal keys were one taint; branches decided by known values (`if 7 * 42 - num > 200`, `match "ABC"[0]`, Java `switch` on `"ABC".charAt(1)`) counted both sides. The last also took OWASP Benchmark Java from +52.6% to +72.6%; lists read by position in straight-line code (`add("safe"); add(param); remove(0); get(1)`), escapers called through a chain (`org.owasp.esapi.ESAPI.encoder().encodeForHTML`) and Java classes named in full without an import (`new org.owasp.benchmark.helpers.SeparateClassRequest(request)`) took it to +86.8%.
 
-Still wrong: values passed through a list by position (`lst.append(x); lst.pop(0); bar = lst[1]`) and a `configparser` section; an argument list built with `append` (`args.append('sh'); args.append('-c'); args.append(cmd)`): only list literals are read; the policy rules `py-no-shell-true`, `py-no-eval`, `py-no-ldap-interpolation` report safe cases by design.
+Still wrong: a list changed in a branch or passed to a function is one whole; a `configparser` section; an argument list built with `append` (`args.append('sh'); args.append('-c'); args.append(cmd)`): only list literals are read; the policy rules `py-no-shell-true`, `py-no-eval`, `py-no-ldap-interpolation` report safe cases by design.

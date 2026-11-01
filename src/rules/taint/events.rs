@@ -161,6 +161,7 @@ impl<'a, D: Doc> Hits<'a, D> {
 fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
     let mut out: Skeleton<D> = Vec::new();
     let branches = super::deadcode::Branches::of(scope);
+    let lists = super::lists::Lists::of(scope);
     for d in branches.dead() {
         out.push((d.start, Shape::Dead(d.start, d.end)));
     }
@@ -183,7 +184,7 @@ fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
             })
         {
             // `x = c ? a : b` with `c` known: only the side taken.
-            let right = branches.live(right);
+            let right = lists.resolve(branches.live(right));
             // `x += v` adds to `x`: a clean `v` cleans `x` up to the
             // assignment's own end, that is not at all.
             let conditional = if compound(n, &left, &right) {

@@ -71,7 +71,10 @@ impl<'a, D: Doc> FileIndex<'a, D> {
             .iter()
             .filter(|n| super::flow::CALLS.contains(&n.kind().as_ref()))
             .filter(|n| {
-                summary::callee(n).is_some_and(|c| re.is_match(c.rsplit('.').next().unwrap_or(&c)))
+                // By the called name alone: `a.b().escapeHtml(x)` has no plain callee.
+                summary::called_name(n)
+                    .or_else(|| summary::callee(n))
+                    .is_some_and(|c| re.is_match(c.rsplit('.').next().unwrap_or(&c)))
             })
             .map(|n| n.range())
             .collect()

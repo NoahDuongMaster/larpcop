@@ -52,3 +52,35 @@ def rename(request, student):
     );
     assert!(hits[0].1.contains("`Student.create`"), "{hits:?}");
 }
+
+/// Java: a helper class named in full (`new org.acme.web.Wrapper(req)`), no
+/// `import`, is read through the source root.
+#[test]
+fn java_class_named_in_full() {
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("src/main/java/org/acme");
+    std::fs::create_dir_all(base.join("web")).unwrap();
+    std::fs::write(
+        base.join("web/Wrapper.java"),
+        "package org.acme.web;\npublic class Wrapper {\n  private Req req;\n  public Wrapper(Req req) { this.req = req; }\n  public String getTheParameter(String n) { return req.getParameter(n); }\n}\n",
+    )
+    .unwrap();
+    let rel = "src/main/java/org/acme/App.java";
+    std::fs::write(
+        dir.path().join(rel),
+        "package org.acme;\npublic class App {\n  void f(Req req) {\n    org.acme.web.Wrapper w = new org.acme.web.Wrapper(req);\n    sink(w.getTheParameter(\"q\"));\n  }\n}\n",
+    )
+    .unwrap();
+    let r = super::tests_calls::rule(
+        "Java",
+        dir.path(),
+        &["req.getParameter($K)"],
+        &["sink($X)"],
+        &[],
+    );
+    let lines: Vec<usize> = super::tests_calls::found(&r, dir.path(), rel)
+        .iter()
+        .map(|(l, _)| *l)
+        .collect();
+    assert_eq!(lines, [5]);
+}

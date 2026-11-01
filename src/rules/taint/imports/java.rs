@@ -31,16 +31,44 @@ pub(super) fn imports<D: Doc>(root: &Node<D>, file: &Path, repo: &Path) -> Vec<I
         .children()
         .filter(|n| n.kind() == "import_declaration")
         .collect();
-    if declarations.is_empty() {
+    // `new org.acme.helpers.Request(r)`: a class named in full, no import.
+    let qualified: HashSet<String> = root
+        .dfs()
+        .filter(|n| n.kind() == "scoped_type_identifier")
+        .filter(|n| {
+            n.parent()
+                .is_none_or(|p| p.kind() != "scoped_type_identifier")
+        })
+        .map(|n| {
+            n.text()
+                .split('<')
+                .next()
+                .unwrap_or_default()
+                .replace(char::is_whitespace, "")
+        })
+        .filter(|t| {
+            t.split('.')
+                .next()
+                .is_some_and(|s| s.starts_with(char::is_lowercase))
+        })
+        .collect();
+    if declarations.is_empty() && qualified.is_empty() {
         return Vec::new();
     }
     let roots = source_roots(root, file, repo);
+    let mut out: Vec<Import> = qualified
+        .iter()
+        .filter_map(|q| {
+            let relative = format!("{}.java", q.replace('.', "/"));
+            roots.iter().map(|r| r.join(&relative)).find(|p| is_file(p))
+        })
+        .map(|p| whole(&p))
+        .collect();
     let used: HashSet<String> = root
         .dfs()
         .filter(|n| matches!(n.kind().as_ref(), "identifier" | "type_identifier"))
         .map(|n| n.text().to_string())
         .collect();
-    let mut out = Vec::new();
     for decl in declarations {
         let text = decl.text();
         let is_static = text.contains("static ");

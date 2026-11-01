@@ -4,7 +4,7 @@
   "language": "Java",
   "severity": "error",
   "message": "XML parser created with DTDs and external entities on (XXE: file read, SSRF).",
-  "note": "In the same method, setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true) (StAX: setProperty(XMLInputFactory.SUPPORT_DTD, false); TransformerFactory/SchemaFactory: setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, \"\")).",
+  "note": "In the same method, setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true), or both external-general-entities and external-parameter-entities false (StAX: setProperty(XMLInputFactory.SUPPORT_DTD, false); TransformerFactory/SchemaFactory: setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, \"\")).",
   "rule": {
     "any": [
       {
@@ -29,46 +29,170 @@
           "field": "type",
           "regex": "^(SAXBuilder|SAXReader|Digester)$"
         }
+      },
+      {
+        "kind": "method_invocation",
+        "all": [
+          {
+            "has": {
+              "field": "name",
+              "regex": "^unmarshal$"
+            }
+          },
+          {
+            "inside": {
+              "any": [
+                {
+                  "kind": "method_declaration"
+                },
+                {
+                  "kind": "constructor_declaration"
+                },
+                {
+                  "kind": "static_initializer"
+                },
+                {
+                  "kind": "lambda_expression"
+                }
+              ],
+              "stopBy": "end",
+              "has": {
+                "kind": "method_invocation",
+                "regex": "createUnmarshaller\\(",
+                "stopBy": "end"
+              }
+            }
+          },
+          {
+            "not": {
+              "inside": {
+                "any": [
+                  {
+                    "kind": "method_declaration"
+                  },
+                  {
+                    "kind": "constructor_declaration"
+                  },
+                  {
+                    "kind": "static_initializer"
+                  },
+                  {
+                    "kind": "lambda_expression"
+                  }
+                ],
+                "stopBy": "end",
+                "has": {
+                  "regex": "^(SAXSource|StAXSource|DOMSource|XMLStreamReader|XMLEventReader)$",
+                  "stopBy": "end"
+                }
+              }
+            }
+          }
+        ]
       }
     ],
     "not": {
       "any": [
         {
-          "inside": {
-            "any": [
-              {
-                "kind": "method_declaration"
-              },
-              {
-                "kind": "constructor_declaration"
-              },
-              {
-                "kind": "static_initializer"
-              },
-              {
-                "kind": "lambda_expression"
+          "any": [
+            {
+              "inside": {
+                "any": [
+                  {
+                    "kind": "method_declaration"
+                  },
+                  {
+                    "kind": "constructor_declaration"
+                  },
+                  {
+                    "kind": "static_initializer"
+                  },
+                  {
+                    "kind": "lambda_expression"
+                  }
+                ],
+                "stopBy": "end",
+                "has": {
+                  "kind": "method_invocation",
+                  "regex": "disallow-doctype-decl\"?\\s*,\\s*true|ACCESS_EXTERNAL_(DTD|SCHEMA|STYLESHEET)\\s*,\\s*\"\"|SUPPORT_DTD\\s*,\\s*(false|Boolean\\.FALSE)|IS_SUPPORTING_EXTERNAL_ENTITIES\\s*,\\s*(false|Boolean\\.FALSE)|isSupportingExternalEntities\"\\s*,\\s*(false|Boolean\\.FALSE)|setExpandEntityReferences\\(\\s*false",
+                  "stopBy": "end"
+                }
               }
-            ],
-            "stopBy": "end",
-            "has": {
-              "kind": "method_invocation",
-              "regex": "disallow-doctype-decl\"?\\s*,\\s*true|external-(general|parameter)-entities\"?\\s*,\\s*false|load-external-dtd\"?\\s*,\\s*false|ACCESS_EXTERNAL_(DTD|SCHEMA|STYLESHEET)\\s*,\\s*\"\"|SUPPORT_DTD\\s*,\\s*(false|Boolean\\.FALSE)|IS_SUPPORTING_EXTERNAL_ENTITIES\\s*,\\s*(false|Boolean\\.FALSE)|isSupportingExternalEntities\"\\s*,\\s*(false|Boolean\\.FALSE)|setExpandEntityReferences\\(\\s*false",
-              "stopBy": "end"
+            },
+            {
+              "inside": {
+                "any": [
+                  {
+                    "kind": "method_declaration"
+                  },
+                  {
+                    "kind": "constructor_declaration"
+                  },
+                  {
+                    "kind": "static_initializer"
+                  },
+                  {
+                    "kind": "lambda_expression"
+                  }
+                ],
+                "stopBy": "end",
+                "all": [
+                  {
+                    "has": {
+                      "kind": "method_invocation",
+                      "regex": "external-general-entities\"?\\s*,\\s*false",
+                      "stopBy": "end"
+                    }
+                  },
+                  {
+                    "has": {
+                      "kind": "method_invocation",
+                      "regex": "external-parameter-entities\"?\\s*,\\s*false",
+                      "stopBy": "end"
+                    }
+                  }
+                ]
+              }
             }
-          }
+          ]
         },
         {
           "inside": {
             "kind": "field_declaration",
             "stopBy": "end",
-            "inside": {
-              "kind": "class_body",
-              "has": {
-                "kind": "method_invocation",
-                "regex": "disallow-doctype-decl\"?\\s*,\\s*true|external-(general|parameter)-entities\"?\\s*,\\s*false|load-external-dtd\"?\\s*,\\s*false|ACCESS_EXTERNAL_(DTD|SCHEMA|STYLESHEET)\\s*,\\s*\"\"|SUPPORT_DTD\\s*,\\s*(false|Boolean\\.FALSE)|IS_SUPPORTING_EXTERNAL_ENTITIES\\s*,\\s*(false|Boolean\\.FALSE)|isSupportingExternalEntities\"\\s*,\\s*(false|Boolean\\.FALSE)|setExpandEntityReferences\\(\\s*false",
-                "stopBy": "end"
+            "any": [
+              {
+                "inside": {
+                  "kind": "class_body",
+                  "has": {
+                    "kind": "method_invocation",
+                    "regex": "disallow-doctype-decl\"?\\s*,\\s*true|ACCESS_EXTERNAL_(DTD|SCHEMA|STYLESHEET)\\s*,\\s*\"\"|SUPPORT_DTD\\s*,\\s*(false|Boolean\\.FALSE)|IS_SUPPORTING_EXTERNAL_ENTITIES\\s*,\\s*(false|Boolean\\.FALSE)|isSupportingExternalEntities\"\\s*,\\s*(false|Boolean\\.FALSE)|setExpandEntityReferences\\(\\s*false",
+                    "stopBy": "end"
+                  }
+                }
+              },
+              {
+                "inside": {
+                  "kind": "class_body",
+                  "all": [
+                    {
+                      "has": {
+                        "kind": "method_invocation",
+                        "regex": "external-general-entities\"?\\s*,\\s*false",
+                        "stopBy": "end"
+                      }
+                    },
+                    {
+                      "has": {
+                        "kind": "method_invocation",
+                        "regex": "external-parameter-entities\"?\\s*,\\s*false",
+                        "stopBy": "end"
+                      }
+                    }
+                  ]
+                }
               }
-            }
+            ]
           }
         }
       ]

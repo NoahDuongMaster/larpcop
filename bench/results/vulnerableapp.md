@@ -20,18 +20,18 @@
 
 ## After the fixes (not a held-out number)
 
-| category (vuln/safe) | larpcop | semgrep-default | semgrep-java |
-|---|---|---|---|
-| deserialization (3/1) | 0/3 TP, 0/1 FP (+0%) | 0/3 TP, 0/1 FP (+0%) | 0/3 TP, 0/1 FP (+0%) |
-| ldap (4/2) | 4/4 TP, 0/2 FP (+100%) | 0/4 TP, 0/2 FP (+0%) | 0/4 TP, 0/2 FP (+0%) |
-| path (12/3) | 12/12 TP, 3/3 FP (+0%) | 0/12 TP, 1/3 FP (-33%) | 0/12 TP, 1/3 FP (-33%) |
-| redirect (9/3) | 9/9 TP, 1/3 FP (+67%) | 0/9 TP, 0/3 FP (+0%) | 0/9 TP, 0/3 FP (+0%) |
-| shell (5/1) | 5/5 TP, 1/1 FP (+0%) | 0/5 TP, 0/1 FP (+0%) | 0/5 TP, 0/1 FP (+0%) |
-| sql (8/11) | 8/8 TP, 2/11 FP (+82%) | 8/8 TP, 2/11 FP (+82%) | 8/8 TP, 2/11 FP (+82%) |
-| ssrf (6/1) | 6/6 TP, 0/1 FP (+100%) | 4/6 TP, 0/1 FP (+67%) | 4/6 TP, 0/1 FP (+67%) |
-| xss (14/7) | 5/14 TP, 0/7 FP (+36%) | 0/14 TP, 0/7 FP (+0%) | 0/14 TP, 0/7 FP (+0%) |
-| xxe (3/4) | 1/3 TP, 0/4 FP (+33%) | 1/3 TP, 0/4 FP (+33%) | 1/3 TP, 0/4 FP (+33%) |
-| **average** | **+46.4%** | **+16.5%** | **+16.5%** |
-| **total** | 50/64 TP, 7/33 FP | 13/64 TP, 3/33 FP | 13/64 TP, 3/33 FP |
+| category (vuln/safe) | larpcop |
+|---|---|
+| deserialization (3/1) | 0/3 TP, 0/1 FP (+0%) |
+| ldap (4/2) | 4/4 TP, 0/2 FP (+100%) |
+| path (12/3) | 11/12 TP, 1/3 FP (+58%) |
+| redirect (9/3) | 9/9 TP, 1/3 FP (+67%) |
+| shell (5/1) | 5/5 TP, 1/1 FP (+0%) |
+| sql (8/11) | 8/8 TP, 2/11 FP (+82%) |
+| ssrf (6/1) | 6/6 TP, 0/1 FP (+100%) |
+| xss (14/7) | 5/14 TP, 0/7 FP (+36%) |
+| xxe (3/4) | 3/3 TP, 0/4 FP (+100%) |
+| **average** | **+60.3%** |
+| **total** | 51/64 TP, 5/33 FP |
 
-Still wrong: validation passed as a lambda or method reference to the helper that reads the file / runs the command / redirects (`readFile(() -> ALLOWED.contains(f), f)`, `WHITELISTED_URLS::contains`): 5 secure handlers reported. Stored XSS through the database (6 handlers): the database is not a source. HTML-escaped input in an unquoted attribute (`<img src=%s>`): escaping is not judged by context. Jackson polymorphic `readValue` behind a project util: `java-no-jackson-default-typing` reports the mapper's configuration, outside the handlers. JAXB `Unmarshaller.unmarshal` (XXE level 1): no rule. SQL levels 3/4 concatenate after stripping quotes; `java-no-sql-concat` forbids the concatenation itself.
+Still wrong: a check in a lambda kept in a variable, or with several branches (`Supplier<Boolean> validator = () -> { … }`), and method references (`WHITELISTED_URLS::contains`) are not read; a lambda check `!name.contains("..")` counts as a guard, as it does in an `if`. Stored XSS through the database (6 handlers): the database is not a source. HTML-escaped input in an unquoted attribute (`<img src=%s>`): escaping is not judged by context. Jackson `readValue` behind a project util: `java-no-jackson-default-typing` reports the mapper's configuration, outside the handlers. SQL levels 3/4 concatenate after stripping quotes; `java-no-sql-concat` forbids the concatenation itself. Fixed since the first write-up: JAXB `Unmarshaller.unmarshal(stream)` is XXE; external general entities off without parameter entities off is not a fix.

@@ -9,6 +9,10 @@ valid:
   , false);\n    factory.setFeature(\"http://xml.org/sax/features/external-parameter-entities\", false);\n  }\n}\n"
 - "class Parse {\n  void transform(Source s, Result r) throws Exception {\n    TransformerFactory tf = TransformerFactory.newInstance();\n    tf.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, \"\");\n \
   \   tf.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, \"\");\n    tf.newTransformer().transform(s, r);\n  }\n}\n"
+- "class X {\n  Object parse(InputStream in) throws Exception {\n    SAXParserFactory spf = SAXParserFactory.newInstance();\n    spf.setFeature(\"http://xml.org/sax/features/external-general-entities\"\
+  , false);\n    spf.setFeature(\"http://xml.org/sax/features/external-parameter-entities\", false);\n    return spf.newSAXParser();\n  }\n}\n"
+- "class X {\n  Object parse(InputStream in) throws Exception {\n    XMLInputFactory xif = XMLInputFactory.newFactory();\n    xif.setProperty(XMLInputFactory.SUPPORT_DTD, false);\n    XMLStreamReader xsr\
+  \ = xif.createXMLStreamReader(in);\n    Unmarshaller u = JAXBContext.newInstance(Book.class).createUnmarshaller();\n    return u.unmarshal(xsr);\n  }\n}\n"
 invalid:
 - "class Parse {\n  Document read(InputStream in) throws Exception {\n    DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();\n    return f.newDocumentBuilder().parse(in);\n  }\n}\n"
 - "class Parse {\n  Document read(String xml) throws Exception {\n    SAXReader reader = new SAXReader();\n    return reader.read(new StringReader(xml));\n  }\n}\n"
@@ -17,3 +21,7 @@ invalid:
   , true);\n    return f.newDocumentBuilder().parse(in);\n  }\n  Document unsafe(InputStream in) throws Exception {\n    return DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);\n  }\n\
   }\n"
 - "class Parse {\n  Document read(String xml) throws Exception {\n    return DocumentHelper.parseText(xml);\n  }\n}\n"
+- "class X {\n  Object parse(InputStream in) throws Exception {\n    SAXParserFactory spf = SAXParserFactory.newInstance();\n    spf.setFeature(\"http://xml.org/sax/features/external-general-entities\"\
+  , false);\n    return spf.newSAXParser();\n  }\n}\n"
+- "class X {\n  Object parse(InputStream in) throws Exception {\n    JAXBContext jc = JAXBContext.newInstance(Book.class);\n    Unmarshaller u = jc.createUnmarshaller();\n    return u.unmarshal(in);\n \
+  \ }\n}\n"

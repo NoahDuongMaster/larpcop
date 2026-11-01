@@ -3,11 +3,23 @@
 from .common import SQL_TEXT
 
 # Settings that turn off DTDs or external entities (OWASP XXE cheat sheet).
-XXE_SECURE = ("disallow-doctype-decl\"?\\s*,\\s*true|external-(general|parameter)-entities\"?\\s*,\\s*false"
-              "|load-external-dtd\"?\\s*,\\s*false|ACCESS_EXTERNAL_(DTD|SCHEMA|STYLESHEET)\\s*,\\s*\"\""
+# One setting that is enough on its own; external general entities off is
+# enough only with parameter entities off too (XXE_PAIR).
+XXE_SECURE = ("disallow-doctype-decl\"?\\s*,\\s*true"
+              "|ACCESS_EXTERNAL_(DTD|SCHEMA|STYLESHEET)\\s*,\\s*\"\""
               "|SUPPORT_DTD\\s*,\\s*(false|Boolean\\.FALSE)|IS_SUPPORTING_EXTERNAL_ENTITIES\\s*,\\s*(false|Boolean\\.FALSE)"
               "|isSupportingExternalEntities\"\\s*,\\s*(false|Boolean\\.FALSE)|setExpandEntityReferences\\(\\s*false")
 XXE_SCOPES = ["method_declaration", "constructor_declaration", "static_initializer", "lambda_expression"]
+XXE_PAIR = ["external-general-entities\"?\\s*,\\s*false", "external-parameter-entities\"?\\s*,\\s*false"]
+
+
+def inside_configured(where):
+    """Inside a `where` holding a call that turns XXE off: one sufficient setting, or both entity kinds off."""
+    one = {"kind": "method_invocation", "regex": XXE_SECURE, "stopBy": "end"}
+    pair = [{"has": {"kind": "method_invocation", "regex": r, "stopBy": "end"}} for r in XXE_PAIR]
+    return {"any": [{"inside": dict(where, has=one)}, {"inside": dict(where, all=pair)}]}
+
+
 
 RULES = [
     dict(id="java-no-sql-concat", langs=["Java"], severity="error",
@@ -54,7 +66,8 @@ RULES = [
          rule={"kind": "keyed_element", "regex": "^InsecureSkipVerify\\s*:\\s*true"}),
     dict(id="java-no-xxe", langs=["Java"], severity="error",
          message="XML parser created with DTDs and external entities on (XXE: file read, SSRF).",
-         note="In the same method, setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true) "
+         note="In the same method, setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true), or both "
+              "external-general-entities and external-parameter-entities false "
               "(StAX: setProperty(XMLInputFactory.SUPPORT_DTD, false); TransformerFactory/SchemaFactory: "
               "setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, \"\")).",
          rule={"any": [
@@ -64,12 +77,19 @@ RULES = [
              {"kind": "method_invocation", "regex": "\\.newSAXParser\\(\\)\\s*\\.\\s*getXMLReader\\(\\)$"},
              {"kind": "method_invocation", "regex": "^DocumentHelper\\s*\\.\\s*parseText\\("},
              {"kind": "object_creation_expression", "has": {"field": "type", "regex": "^(SAXBuilder|SAXReader|Digester)$"}},
+             # JAXB has no XXE setting: unmarshal straight from a stream or file parses with its defaults.
+             {"kind": "method_invocation", "all": [
+                 {"has": {"field": "name", "regex": "^unmarshal$"}},
+                 {"inside": {"any": [{"kind": k} for k in XXE_SCOPES], "stopBy": "end",
+                             "has": {"kind": "method_invocation", "regex": "createUnmarshaller\\(", "stopBy": "end"}}},
+                 {"not": {"inside": {"any": [{"kind": k} for k in XXE_SCOPES], "stopBy": "end",
+                                     "has": {"regex": "^(SAXSource|StAXSource|DOMSource|XMLStreamReader|XMLEventReader)$",
+                                             "stopBy": "end"}}}},
+             ]},
          ], "not": {"any": [
-             {"inside": {"any": [{"kind": k} for k in XXE_SCOPES], "stopBy": "end",
-                         "has": {"kind": "method_invocation", "regex": XXE_SECURE, "stopBy": "end"}}},
+             inside_configured({"any": [{"kind": k} for k in XXE_SCOPES], "stopBy": "end"}),
              # A factory kept in a field and configured elsewhere in the class.
-             {"inside": {"kind": "field_declaration", "stopBy": "end", "inside": {"kind": "class_body", "has": {
-                 "kind": "method_invocation", "regex": XXE_SECURE, "stopBy": "end"}}}},
+             {"inside": dict({"kind": "field_declaration", "stopBy": "end"}, **inside_configured({"kind": "class_body"}))},
          ]}}),
     dict(id="java-no-jackson-default-typing", langs=["Java"], severity="error",
          message="Jackson polymorphic typing by class name: JSON from outside picks the class to build (deserialization RCE).",

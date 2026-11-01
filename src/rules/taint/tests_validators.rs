@@ -91,3 +91,54 @@ def view(req):
     let got = reported("Python", "v.py", src, &["'$S' in $P"], "open($X)");
     assert!(got.is_empty(), "{got:?}");
 }
+
+/// A check passed as a lambda to a helper that runs the sink only when the
+/// check holds: judged with the rule's guards at the call.
+#[test]
+fn lambda_checks() {
+    let java = "\
+class A {
+  private void readFile(Supplier<Boolean> condition, String name) {
+    if (condition.get()) {
+      sink(name);
+    }
+  }
+  void a(Req req) {
+    String f = req.getParameter(\"f\");
+    this.readFile(() -> f != null && ALLOWED.contains(f), f);
+    this.readFile(() -> f != null, f);
+  }
+}
+";
+    let js = "\
+function readFile(cond, name) {
+  if (cond()) {
+    sink(name);
+  }
+}
+function a(req) {
+  const f = req.query.f;
+  readFile(() => allowed.includes(f), f);
+  readFile(() => true, f);
+}
+";
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("A.java"), java).unwrap();
+    std::fs::write(dir.path().join("a.js"), js).unwrap();
+    let lines = |lang: &str, rel: &str, source: &str, guard: &str| -> Vec<usize> {
+        let r =
+            super::tests_calls::guarded(lang, dir.path(), &[source], &["sink($X)"], &[], &[guard]);
+        super::tests_calls::found(&r, dir.path(), rel)
+            .iter()
+            .map(|(l, _)| *l)
+            .collect()
+    };
+    assert_eq!(
+        lines("Java", "A.java", "req.getParameter($K)", "$L.contains($X)"),
+        [10]
+    );
+    assert_eq!(
+        lines("JavaScript", "a.js", "req.query", "$L.includes($X)"),
+        [9]
+    );
+}

@@ -213,6 +213,7 @@ mod guards;
 mod handlers;
 mod imports;
 mod iteration;
+mod lambdas;
 mod lists;
 mod membership;
 mod names;

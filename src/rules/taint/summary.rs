@@ -22,6 +22,9 @@ pub struct Summary {
     pub validates: BTreeSet<usize>,
     /// Defined in a class (a method), whatever the class is called.
     pub method: bool,
+    /// Parameter → the function-typed parameter whose call guards every
+    /// sink it reaches (`if (cond.get()) read(name)`).
+    pub conditions: std::collections::BTreeMap<usize, usize>,
 }
 
 /// Callee as written (`f`, `db.run`, `utils.clean`) → its summary.
@@ -190,18 +193,35 @@ impl TaintRule {
                 };
                 for (i, p) in params.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
                     let start: HashSet<String> = [p.clone()].into();
+                    // Every sink of `p` under the same parameter's call, or not.
+                    let mut condition: Option<Option<usize>> = None;
+                    let mut under = |at: &Node<'a, D>| {
+                        let c = super::lambdas::condition_param(at, f, params);
+                        condition = Some(match condition {
+                            None => c,
+                            Some(prev) if prev == c => c,
+                            Some(_) => None,
+                        });
+                    };
                     params_only.run(f, start, hits, &|_| HashSet::new(), &mut |r| match r {
                         Reached::Sink(arg, typed) => {
                             if self.typed.holds(lang, file, &typed) {
+                                under(&arg);
                                 s.sinks.push((i, self.into(name, &arg, &file.rel)));
                             }
                         }
-                        Reached::Call(_, into) => s.sinks.push((i, format!("`{name}` → {into}"))),
+                        Reached::Call(at, into) => {
+                            under(&at);
+                            s.sinks.push((i, format!("`{name}` → {into}")))
+                        }
                         Reached::Return(_) => {
                             s.returns.insert(i);
                         }
                         Reached::Field(_) | Reached::Responds(..) => {}
                     });
+                    if let Some(Some(g)) = condition {
+                        s.conditions.insert(i, g);
+                    }
                 }
                 s.validates = super::validators::validated(f, params, &round.guards);
                 round.run(f, own(f), hits, &own, &mut |r| {

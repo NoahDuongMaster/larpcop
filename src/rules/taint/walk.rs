@@ -131,7 +131,22 @@ impl Ctx {
                     let args = args(call);
                     for (i, into) in &s.sinks {
                         if let Some(a) = args.get(*i).filter(|a| self.tainted(a, &names)) {
-                            on(Seen::Reached(Reached::Call(a.clone(), into.clone())));
+                            // `readFile(() -> ALLOWED.contains(f), f)`: the callee
+                            // reaches its sink only when this check holds.
+                            let checked = s
+                                .conditions
+                                .get(i)
+                                .and_then(|g| args.get(*g))
+                                .is_some_and(|l| {
+                                    super::lambdas::covers(
+                                        a,
+                                        &names,
+                                        &super::lambdas::validated(l, &self.guards),
+                                    )
+                                });
+                            if !checked {
+                                on(Seen::Reached(Reached::Call(a.clone(), into.clone())));
+                            }
                         }
                     }
                 }

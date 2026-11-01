@@ -39,6 +39,36 @@ impl TaintRule {
                 ]),
             ));
         }
+        // Kotlin code calls Java classes of the same project: a Kotlin rule
+        // summarizes them, without reporting on Java files itself.
+        let mut companions = Vec::new();
+        let declared: Vec<SupportLang> = langs.iter().map(|(l, _)| *l).collect();
+        if declared.contains(&SupportLang::Kotlin) && !declared.contains(&SupportLang::Java) {
+            let java = SupportLang::Java;
+            let lenient = |list: &[String]| -> Vec<scan::Compiled> {
+                list.iter()
+                    .flat_map(|p| java_forms(p))
+                    .filter_map(|p| {
+                        Some((
+                            pattern(&p, java).ok()?,
+                            scan::needle(&p),
+                            scan::specificity(&p),
+                        ))
+                    })
+                    .collect()
+            };
+            langs.push((
+                java,
+                scan::Indexed::new([
+                    lenient(&cfg.sources),
+                    lenient(&cfg.sinks),
+                    lenient(&cfg.sanitizers),
+                    lenient(&cfg.guards),
+                    lenient(&cfg.rejects),
+                ]),
+            ));
+            companions.push(java);
+        }
         Ok(Self {
             id: cfg.id.clone(),
             level: cfg.severity.unwrap_or(Level::Error),
@@ -86,6 +116,7 @@ impl TaintRule {
                 .map(|r| super::responds::Responds::new(&cfg.id, r))
                 .transpose()?,
             langs,
+            companions,
             root,
             imported: Mutex::default(),
         })
@@ -100,4 +131,17 @@ pub(super) fn pattern(p: &str, lang: SupportLang) -> Result<Pattern> {
         return Ok(Pattern::contextual(&context, &selector, lang)?);
     }
     Ok(Pattern::try_new(p, lang)?)
+}
+
+/// A Kotlin pattern as Java writes it: `File($X)` is `new File($X)` there.
+fn java_forms(p: &str) -> Vec<String> {
+    let constructor = p.starts_with(char::is_uppercase)
+        && p.split('(')
+            .next()
+            .is_some_and(|c| c.chars().all(|c| c.is_alphanumeric() || c == '_'));
+    if constructor {
+        vec![p.to_string(), format!("new {p}")]
+    } else {
+        vec![p.to_string()]
+    }
 }

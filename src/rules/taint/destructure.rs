@@ -2,6 +2,7 @@
 //! `req.query` under another name, so a source written as `req.query` must
 //! taint `query` too.
 
+use super::kotlin::Part;
 use ast_grep_core::{Doc, Node};
 use std::collections::{BTreeMap, HashSet};
 
@@ -14,12 +15,12 @@ fn properties<D: Doc>(pattern: &Node<D>) -> Vec<(String, String)> {
                 Some((c.text().to_string(), c.text().to_string()))
             }
             "object_assignment_pattern" => {
-                let name = c.field("left")?.text().to_string();
+                let name = c.part("left")?.text().to_string();
                 Some((name.clone(), name))
             }
             "pair_pattern" => {
-                let key = c.field("key")?.text().trim_matches(['"', '\'']).to_string();
-                let value = c.field("value").filter(|v| v.kind() == "identifier")?;
+                let key = c.part("key")?.text().trim_matches(['"', '\'']).to_string();
+                let value = c.part("value").filter(|v| v.kind() == "identifier")?;
                 Some((key, value.text().to_string()))
             }
             _ => None,
@@ -51,11 +52,11 @@ pub(super) fn from_params<D: Doc>(
     sources: &[String],
 ) -> HashSet<String> {
     let mut out = HashSet::new();
-    let Some(params) = function.field("parameters") else {
+    let Some(params) = function.part("parameters") else {
         return out;
     };
     for p in params.children() {
-        let (Some(pattern), Some(ty)) = (p.field("pattern"), p.field("type")) else {
+        let (Some(pattern), Some(ty)) = (p.part("pattern"), p.part("type")) else {
             continue;
         };
         let ty = ty.text();

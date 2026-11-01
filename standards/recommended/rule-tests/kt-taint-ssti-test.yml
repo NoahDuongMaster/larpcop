@@ -1,0 +1,7 @@
+id: kt-taint-ssti
+valid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        Velocity.evaluate(VelocityContext(), StringWriter(), \"x\", \"Hello\")\n        return \"ok\"\n    }\n}\n"
+invalid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        Velocity.evaluate(VelocityContext(), StringWriter(), \"x\", q)\n        return \"ok\"\n    }\n}\n"

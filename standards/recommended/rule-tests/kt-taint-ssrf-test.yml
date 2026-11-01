@@ -1,0 +1,11 @@
+id: kt-taint-ssrf
+valid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        if (!ALLOWED.contains(q)) return \"no\"\n        URL(q).openStream().readBytes()\n        return \"ok\"\n    }\n}\n"
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        URL(\"https://api.example.com/v1\").openStream().readBytes()\n        return \"ok\"\n    }\n}\n"
+invalid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        URL(q).openStream().readBytes()\n        return \"ok\"\n    }\n}\n"
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        RestTemplate().getForObject(q, String::class.java)\n        return \"ok\"\n    }\n}\n"

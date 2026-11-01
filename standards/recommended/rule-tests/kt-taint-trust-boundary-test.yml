@@ -1,0 +1,9 @@
+id: kt-taint-trust-boundary
+valid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        request.session.setAttribute(\"user\", \"guest\")\n        return \"ok\"\n    }\n}\n"
+invalid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        request.session.setAttribute(\"user\", q)\n        return \"ok\"\n    }\n}\n"
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        request.getSession().setAttribute(\"user\", request.getParameter(\"u\"))\n        return \"ok\"\n    }\n}\n"

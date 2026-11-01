@@ -16,7 +16,7 @@ pub struct Function {
     pub complexity: usize,
 }
 
-const FUNCTIONS: [&str; 17] = [
+const FUNCTIONS: [&str; 19] = [
     "function_declaration",
     "function_expression",
     "generator_function_declaration",
@@ -34,6 +34,9 @@ const FUNCTIONS: [&str; 17] = [
     "method",
     "singleton_method",
     "function",
+    // Kotlin `{ x -> … }`, `fun(x: T) { … }`.
+    "lambda_literal",
+    "anonymous_function",
 ];
 
 const BRANCHES: [&str; 26] = [

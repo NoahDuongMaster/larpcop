@@ -42,6 +42,8 @@ pub struct TaintRule {
     responds: Option<responds::Responds>,
     /// Per language: (sources, sinks, sanitizers, guards), compiled for that grammar.
     langs: Vec<(SupportLang, scan::Indexed)>,
+    /// Languages among `langs` only read to summarize what the others call.
+    companions: Vec<SupportLang>,
     root: PathBuf,
     /// Summaries of imported files by (path, import depth), computed once per
     /// run even when several threads need the same file at once.
@@ -65,11 +67,15 @@ impl TaintRule {
     }
 
     pub fn languages(&self) -> Vec<SupportLang> {
-        self.langs.iter().map(|(l, _)| *l).collect()
+        self.langs
+            .iter()
+            .map(|(l, _)| *l)
+            .filter(|l| !self.companions.contains(l))
+            .collect()
     }
 
     pub fn info(&self) -> RuleInfo {
-        let scope: Vec<String> = self.langs.iter().map(|(l, _)| l.to_string()).collect();
+        let scope: Vec<String> = self.languages().iter().map(|l| l.to_string()).collect();
         RuleInfo {
             id: self.id.clone(),
             level: self.level,
@@ -90,7 +96,7 @@ impl TaintRule {
     }
 
     pub fn handles(&self, lang: SupportLang) -> bool {
-        self.patterns(lang).is_some()
+        self.patterns(lang).is_some() && !self.companions.contains(&lang)
     }
 
     /// The check on a file already parsed and indexed for `lang`.
@@ -201,6 +207,7 @@ fn class_of<D: Doc>(n: &Node<D>) -> Option<(usize, usize)> {
 }
 
 mod build;
+mod callbacks;
 mod constant;
 mod containers;
 mod deadcode;
@@ -215,6 +222,7 @@ mod guards;
 mod handlers;
 mod imports;
 mod iteration;
+mod kotlin;
 mod lambdas;
 mod lists;
 mod membership;
@@ -239,6 +247,8 @@ mod tests_csharp;
 mod tests_deadcode;
 #[cfg(test)]
 mod tests_entries;
+#[cfg(test)]
+mod tests_kotlin;
 #[cfg(test)]
 mod tests_methods;
 #[cfg(test)]

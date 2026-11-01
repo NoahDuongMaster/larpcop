@@ -1,6 +1,7 @@
 //! Containers hold what was put in: `list.push(x)`, `map.set(k, x)`,
 //! `Object.assign(o, x)` make the container carry `x`.
 
+use super::kotlin::Part;
 use super::summary::{args, callee};
 use ast_grep_core::{Doc, Node};
 
@@ -59,8 +60,8 @@ pub(super) fn set_on<D: Doc>(
     if built.is_empty() {
         return None;
     }
-    let object = call.field("object")?;
-    let method = call.field("name")?;
+    let object = call.part("object")?;
+    let method = call.part("name")?;
     let method = method.text();
     let setter = method.len() > 3
         && method.starts_with("set")
@@ -72,18 +73,18 @@ pub(super) fn set_on<D: Doc>(
 /// `headers.get("Location").add(x)`: the variable at the root of the
 /// receiver chain holds what the call stores.
 fn chained<D: Doc>(call: &Node<D>) -> Option<String> {
-    let member = call.field("function");
+    let member = call.part("function");
     let member = member.as_ref().unwrap_or(call);
-    let method = member.field("name").or_else(|| member.field("property"))?;
+    let method = member.part("name").or_else(|| member.part("property"))?;
     if !FILLS.contains(&method.text().to_lowercase().as_str()) {
         return None;
     }
-    let mut object = member.field("object")?;
+    let mut object = member.part("object")?;
     loop {
         let inner = object
-            .field("function")
-            .and_then(|f| f.field("object"))
-            .or_else(|| object.field("object"));
+            .part("function")
+            .and_then(|f| f.part("object"))
+            .or_else(|| object.part("object"));
         match inner {
             Some(i) => object = i,
             None => break,

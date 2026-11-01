@@ -3,6 +3,7 @@
 //! (what it assigns is no longer conditional).
 
 use super::constant::{Env, Value, eval};
+use super::kotlin::Part;
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
 use std::collections::{HashMap, HashSet};
@@ -103,14 +104,14 @@ impl Branches {
 
     /// `if … elif … else …` (Python), `if … else …` (Java, JS, C#, Go).
     fn if_chain<D: Doc>(&mut self, n: &Node<D>, env: &Env<D>) {
-        let Some(cond) = n.field("condition") else {
+        let Some(cond) = n.part("condition") else {
             return;
         };
         let Some(Value::Bool(v)) = eval(&cond, env, 0) else {
             return;
         };
         self.always.insert(key(n));
-        let Some(then) = n.field("consequence") else {
+        let Some(then) = n.part("consequence") else {
             return;
         };
         let rest: Vec<Node<D>> = n
@@ -127,7 +128,7 @@ impl Branches {
         for clause in rest {
             match clause.kind().as_ref() {
                 "elif_clause" if prior_false => {
-                    match clause.field("condition").and_then(|c| eval(&c, env, 0)) {
+                    match clause.part("condition").and_then(|c| eval(&c, env, 0)) {
                         Some(Value::Bool(true)) => {
                             self.always.insert(key(&clause));
                             self.skip_after(n, &clause);
@@ -156,10 +157,10 @@ impl Branches {
 
     /// Python `match` on a known value with literal cases.
     fn match_cases<D: Doc>(&mut self, n: &Node<D>, env: &Env<D>) {
-        let Some(subject) = n.field("subject").and_then(|s| eval(&s, env, 0)) else {
+        let Some(subject) = n.part("subject").and_then(|s| eval(&s, env, 0)) else {
             return;
         };
-        let Some(body) = n.field("body") else { return };
+        let Some(body) = n.part("body") else { return };
         let clauses: Vec<Node<D>> = body
             .children()
             .filter(|c| c.kind() == "case_clause")
@@ -169,7 +170,7 @@ impl Branches {
         }
         let mut matches = Vec::new();
         for clause in &clauses {
-            if clause.field("guard").is_some() {
+            if clause.part("guard").is_some() {
                 return;
             }
             let Some(pattern) = clause.children().find(|c| c.kind() == "case_pattern") else {
@@ -199,10 +200,10 @@ impl Branches {
     /// Java `switch` on a known value: from the matching group (or
     /// `default`) up to the first group that breaks, falling through.
     fn switch_groups<D: Doc>(&mut self, n: &Node<D>, env: &Env<D>) {
-        let Some(subject) = n.field("condition").and_then(|s| eval(&s, env, 0)) else {
+        let Some(subject) = n.part("condition").and_then(|s| eval(&s, env, 0)) else {
             return;
         };
-        let Some(body) = n.field("body") else { return };
+        let Some(body) = n.part("body") else { return };
         let groups: Vec<Node<D>> = body
             .children()
             .filter(|c| {
@@ -258,7 +259,10 @@ impl Branches {
                 || last.is_some_and(|l| {
                     matches!(
                         l.kind().as_ref(),
-                        "break_statement" | "return_statement" | "throw_statement"
+                        "break_statement"
+                            | "return_statement"
+                            | "throw_statement"
+                            | "jump_expression"
                     )
                 });
             if falls && ends {
@@ -275,9 +279,9 @@ pub(super) fn sides<'a, D: Doc>(
     n: &Node<'a, D>,
 ) -> Option<(Node<'a, D>, Node<'a, D>, Node<'a, D>)> {
     if let (Some(c), Some(a), Some(b)) = (
-        n.field("condition"),
-        n.field("consequence"),
-        n.field("alternative"),
+        n.part("condition"),
+        n.part("consequence"),
+        n.part("alternative"),
     ) {
         return Some((c, a, b));
     }

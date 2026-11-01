@@ -1,0 +1,10 @@
+id: kt-taint-redirect
+valid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        if (!q.startsWith(\"/\") || q.startsWith(\"//\")) return \"no\"\n        response.sendRedirect(q)\n        return \"ok\"\n    }\n}\n"
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        response.sendRedirect(\"/home\")\n        return \"ok\"\n    }\n}\n"
+invalid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        response.sendRedirect(q)\n        return \"ok\"\n    }\n}\n"
+- "fun Application.routes() {\n    routing {\n        get(\"/x\") {\n            val next = call.parameters[\"next\"]\n            call.respondRedirect(next!!)\n        }\n    }\n}\n"

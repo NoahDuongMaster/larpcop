@@ -1,0 +1,9 @@
+id: kt-taint-shell
+valid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        Runtime.getRuntime().exec(arrayOf(\"ping\", \"-c\", \"1\", \"localhost\"))\n        return \"ok\"\n    }\n}\n"
+invalid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        Runtime.getRuntime().exec(\"ping -c 1 $q\")\n        return \"ok\"\n    }\n}\n"
+- "fun Application.routes() {\n    routing {\n        get(\"/x\") {\n            val host = call.request.queryParameters[\"host\"]\n            ProcessBuilder(\"sh\", \"-c\", \"ping $host\").start()\n \
+  \       }\n    }\n}\n"

@@ -5,6 +5,7 @@
 use super::TaintRule;
 use super::events::Hits;
 use super::flow::{Ctx, Reached};
+use super::kotlin::Part;
 use crate::files::SourceFile;
 use ast_grep_core::{Doc, Node};
 use ast_grep_language::SupportLang;
@@ -37,18 +38,18 @@ const ROUNDS: usize = 3;
 /// Callee of a call, whitespace removed: `f`, `mod.f`, `a.b.f`.
 pub fn callee<D: Doc>(call: &Node<D>) -> Option<String> {
     let squeeze = |n: Node<D>| -> String { n.text().split_whitespace().collect() };
-    let text = match call.field("function") {
+    let text = match call.part("function") {
         Some(f) => squeeze(f),
         // Java `obj.name(…)` / `new Type(…)`, PHP `$obj->name(…)`, Ruby `obj.name …`
         None => {
             let name = call
-                .field("name")
-                .or_else(|| call.field("method"))
-                .or_else(|| call.field("type"))?;
+                .part("name")
+                .or_else(|| call.part("method"))
+                .or_else(|| call.part("type"))?;
             let object = call
-                .field("object")
-                .or_else(|| call.field("receiver"))
-                .or_else(|| call.field("scope"));
+                .part("object")
+                .or_else(|| call.part("receiver"))
+                .or_else(|| call.part("scope"));
             match object {
                 Some(o) => format!("{}.{}", squeeze(o), squeeze(name)),
                 None => squeeze(name),
@@ -67,15 +68,15 @@ pub fn callee<D: Doc>(call: &Node<D>) -> Option<String> {
 /// The name a call calls, without its receiver: `run` in `a.b.run(…)`,
 /// `Helper` in `new Helper<T>(…)`; `None` when it is not a plain name.
 pub fn called_name<D: Doc>(call: &Node<D>) -> Option<String> {
-    let target = match call.field("function") {
+    let target = match call.part("function") {
         Some(f) => ["property", "attribute", "field", "name"]
             .iter()
-            .find_map(|k| f.field(k))
+            .find_map(|k| f.part(k))
             .unwrap_or(f),
         None => call
-            .field("name")
-            .or_else(|| call.field("method"))
-            .or_else(|| call.field("type"))?,
+            .part("name")
+            .or_else(|| call.part("method"))
+            .or_else(|| call.part("type"))?,
     };
     let text = target.text();
     let name = text.split('<').next()?.trim();
@@ -86,25 +87,32 @@ pub fn called_name<D: Doc>(call: &Node<D>) -> Option<String> {
 
 /// `new Helper().run(…)`, `(new Helper()).run(…)`: `Helper.run`.
 fn constructed<D: Doc>(call: &Node<D>) -> Option<String> {
-    let member = call.field("function");
+    let member = call.part("function");
     let member = member.as_ref().unwrap_or(call);
     let mut object = member
-        .field("expression")
-        .or_else(|| member.field("object"))?;
+        .part("expression")
+        .or_else(|| member.part("object"))?;
     while object.kind() == "parenthesized_expression" {
         let inner = object.children().find(|c| c.is_named())?;
         object = inner;
     }
-    if !matches!(
-        object.kind().as_ref(),
-        "object_creation_expression" | "new_expression"
-    ) {
+    // Kotlin builds without `new`: `UserRepo().byName(…)`.
+    let kotlin = (object.kind() == "call_expression")
+        .then(|| object.part("function"))
+        .flatten()
+        .filter(|f| f.kind() == "simple_identifier" && f.text().starts_with(char::is_uppercase));
+    if kotlin.is_none()
+        && !matches!(
+            object.kind().as_ref(),
+            "object_creation_expression" | "new_expression"
+        )
+    {
         return None;
     }
-    let class = object
-        .field("type")
-        .or_else(|| object.field("constructor"))?;
-    let method = member.field("name").or_else(|| member.field("property"))?;
+    let class = kotlin
+        .or_else(|| object.part("type"))
+        .or_else(|| object.part("constructor"))?;
+    let method = member.part("name").or_else(|| member.part("property"))?;
     let class = class.text();
     Some(format!(
         "{}.{}",
@@ -115,7 +123,7 @@ fn constructed<D: Doc>(call: &Node<D>) -> Option<String> {
 
 /// Positional arguments of a call (keyword arguments end the list).
 pub fn args<'a, D: Doc>(call: &Node<'a, D>) -> Vec<Node<'a, D>> {
-    let Some(list) = call.field("arguments") else {
+    let Some(list) = call.part("arguments") else {
         return Vec::new();
     };
     list.children()

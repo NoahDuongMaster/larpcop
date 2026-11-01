@@ -4,6 +4,7 @@
 //! decorator (FastAPI `@app.get(…)`, Flask `@app.route('/u/<name>')`), and the
 //! arguments of GraphQL resolvers (`(parent, args) => …`, `def resolve_x(root, info, id)`).
 
+use super::kotlin::Part;
 use ast_grep_core::{Doc, Node};
 use regex::Regex;
 use std::collections::HashSet;
@@ -25,7 +26,7 @@ const NOT_INPUT_TYPES: [&str; 9] = [
 /// parameter cannot carry an injection.
 /// Java and C# action parameters of numeric, boolean, id or date types are
 /// converted by the framework too.
-const VALIDATED_TYPES: [&str; 20] = [
+const VALIDATED_TYPES: [&str; 28] = [
     "int",
     "float",
     "bool",
@@ -46,6 +47,15 @@ const VALIDATED_TYPES: [&str; 20] = [
     "decimal",
     "LocalDate",
     "boolean",
+    // Kotlin.
+    "Int",
+    "Float",
+    "Short",
+    "Byte",
+    "LocalDateTime",
+    "Instant",
+    "BigDecimal",
+    "BigInteger",
 ];
 /// NestJS pipes that convert a parameter before the handler sees it.
 const CONVERTING_PIPES: [&str; 5] = [
@@ -68,7 +78,7 @@ pub(super) fn params<D: Doc>(
     resolvers: bool,
 ) -> HashSet<String> {
     let mut out = HashSet::new();
-    let Some(list) = function.field("parameters") else {
+    let Some(list) = function.part("parameters") else {
         return out;
     };
     if resolvers {
@@ -91,7 +101,8 @@ pub(super) fn params<D: Doc>(
                 param_decorators.contains(&called)
                     && !CONVERTING_PIPES.iter().any(|p| text.contains(p))
             });
-        if decorated || (is_handler && is_input(&p, &name)) {
+        // `@RequestParam Long id`: the framework converts it or fails.
+        if (decorated && !validated(&p)) || (is_handler && is_input(&p, &name)) {
             out.insert(name);
         }
     }
@@ -106,7 +117,7 @@ fn resolver_args<D: Doc>(list: &Node<D>) -> Vec<String> {
         .filter(|c| c.is_named() && c.kind() != "comment")
         .collect();
     let text = |n: &Node<D>| {
-        n.field("pattern")
+        n.part("pattern")
             .unwrap_or_else(|| n.clone())
             .text()
             .to_string()
@@ -115,7 +126,7 @@ fn resolver_args<D: Doc>(list: &Node<D>) -> Vec<String> {
         return Vec::new();
     }
     let second = params[1]
-        .field("pattern")
+        .part("pattern")
         .unwrap_or_else(|| params[1].clone());
     if second.kind() == "object_pattern" {
         return second
@@ -161,13 +172,15 @@ fn decorators_of<D: Doc>(function: &Node<D>) -> Vec<String> {
 }
 
 /// Decorators of a parameter: TS `@Body()`, Java `@RequestParam("q")` (in
-/// `modifiers`), C# `[FromQuery]` (an `attribute_list`).
+/// `modifiers`), C# `[FromQuery]` (an `attribute_list`), Kotlin's (in the
+/// `parameter_modifiers` just before the parameter).
 fn annotations<D: Doc>(p: &Node<D>) -> Vec<String> {
     let mut out = Vec::new();
-    for c in p.children() {
+    let kotlin = p.prev().filter(|m| m.kind() == "parameter_modifiers");
+    for c in p.children().chain(kotlin) {
         match c.kind().as_ref() {
             "decorator" | "attribute_list" => out.push(c.text().to_string()),
-            "modifiers" => out.extend(
+            "modifiers" | "parameter_modifiers" => out.extend(
                 c.children()
                     .filter(|a| matches!(a.kind().as_ref(), "annotation" | "marker_annotation"))
                     .map(|a| a.text().to_string()),
@@ -181,12 +194,12 @@ fn annotations<D: Doc>(p: &Node<D>) -> Vec<String> {
 fn name_of<D: Doc>(p: &Node<D>) -> Option<String> {
     let n = match p.kind().as_ref() {
         // Java, C#
-        "formal_parameter" | "parameter" => p.field("name")?,
+        "formal_parameter" | "parameter" => p.part("name")?,
         "identifier" => p.clone(),
         "typed_parameter" => p.children().find(|c| c.kind() == "identifier")?,
-        "default_parameter" | "typed_default_parameter" => p.field("name")?,
+        "default_parameter" | "typed_default_parameter" => p.part("name")?,
         "required_parameter" | "optional_parameter" => {
-            p.field("pattern").filter(|n| n.kind() == "identifier")?
+            p.part("pattern").filter(|n| n.kind() == "identifier")?
         }
         _ => return None,
     };
@@ -199,23 +212,33 @@ fn is_input<D: Doc>(p: &Node<D>, name: &str) -> bool {
     if NOT_INPUT.contains(&name) {
         return false;
     }
-    let ty = p
-        .field("type")
-        .map(|t| t.text().trim_start_matches(':').trim().to_string());
-    let framework = |t: &String| {
+    let framework = type_of(p).is_some_and(|t| {
         NOT_INPUT_TYPES
             .iter()
-            .any(|n| t == n || t.ends_with(&format!(".{n}")))
-    };
-    if ty
-        .as_ref()
-        .is_some_and(|t| framework(t) || VALIDATED_TYPES.contains(&t.as_str()))
-    {
+            .any(|n| t == *n || t.ends_with(&format!(".{n}")))
+    });
+    if framework || validated(p) {
         return false;
     }
     let default = p
-        .field("value")
+        .part("value")
         .map(|v| v.text().to_string())
         .unwrap_or_default();
     !(default.starts_with("Depends(") || default.starts_with("Security("))
+}
+
+/// A parameter's declared type, without `:` or a nullable `?`.
+fn type_of<D: Doc>(p: &Node<D>) -> Option<String> {
+    let ty = p.part("type")?.text().to_string();
+    Some(
+        ty.trim_start_matches(':')
+            .trim()
+            .trim_end_matches('?')
+            .to_string(),
+    )
+}
+
+/// Is the parameter of a type the framework converts (a number, a date)?
+fn validated<D: Doc>(p: &Node<D>) -> bool {
+    type_of(p).is_some_and(|t| VALIDATED_TYPES.contains(&t.as_str()))
 }

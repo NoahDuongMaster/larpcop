@@ -5,6 +5,7 @@
 use super::NAMES;
 use super::events::Hits;
 use super::fields::is_field;
+use super::kotlin::Part;
 use super::summary::{Summaries, args, callee};
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
@@ -12,8 +13,9 @@ use std::collections::HashSet;
 use std::ops::Range;
 
 /// Targets (left) and value (right) of the assignment kinds we follow.
-pub(super) const ASSIGNMENTS: [(&str, &str, &str); 14] = [
+pub(super) const ASSIGNMENTS: [(&str, &str, &str); 15] = [
     ("variable_declarator", "name", "value"),
+    ("property_declaration", "name", "value"),
     ("let_declaration", "pattern", "value"),
     ("var_spec", "name", "value"),
     ("assignment_expression", "left", "right"),
@@ -223,10 +225,10 @@ impl Ctx {
             // guess: request data it is called on (`request.GET.get('q')`)
             // still flows out.
             let receiver = node
-                .field("function")
-                .and_then(|f| f.field("object"))
-                .or_else(|| node.field("object"))
-                .or_else(|| node.field("receiver"));
+                .part("function")
+                .and_then(|f| f.part("object"))
+                .or_else(|| node.part("object"))
+                .or_else(|| node.part("receiver"));
             return passed || (guessed && receiver.is_some_and(|r| self.tainted(&r, names)));
         }
         node.children().any(|c| self.tainted(&c, names))
@@ -251,10 +253,12 @@ impl Ctx {
         for (f, captured) in nested {
             let params = super::summary::param_names(&f);
             let text = f.text();
+            let element = super::callbacks::bound(self, &f, &captured);
             // Only what the nested function mentions can reach it.
             let mut names: HashSet<String> = captured
                 .into_iter()
                 .filter(|n| !params.contains(n) && text.contains(n.as_str()))
+                .chain(element)
                 .collect();
             names.extend(own(&f));
             // A nested function's `return` is not this scope's.

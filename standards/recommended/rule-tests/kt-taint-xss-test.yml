@@ -1,0 +1,11 @@
+id: kt-taint-xss
+valid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        response.writer.print(\"<p>Hello \" + HtmlUtils.htmlEscape(q) + \"</p>\")\n        return \"ok\"\n    }\n}\n"
+- "fun Application.routes() {\n    routing {\n        get(\"/x\") {\n            val name = call.parameters[\"name\"]\n            call.respondText(\"Hello $name\", ContentType.Text.Plain)\n        }\n\
+  \    }\n}\n"
+invalid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        response.writer.print(\"<p>Hello $q</p>\")\n        return \"ok\"\n    }\n}\n"
+- "fun Application.routes() {\n    routing {\n        get(\"/x\") {\n            val name = call.parameters[\"name\"]\n            call.respondText(\"<h1>$name</h1>\", ContentType.Text.Html)\n        }\n\
+  \    }\n}\n"

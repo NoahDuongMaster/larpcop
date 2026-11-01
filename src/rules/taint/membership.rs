@@ -1,6 +1,7 @@
 //! What a membership or equality check proves: the names it makes safe.
 
 use super::NAMES;
+use super::kotlin::Part;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
 
@@ -34,20 +35,10 @@ const NEEDLES: [(&str, usize); 5] = [
 ];
 
 pub(super) fn members<D: Doc>(n: &Node<D>) -> Option<HashSet<String>> {
-    // Python `x in allowed`: the left operand only (`"k" in form.getlist(name)`
-    // says nothing of `name`).
-    if n.kind() == "comparison_operator" {
-        let parts: Vec<Node<D>> = n.children().filter(|c| c.is_named()).collect();
-        if let [left, right] = parts.as_slice() {
-            let start = n.range().start;
-            let op = n.text()[left.range().end - start..right.range().start - start]
-                .trim()
-                .to_string();
-            if op == "in" {
-                return Some(super::guards::names(left));
-            }
-        }
-        return None;
+    // Python `x in allowed`, Kotlin `x in allowed`: the left operand only
+    // (`"k" in form.getlist(name)` says nothing of `name`).
+    if let Some((left, op)) = infix(n) {
+        return (op == "in").then(|| super::guards::names(&left));
     }
     if !super::flow::CALLS.contains(&n.kind().as_ref()) {
         return None;
@@ -63,12 +54,12 @@ pub(super) fn members<D: Doc>(n: &Node<D>) -> Option<HashSet<String>> {
         );
     }
     // From the node: `callee` gives up on chains (`c.getName().equals(X)`).
-    let member = n.field("function");
+    let member = n.part("function");
     let method = member
         .as_ref()
-        .and_then(|f| f.field("property"))
-        .or_else(|| n.field("name"))
-        .or_else(|| n.field("method"))?
+        .and_then(|f| f.part("property"))
+        .or_else(|| n.part("name"))
+        .or_else(|| n.part("method"))?
         .text()
         .to_string();
     let method = method.as_str();
@@ -80,8 +71,8 @@ pub(super) fn members<D: Doc>(n: &Node<D>) -> Option<HashSet<String>> {
         return None;
     }
     let receiver = n
-        .field("object")
-        .or_else(|| n.field("function")?.field("object"));
+        .part("object")
+        .or_else(|| n.part("function")?.part("object"));
     Some(
         receiver
             .into_iter()
@@ -90,4 +81,29 @@ pub(super) fn members<D: Doc>(n: &Node<D>) -> Option<HashSet<String>> {
             .map(|o| o.text().to_string())
             .collect(),
     )
+}
+
+/// `x not in allowed` (Python), `x !in allowed` (Kotlin): the names of `x`.
+pub(super) fn not_in<D: Doc>(n: &Node<D>) -> Option<HashSet<String>> {
+    let (left, op) = infix(n)?;
+    matches!(op.as_str(), "not in" | "!in").then(|| super::guards::names(&left))
+}
+
+/// The left operand and operator of a Python comparison or a Kotlin `in` check.
+fn infix<'a, D: Doc>(n: &Node<'a, D>) -> Option<(Node<'a, D>, String)> {
+    if !matches!(
+        n.kind().as_ref(),
+        "comparison_operator" | "check_expression"
+    ) {
+        return None;
+    }
+    let parts: Vec<Node<D>> = n.children().filter(|c| c.is_named()).collect();
+    let [left, right] = parts.as_slice() else {
+        return None;
+    };
+    let start = n.range().start;
+    let op = n.text()[left.range().end - start..right.range().start - start]
+        .trim()
+        .to_string();
+    Some((left.clone(), op))
 }

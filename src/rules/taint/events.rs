@@ -7,6 +7,7 @@
 use super::fields::{class_field, is_field};
 use super::flow::{ASSIGNMENTS, CALLS, LOOPS, enclosing};
 use super::guards::{Check, Guard};
+use super::kotlin::Part;
 use super::paths::{CONDITIONAL, compound};
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
@@ -175,9 +176,9 @@ fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
             out.push((n.range().start, Shape::If(n.clone())));
         }
         if let Some((_, l, r)) = ASSIGNMENTS.iter().find(|(k, ..)| kind == *k)
-            && let Some(left) = n.field(l)
+            && let Some(left) = n.part(l)
             // C#'s `var x = …` leaves the value without a field name.
-            && let Some(right) = n.field(r).or_else(|| {
+            && let Some(right) = n.part(r).or_else(|| {
                 n.children()
                     .filter(|c| c.is_named() && c.range() != left.range())
                     .last()
@@ -201,10 +202,7 @@ fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
             out.push((at, Shape::Assign(left, right, conditional, field)));
         } else if CALLS.contains(&kind.as_ref()) {
             out.push((n.range().start, Shape::Call(n.clone())));
-        } else if matches!(
-            kind.as_ref(),
-            "return_statement" | "return_expression" | "return"
-        ) {
+        } else if super::kotlin::is_return(n) {
             out.push((n.range().end, Shape::Return(n.clone())));
         }
     });

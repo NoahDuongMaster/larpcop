@@ -5,6 +5,7 @@
 //! with statements falls back to the receiver's taint.
 
 use super::flow::{CALLS, Ctx};
+use super::kotlin::Part;
 use super::summary::param_names;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
@@ -50,28 +51,28 @@ pub(super) fn mapped<D: Doc>(ctx: &Ctx, node: &Node<D>, names: &HashSet<String>)
 
 /// Receiver, method name and callback of `recv.map(fn)` / `recv.map { … }`.
 fn parts<'a, D: Doc>(call: &Node<'a, D>) -> Option<(Node<'a, D>, String, Node<'a, D>)> {
-    if let Some(member) = call.field("function") {
+    if let Some(member) = call.part("function") {
         // JS/TS: `recv.map(x => …)`.
-        let receiver = member.field("object")?;
-        let method = member.field("property")?.text().to_string();
+        let receiver = member.part("object")?;
+        let method = member.part("property")?.text().to_string();
         let callback = call
-            .field("arguments")?
+            .part("arguments")?
             .children()
             .find(|c| c.is_named())
             .filter(|c| matches!(c.kind().as_ref(), "arrow_function" | "function_expression"))?;
         return Some((receiver, method, callback));
     }
     // Ruby: `recv.map { |x| … }`.
-    let receiver = call.field("receiver")?;
-    let method = call.field("method")?.text().to_string();
-    let callback = call.field("block")?;
+    let receiver = call.part("receiver")?;
+    let method = call.part("method")?.text().to_string();
+    let callback = call.part("block")?;
     Some((receiver, method, callback))
 }
 
 /// The one expression a callback returns: an arrow function's expression
 /// body, a Ruby block of one statement.
 fn single_value<'a, D: Doc>(callback: &Node<'a, D>) -> Option<Node<'a, D>> {
-    let body = callback.field("body")?;
+    let body = callback.part("body")?;
     match callback.kind().as_ref() {
         "arrow_function" => (body.kind() != "statement_block").then_some(body),
         "block" | "do_block" => {
@@ -91,10 +92,10 @@ fn single_value<'a, D: Doc>(callback: &Node<'a, D>) -> Option<Node<'a, D>> {
 /// `[body for x in xs if …]`: tainted when the body is, with `x` tainted if
 /// `xs` is.
 fn comprehension<D: Doc>(ctx: &Ctx, node: &Node<D>, names: &HashSet<String>) -> Option<bool> {
-    let body = node.field("body")?;
+    let body = node.part("body")?;
     let mut inner = names.clone();
     for clause in node.children().filter(|c| c.kind() == "for_in_clause") {
-        let (Some(left), Some(right)) = (clause.field("left"), clause.field("right")) else {
+        let (Some(left), Some(right)) = (clause.part("left"), clause.part("right")) else {
             return None;
         };
         let bound = left

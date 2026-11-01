@@ -3,6 +3,7 @@
 //! a Flask view returning a string: the returned value is written to the
 //! client as is, like an argument of `res.send`.
 
+use super::kotlin::Part;
 use crate::config::ResponseReturns;
 use crate::rules::complexity::is_function;
 use anyhow::{Context, Result};
@@ -50,7 +51,7 @@ impl Responds {
         {
             return false;
         }
-        if let (Some(types), Some(declared)) = (&self.types, function.field("type"))
+        if let (Some(types), Some(declared)) = (&self.types, function.part("type"))
             && !types.is_match(declared.text().trim())
         {
             return false;
@@ -90,8 +91,8 @@ fn headers<D: Doc>(function: &Node<D>) -> String {
 fn head<D: Doc>(n: &Node<D>) -> String {
     let text = n.text();
     let end = n
-        .field("body")
-        .or_else(|| n.field("definition").and_then(|d| d.field("body")))
+        .part("body")
+        .or_else(|| n.part("definition").and_then(|d| d.part("body")))
         .map_or(text.len(), |b| b.range().start - n.range().start);
     text[..end.min(text.len())].to_string()
 }
@@ -105,12 +106,12 @@ fn built_as_string<D: Doc>(function: &Node<D>, value: &Node<D>) -> bool {
     let name = value.text();
     function.dfs().any(|n| {
         let assigned = match n.kind().as_ref() {
-            "assignment" | "augmented_assignment" => n.field("left"),
+            "assignment" | "augmented_assignment" => n.part("left"),
             _ => None,
         };
         assigned.is_some_and(|l| l.text() == name)
             && (n.kind() == "augmented_assignment"
-                || n.field("right").is_some_and(|r| {
+                || n.part("right").is_some_and(|r| {
                     matches!(r.kind().as_ref(), "string" | "concatenated_string")
                         || (r.kind() == "binary_operator"
                             && r.children().any(|c| c.kind() == "string"))

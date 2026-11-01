@@ -6,6 +6,7 @@
 //! caller's argument is then judged with the rule's guards.
 
 use super::guards::{Check, safe};
+use super::kotlin::Part;
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
@@ -40,7 +41,7 @@ pub(super) fn condition_param<D: Doc>(
         if a.kind() != "if_statement" {
             continue;
         }
-        let (Some(cond), Some(then)) = (a.field("condition"), a.field("consequence")) else {
+        let (Some(cond), Some(then)) = (a.part("condition"), a.part("consequence")) else {
             continue;
         };
         let r = at.range();
@@ -91,8 +92,8 @@ pub(super) fn validated<D: Doc>(
         let mut holds = safe(&value, checks).0;
         // `u -> ALLOWED.contains(u)` applied to the caller's `url`.
         let param = check
-            .field("parameters")
-            .or_else(|| check.field("parameter"))
+            .part("parameters")
+            .or_else(|| check.part("parameter"))
             .and_then(|p| p.dfs().find(|n| n.kind() == "identifier"));
         if param.is_some_and(|p| holds.contains(p.text().as_ref())) {
             holds.extend(applied_names());
@@ -133,13 +134,13 @@ pub(super) fn validated<D: Doc>(
 /// What a lambda returns when it can return true: its expression body, or
 /// its one `return` whose value is not `false`.
 fn returned<'a, D: Doc>(lambda: &Node<'a, D>) -> Option<Node<'a, D>> {
-    let body = lambda.field("body")?;
+    let body = lambda.part("body")?;
     if !body.kind().contains("block") {
         return Some(body);
     }
     let values: Vec<Node<D>> = body
         .dfs()
-        .filter(|n| matches!(n.kind().as_ref(), "return_statement" | "return"))
+        .filter(|n| super::kotlin::is_return(n))
         .filter_map(|r| r.children().find(|c| c.is_named()))
         .filter(|v| v.text() != "false")
         .collect();
@@ -155,8 +156,8 @@ fn lambda_named<'a, D: Doc>(at: &Node<'a, D>, name: &str) -> Option<Node<'a, D>>
     f.dfs()
         .filter(|n| matches!(n.kind().as_ref(), "variable_declarator" | "assignment"))
         .find_map(|n| {
-            let left = n.field("name").or_else(|| n.field("left"))?;
-            let value = n.field("value").or_else(|| n.field("right"))?;
+            let left = n.part("name").or_else(|| n.part("left"))?;
+            let value = n.part("value").or_else(|| n.part("right"))?;
             (left.text() == name && LAMBDAS.contains(&value.kind().as_ref())).then_some(value)
         })
 }

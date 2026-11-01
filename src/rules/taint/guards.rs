@@ -7,6 +7,7 @@
 //! and after the `if` when the `then` branch leaves: `if (!ok(u)) return;`).
 
 use super::NAMES;
+use super::kotlin::Part;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
 use std::ops::Range;
@@ -37,8 +38,10 @@ const EXIT_CALLS: [&str; 14] = [
     "log.Fatalf(",
     "log.Fatalln(",
 ];
-const EXITS: [&str; 8] = [
+const EXITS: [&str; 9] = [
     "exit_statement",
+    // Kotlin `return`, `throw`, `break`, `continue`.
+    "jump_expression",
     "return",
     "return_statement",
     "return_expression",
@@ -56,20 +59,28 @@ const NOTS: [&str; 6] = [
     "not_operator",
     "prefix_expression",
 ];
-const BINARIES: [&str; 5] = [
+const BINARIES: [&str; 9] = [
     "binary",
     "binary_expression",
     "boolean_operator",
     "comparison_operator",
     "binary_op_expression",
+    // Kotlin `&&`, `||`, `==`, `<`.
+    "conjunction_expression",
+    "disjunction_expression",
+    "equality_expression",
+    "comparison_expression",
 ];
 /// Blocks that may end in the exit: Go's `statement_list`, the block of an `else`.
-const BLOCKS: [&str; 5] = [
+const BLOCKS: [&str; 7] = [
     "statement_list",
     "block",
     "statement_block",
     "compound_statement",
     "else_clause",
+    // Kotlin `if (…) { … }`.
+    "control_structure_body",
+    "statements",
 ];
 
 /// A guard match: its range, whether it holds when the value is safe
@@ -92,9 +103,9 @@ pub(super) fn of<D: Doc>(n: &Node<D>, checks: &[Check]) -> Vec<Guard> {
         return out;
     }
     let (Some(condition), Some(then)) = (
-        n.field("condition"),
+        n.part("condition"),
         // PHP names the branch `body`.
-        n.field("consequence").or_else(|| n.field("body")),
+        n.part("consequence").or_else(|| n.part("body")),
     ) else {
         return out;
     };
@@ -104,7 +115,7 @@ pub(super) fn of<D: Doc>(n: &Node<D>, checks: &[Check]) -> Vec<Guard> {
     } else {
         (holds, fails)
     };
-    let otherwise = n.field("alternative");
+    let otherwise = n.part("alternative");
     if exits(&then) && !fails.is_empty() {
         out.push(Guard::After(n.range().end, fails.clone()));
     } else if otherwise.is_none() && !fails.is_empty() {
@@ -150,7 +161,9 @@ pub(super) fn safe<D: Doc>(n: &Node<D>, checks: &[Check]) -> Sets {
                 HashSet::new(),
             )
         } else {
-            (HashSet::new(), names(n))
+            // `x not in allowed` rejects `x`; `".." in p`, `p.includes("..")` reject `p`.
+            let needle = super::membership::not_in(n);
+            (HashSet::new(), needle.unwrap_or_else(|| names(n)))
         };
     }
     if !checks
@@ -169,11 +182,11 @@ pub(super) fn safe<D: Doc>(n: &Node<D>, checks: &[Check]) -> Sets {
     }
     if BINARIES.contains(&kind.as_ref())
         && let (Some(l), Some(r)) = (
-            n.field("left").or_else(|| named.first().cloned()),
-            n.field("right").or_else(|| named.get(1).cloned()),
+            n.part("left").or_else(|| named.first().cloned()),
+            n.part("right").or_else(|| named.get(1).cloned()),
         )
         // Python's comparison_operator names no operands: `a != b`, two children.
-        && (n.field("left").is_some() || named.len() == 2)
+        && (n.part("left").is_some() || named.len() == 2)
     {
         return binary(&operator(n, &l, &r), &l, &r, checks);
     }
@@ -261,6 +274,6 @@ fn exits<D: Doc>(branch: &Node<D>) -> bool {
                 && EXIT_CALLS.iter().any(|e| l.text().starts_with(e)))
             // Ruby: `redirect_to root_path and return`.
             || (l.kind() == "binary"
-                && l.field("right").is_some_and(|r| EXITS.contains(&r.kind().as_ref())))
+                && l.part("right").is_some_and(|r| EXITS.contains(&r.kind().as_ref())))
     })
 }

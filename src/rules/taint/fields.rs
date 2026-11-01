@@ -2,20 +2,21 @@
 //! `@x`, and in Java and C# a bare name the class declares as a field. Data
 //! stored there is read by the class's other methods.
 
+use super::kotlin::Part;
 use ast_grep_core::{Doc, Node};
 
 /// `this.x` (JS/TS) or `self.x` (Python): a field of the object a method runs on.
 pub(crate) fn is_field<D: Doc>(node: &Node<D>) -> bool {
     // Kind first: a field lookup on every node the walk visits is costly.
     match node.kind().as_ref() {
-        "member_expression" => node.field("object").is_some_and(|o| o.kind() == "this"),
-        "attribute" => node.field("object").is_some_and(|o| o.text() == "self"),
+        "member_expression" => node.part("object").is_some_and(|o| o.kind() == "this"),
+        "attribute" => node.part("object").is_some_and(|o| o.text() == "self"),
         // C# `this.x`, PHP `$this->x`, Java `this.x`, Ruby `@x`.
         "member_access_expression" => node
-            .field("expression")
-            .or_else(|| node.field("object"))
+            .part("expression")
+            .or_else(|| node.part("object"))
             .is_some_and(|o| matches!(o.text().as_ref(), "this" | "$this")),
-        "field_access" => node.field("object").is_some_and(|o| o.text() == "this"),
+        "field_access" => node.part("object").is_some_and(|o| o.text() == "this"),
         "instance_variable" => true,
         _ => false,
     }
@@ -49,7 +50,7 @@ pub(super) fn class_field<D: Doc>(node: &Node<D>) -> bool {
 
 /// Names a class declares as fields.
 fn fields<D: Doc>(class: &Node<D>) -> Vec<String> {
-    let Some(body) = class.field("body") else {
+    let Some(body) = class.part("body") else {
         return Vec::new();
     };
     body.children()
@@ -60,7 +61,7 @@ fn fields<D: Doc>(class: &Node<D>) -> Vec<String> {
                 .collect::<Vec<_>>()
         })
         .filter_map(|d| {
-            d.field("name")
+            d.part("name")
                 .or_else(|| d.children().find(|c| c.kind() == "identifier"))
                 .map(|n| n.text().to_string())
         })
@@ -74,7 +75,7 @@ pub(super) fn declares<D: Doc>(method: &Node<D>, name: &str) -> bool {
             d.kind().as_ref(),
             "parameter" | "formal_parameter" | "variable_declarator"
         ) && d
-            .field("name")
+            .part("name")
             .or_else(|| d.children().find(|c| c.kind() == "identifier"))
             .is_some_and(|n| n.text() == name)
     })

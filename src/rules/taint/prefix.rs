@@ -2,6 +2,7 @@
 //! whose fixed start matches the regex is safe: `res.redirect("/products/" + id)`
 //! cannot leave the site, `fetch("https://api.example.com/" + id)` cannot pick the host.
 
+use super::kotlin::Part;
 use ast_grep_core::{Doc, Node};
 
 /// String literal kinds: JS/TS/Python, Go, Rust.
@@ -16,7 +17,7 @@ const STRINGS: [&str; 5] = [
 /// The fixed text an argument starts with, if it starts with a literal.
 pub(super) fn leading<D: Doc>(node: &Node<D>) -> Option<String> {
     match node.kind().as_ref() {
-        "binary_expression" | "binary_operator" => leading(&node.field("left")?),
+        "binary_expression" | "binary_operator" => leading(&node.part("left")?),
         "parenthesized_expression" => leading(&node.child(1)?),
         // C# and PHP wrap each call argument.
         "argument" => leading(&node.children().filter(|c| c.is_named()).last()?),
@@ -42,7 +43,7 @@ pub(super) fn leading<D: Doc>(node: &Node<D>) -> Option<String> {
 /// The first operand of a built value: `reverse(…)` in `reverse(…) + "?q=" + q`.
 pub(super) fn leftmost<'a, D: Doc>(node: &Node<'a, D>) -> Node<'a, D> {
     let inner = match node.kind().as_ref() {
-        "binary_expression" | "binary_operator" => node.field("left"),
+        "binary_expression" | "binary_operator" => node.part("left"),
         "parenthesized_expression" => node.child(1),
         "argument" => node.children().filter(|c| c.is_named()).last(),
         _ => None,
@@ -97,8 +98,8 @@ fn checked<'a, D: Doc>(guard: &Node<'a, D>, literal_at: usize) -> Option<Node<'a
         return super::summary::args(guard).into_iter().next();
     }
     guard
-        .field("object")
-        .or_else(|| guard.field("function").and_then(|f| f.field("object")))
+        .part("object")
+        .or_else(|| guard.part("function").and_then(|f| f.part("object")))
 }
 
 const NORMALIZING: &str = r"(?i)(normalize|canonical|realpath|abspath|normpath|toRealPath|resolve|getFullPath|expand_path|cleanpath|filepath\.(Clean|Abs)|\.Clean\()";
@@ -122,9 +123,9 @@ fn normalized<D: Doc>(value: &Node<D>) -> bool {
     };
     f.dfs().any(|n| {
         let (left, right) = match n.kind().as_ref() {
-            "variable_declarator" => (n.field("name"), n.field("value")),
+            "variable_declarator" => (n.part("name"), n.part("value")),
             "assignment" | "assignment_expression" | "short_var_declaration" => {
-                (n.field("left"), n.field("right"))
+                (n.part("left"), n.part("right"))
             }
             _ => return false,
         };

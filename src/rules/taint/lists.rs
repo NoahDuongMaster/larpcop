@@ -3,6 +3,7 @@
 //! neighbour, not `param`. A list used any other way (passed on, iterated,
 //! changed in a branch or loop) stays one tainted whole.
 
+use super::kotlin::Part;
 use super::paths::CONDITIONAL;
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
@@ -96,17 +97,17 @@ fn created<'a, D: Doc>(nodes: &[Node<'a, D>]) -> Vec<(String, Node<'a, D>)> {
         .iter()
         .filter_map(|n| {
             let (name, value) = match n.kind().as_ref() {
-                "assignment" => (n.field("left")?, n.field("right")?),
-                "variable_declarator" => (n.field("name")?, n.field("value")?),
+                "assignment" => (n.part("left")?, n.part("right")?),
+                "variable_declarator" => (n.part("name")?, n.part("value")?),
                 _ => return None,
             };
             let new_list = matches!(value.kind().as_ref(), "list" | "array")
                 || (value.kind() == "object_creation_expression"
-                    && value.field("type").is_some_and(|t| {
+                    && value.part("type").is_some_and(|t| {
                         let t = t.text();
                         t.contains("ArrayList") || t.contains("LinkedList")
                     })
-                    && value.field("arguments").is_some_and(|a| a.text() == "()"));
+                    && value.part("arguments").is_some_and(|a| a.text() == "()"));
             (name.kind() == "identifier" && new_list).then(|| (name.text().to_string(), value))
         })
         .collect()
@@ -127,8 +128,8 @@ fn ops<'a, D: Doc>(
     for u in uses {
         // The creation itself.
         if u.parent().is_some_and(|p| {
-            p.field("value")
-                .or_else(|| p.field("right"))
+            p.part("value")
+                .or_else(|| p.part("right"))
                 .is_some_and(|v| v.range() == init.range())
         }) {
             if u.range().start > init.range().start {
@@ -180,11 +181,11 @@ fn op<'a, D: Doc>(u: &Node<'a, D>) -> Option<Op<'a, D>> {
         return None;
     };
     let method = call
-        .field("name")
-        .or_else(|| parent.field("attribute"))
-        .or_else(|| parent.field("property"))?;
+        .part("name")
+        .or_else(|| parent.part("attribute"))
+        .or_else(|| parent.part("property"))?;
     let args: Vec<Node<D>> = call
-        .field("arguments")?
+        .part("arguments")?
         .children()
         .filter(|c| c.is_named())
         .collect();

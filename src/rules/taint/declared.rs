@@ -3,6 +3,7 @@
 //! `x: Pool`), or `var x = new T(…)`. Typed languages state it, so a
 //! `sink_types` constraint needs no language server there.
 
+use super::kotlin::Part;
 use ast_grep_core::{Doc, Node};
 
 /// Statements and members that declare names with a type, per grammar.
@@ -17,13 +18,17 @@ const DECLARATIONS: [&str; 7] = [
 ];
 /// Parameter lists, and the parameters in them.
 /// Java's try-with-resources declares its resources like parameters.
-const PARAMETER_LISTS: [&str; 4] = [
+const PARAMETER_LISTS: [&str; 6] = [
     "formal_parameters",
     "parameter_list",
     "parameters",
     "resource_specification",
+    // Kotlin functions, and `class C(private val db: Db)`.
+    "function_value_parameters",
+    "primary_constructor",
 ];
-const PARAMETERS: [&str; 6] = [
+const PARAMETERS: [&str; 7] = [
+    "class_parameter",
     "resource",
     "formal_parameter",
     "spread_parameter",
@@ -36,7 +41,7 @@ const PARAMETERS: [&str; 6] = [
 /// Only the direct members of each enclosing scope are read (statements of a
 /// block, fields of a class, parameters of a function), not whole subtrees.
 pub(super) fn declared_type<D: Doc>(at: &Node<D>) -> Option<String> {
-    if at.kind() != "identifier" {
+    if !matches!(at.kind().as_ref(), "identifier" | "simple_identifier") {
         return None;
     }
     let name = at.text();
@@ -64,8 +69,8 @@ pub(super) fn declared_type<D: Doc>(at: &Node<D>) -> Option<String> {
     }
     // `URLUtil.url(x)`: an undeclared capitalized receiver names a class.
     let is_receiver = at.parent().is_some_and(|p| {
-        p.field("object")
-            .or_else(|| p.field("expression"))
+        p.part("object")
+            .or_else(|| p.part("expression"))
             .is_some_and(|o| o.range() == at.range())
     });
     if is_receiver && name.chars().next().is_some_and(char::is_uppercase) {
@@ -82,35 +87,35 @@ fn typed<D: Doc>(decl: &Node<D>, name: &str) -> Option<String> {
         .filter(|n| n.kind() == "variable_declarator")
         .collect();
     let declares = |n: &Node<D>| {
-        n.field("name")
+        n.part("name")
             .or_else(|| n.children().find(|c| c.kind() == "identifier"))
             .is_some_and(|id| id.text() == name)
     };
-    let ty = decl.field("type").or_else(|| {
+    let ty = decl.part("type").or_else(|| {
         decl.children()
             .find(|c| c.kind() == "variable_declaration")?
-            .field("type")
+            .part("type")
     });
     if !declarators.is_empty() {
         let declarator = declarators.iter().find(|d| declares(d))?;
         // TypeScript keeps the annotation on the declarator: `const db: Pool`.
-        let ty = ty.or_else(|| declarator.field("type"))?.text().to_string();
+        let ty = ty.or_else(|| declarator.part("type"))?.text().to_string();
         let ty = ty.trim_start_matches(':').trim().to_string();
         if ty != "var" {
             return Some(ty);
         }
         // `var x = new T(…)`.
-        let created = declarator.field("value").or_else(|| {
+        let created = declarator.part("value").or_else(|| {
             declarator
                 .children()
                 .find(|c| c.kind().contains("creation"))
         })?;
-        return Some(created.field("type")?.text().to_string());
+        return Some(created.part("type")?.text().to_string());
     }
     // Parameters: `T name`, `name: T`.
     let named = decl
-        .field("name")
-        .or_else(|| decl.field("pattern"))
+        .part("name")
+        .or_else(|| decl.part("pattern"))
         .or_else(|| decl.children().find(|c| c.kind() == "identifier"))?;
     if named.text() != name {
         return None;
@@ -130,8 +135,8 @@ pub(super) fn constructed<D: Doc>(at: &Node<D>, name: &str) -> Option<String> {
         .find(|a| crate::rules::complexity::is_function(a))?;
     let mut types = f.dfs().filter_map(|n| {
         let (left, right) = match n.kind().as_ref() {
-            "variable_declarator" => (n.field("name")?, n.field("value")?),
-            "assignment_expression" => (n.field("left")?, n.field("right")?),
+            "variable_declarator" => (n.part("name")?, n.part("value")?),
+            "assignment_expression" => (n.part("left")?, n.part("right")?),
             _ => return None,
         };
         (left.text() == name).then_some(right)
@@ -140,7 +145,7 @@ pub(super) fn constructed<D: Doc>(at: &Node<D>, name: &str) -> Option<String> {
     if types.next().is_some() || value.kind() != "object_creation_expression" {
         return None;
     }
-    let ty = value.field("type")?.text().to_string();
+    let ty = value.part("type")?.text().to_string();
     let simple = ty.split('<').next()?.rsplit('.').next()?.trim();
     Some(simple.to_string())
 }

@@ -2,6 +2,7 @@
 //! expression body, a Ruby method's or lambda's last statement, a Rust
 //! block's trailing expression.
 
+use super::kotlin::Part;
 use ast_grep_core::{Doc, Node};
 
 /// Wrappers around a Ruby body's statements.
@@ -23,7 +24,7 @@ const STATEMENTS: [&str; 6] = [
 ];
 
 pub(super) fn implicit<'a, D: Doc>(scope: &Node<'a, D>) -> Option<Node<'a, D>> {
-    let body = scope.field("body")?;
+    let body = scope.part("body")?;
     match scope.kind().as_ref() {
         "arrow_function" => (body.kind() != "statement_block").then_some(body),
         "method" | "singleton_method" | "lambda" => last(&body),
@@ -32,6 +33,8 @@ pub(super) fn implicit<'a, D: Doc>(scope: &Node<'a, D>) -> Option<Node<'a, D>> {
             let tail = named(&body).pop()?;
             (!STATEMENTS.contains(&tail.kind().as_ref())).then_some(tail)
         }
+        // Kotlin `fun f(s: String) = s.trim()`.
+        "function_declaration" | "anonymous_function" => super::kotlin::expression_body(&body),
         _ => None,
     }
 }

@@ -1,6 +1,7 @@
 //! Where functions are defined: named functions, methods (also known as
 //! `Class.method`), Rails scopes, and their parameters.
 
+use super::kotlin::Part;
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
@@ -21,7 +22,7 @@ pub fn functions<'a, D: Doc>(root: &Node<'a, D>) -> Vec<(String, Node<'a, D>, Ve
 /// of a Go method (`func (p *Profile) Load()`), the type of a Rust `impl`.
 pub(super) fn class_of<D: Doc>(f: &Node<D>) -> Option<String> {
     if f.kind() == "method_declaration"
-        && let Some(receiver) = f.field("receiver")
+        && let Some(receiver) = f.part("receiver")
     {
         let ty = receiver.dfs().find(|n| n.kind() == "type_identifier")?;
         return Some(ty.text().to_string());
@@ -32,14 +33,14 @@ pub(super) fn class_of<D: Doc>(f: &Node<D>) -> Option<String> {
             "class_definition" | "class_declaration" | "class" | "impl_item"
         )
     })?;
-    let name = class.field("name").or_else(|| class.field("type"))?;
+    let name = class.part("name").or_else(|| class.part("type"))?;
     Some(name.text().split('<').next()?.trim().to_string())
 }
 
 /// No body (`void run(String x);`), or one that only stands in for an
 /// implementation (`pass`, `...`, `raise NotImplementedError`).
 pub(super) fn bodiless<D: Doc>(f: &Node<D>) -> bool {
-    let Some(body) = f.field("body") else {
+    let Some(body) = f.part("body") else {
         return !matches!(
             f.kind().as_ref(),
             "arrow_function" | "lambda" | "lambda_expression"
@@ -65,11 +66,11 @@ fn named<'a, D: Doc>(
     root: &Node<'a, D>,
 ) -> impl Iterator<Item = (String, Node<'a, D>, Vec<String>)> {
     root.dfs().filter(|n| is_function(n)).filter_map(|f| {
-        let name = f.field("name").map(|n| n.text().to_string()).or_else(|| {
+        let name = f.part("name").map(|n| n.text().to_string()).or_else(|| {
             // `const f = (…) => …`, `f := func(…)`
             let parent = f.parent()?;
             (parent.kind() == "variable_declarator")
-                .then(|| parent.field("name"))
+                .then(|| parent.part("name"))
                 .flatten()
                 .map(|n| n.text().to_string())
                 .or_else(|| rails_scope(&f))
@@ -85,11 +86,11 @@ fn named<'a, D: Doc>(
 /// Rails `scope :recent, ->(n) { … }` defines the class method `recent`.
 fn rails_scope<D: Doc>(lambda: &Node<D>) -> Option<String> {
     let call = lambda.parent()?.parent()?;
-    let method = call.field("method")?;
+    let method = call.part("method")?;
     if lambda.kind() != "lambda" || method.text() != "scope" {
         return None;
     }
-    let name = call.field("arguments")?.children().find(|c| c.is_named())?;
+    let name = call.part("arguments")?.children().find(|c| c.is_named())?;
     (name.kind() == "simple_symbol").then(|| name.text().trim_start_matches(':').to_string())
 }
 
@@ -98,26 +99,44 @@ pub fn param_names<D: Doc>(f: &Node<D>) -> HashSet<String> {
     params(f).into_iter().filter(|p| !p.is_empty()).collect()
 }
 
+/// Parameter names by position (`""` where one is not a plain name).
+pub(super) fn positional_params<D: Doc>(f: &Node<D>) -> Vec<String> {
+    params(f)
+}
+
 fn params<D: Doc>(f: &Node<D>) -> Vec<String> {
-    if let Some(one) = f.field("parameter") {
+    if let Some(one) = f.part("parameter") {
         return vec![one.text().to_string()]; // `x => …`
     }
-    let Some(list) = f.field("parameters") else {
-        return Vec::new();
+    let Some(list) = f.part("parameters") else {
+        // Kotlin `{ q(it) }`.
+        return if f.kind() == "lambda_literal" {
+            vec!["it".to_string()]
+        } else {
+            Vec::new()
+        };
     };
+    // Java `x -> …`.
+    if matches!(list.kind().as_ref(), "identifier" | "simple_identifier") {
+        return vec![list.text().to_string()];
+    }
     // Python's `self` / `cls` are not among the call's arguments.
     let receiver = |p: &Node<D>| matches!(p.text().as_ref(), "self" | "cls");
     list.children()
         .filter(|c| !(f.kind() == "function_definition" && receiver(c)))
-        .filter(|c| c.is_named() && c.kind() != "comment")
+        // Kotlin puts a parameter's annotations before it.
+        .filter(|c| c.is_named() && !matches!(c.kind().as_ref(), "comment" | "parameter_modifiers"))
         .map(|p| {
-            if p.kind() == "identifier" {
+            if matches!(p.kind().as_ref(), "identifier" | "simple_identifier") {
                 return p.text().to_string();
             }
             ["pattern", "name", "left"]
                 .iter()
-                .find_map(|k| p.field(k))
-                .or_else(|| p.dfs().find(|n| n.kind() == "identifier"))
+                .find_map(|k| p.part(k))
+                .or_else(|| {
+                    p.dfs()
+                        .find(|n| matches!(n.kind().as_ref(), "identifier" | "simple_identifier"))
+                })
                 .map(|n| n.text().to_string())
                 .unwrap_or_default()
         })

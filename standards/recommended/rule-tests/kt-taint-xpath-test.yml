@@ -1,0 +1,7 @@
+id: kt-taint-xpath
+valid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        val xp = XPathFactory.newInstance().newXPath()\n        xp.evaluate(\"//user[name='\" + StringEscapeUtils.escapeXml10(q) + \"']\", doc)\n        return \"ok\"\n    }\n}\n"
+invalid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        val xp = XPathFactory.newInstance().newXPath()\n        xp.evaluate(\"//user[name='$q']\", doc)\n        return \"ok\"\n    }\n}\n"

@@ -7,6 +7,7 @@
 
 use super::flow::Ctx;
 use super::guards::{self, Check, Guard};
+use super::kotlin::Part;
 use super::scan::FileIndex;
 use ast_grep_core::{Doc, Node};
 use std::collections::{BTreeSet, HashSet};
@@ -30,7 +31,9 @@ pub(super) fn validated<D: Doc>(
     }
     let returns: Vec<Node<D>> = f
         .dfs()
-        .filter(|n| n.is_named() && RETURNS.contains(&n.kind().as_ref()))
+        .filter(|n| {
+            n.is_named() && (RETURNS.contains(&n.kind().as_ref()) || super::kotlin::is_return(n))
+        })
         .filter(|r| {
             r.ancestors()
                 .find(|a| crate::rules::complexity::is_function(a))
@@ -72,8 +75,8 @@ fn aliases<D: Doc>(f: &Node<D>, param: &str) -> HashSet<String> {
     for _ in 0..2 {
         for n in f.dfs() {
             let (left, right) = match n.kind().as_ref() {
-                "variable_declarator" => (n.field("name"), n.field("value")),
-                "assignment" | "assignment_expression" => (n.field("left"), n.field("right")),
+                "variable_declarator" => (n.part("name"), n.part("value")),
+                "assignment" | "assignment_expression" => (n.part("left"), n.part("right")),
                 _ => continue,
             };
             let (Some(left), Some(right)) = (left, right) else {

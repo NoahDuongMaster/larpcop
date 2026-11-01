@@ -1,0 +1,10 @@
+id: kt-taint-path
+valid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        val f = File(BASE, q).canonicalFile\n        if (!f.canonicalPath.startsWith(\"/srv/files/\")) return \"no\"\n        File(f.canonicalPath).readText()\n        return \"ok\"\n    }\n}\n"
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        File(\"/data/report.txt\").readText()\n        return \"ok\"\n    }\n}\n"
+invalid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        File(\"/data/\" + q).readText()\n        return \"ok\"\n    }\n}\n"
+- "fun Application.routes() {\n    routing {\n        get(\"/x\") {\n            val name = call.parameters[\"name\"]\n            call.respondFile(File(\"/srv/files/$name\"))\n        }\n    }\n}\n"

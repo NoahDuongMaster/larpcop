@@ -4,6 +4,7 @@
 //! can never run (`if (7 * 42) - num > 200`, `match "ABC"[0]`).
 
 use super::flow::ASSIGNMENTS;
+use super::kotlin::Part;
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashMap;
@@ -60,10 +61,10 @@ impl<'a, D: Doc> Env<'a, D> {
             }
             let kind = c.kind();
             if let Some((_, l, r)) = ASSIGNMENTS.iter().find(|(k, ..)| kind == *k)
-                && let Some(left) = c.field(l)
+                && let Some(left) = c.part(l)
                 && left.kind() == "identifier"
             {
-                let value = c.field(r).filter(|v| {
+                let value = c.part(r).filter(|v| {
                     matches!(
                         kind.as_ref(),
                         "variable_declarator" | "assignment" | "assignment_expression"
@@ -148,11 +149,11 @@ pub(super) fn eval<D: Doc>(n: &Node<D>, env: &Env<D>, depth: usize) -> Option<Va
             string(n)
         }
         "identifier" => env.value(&n.text(), n.range().start, depth),
-        "not_operator" => not(eval(&n.field("argument")?, env, depth)?),
+        "not_operator" => not(eval(&n.part("argument")?, env, depth)?),
         "unary_operator" | "unary_expression" | "prefix_unary_expression" => {
             let operand = n
-                .field("argument")
-                .or_else(|| n.field("operand"))
+                .part("argument")
+                .or_else(|| n.part("operand"))
                 .or_else(|| named().last())?;
             let v = eval(&operand, env, depth)?;
             match (n.text().trim_start().chars().next()?, v) {
@@ -163,7 +164,7 @@ pub(super) fn eval<D: Doc>(n: &Node<D>, env: &Env<D>, depth: usize) -> Option<Va
             }
         }
         "binary_operator" | "binary_expression" | "boolean_operator" => {
-            let (l, r) = (n.field("left")?, n.field("right")?);
+            let (l, r) = (n.part("left")?, n.part("right")?);
             let op = n.text()[l.range().end - n.range().start..r.range().start - n.range().start]
                 .trim()
                 .to_string();
@@ -191,14 +192,14 @@ pub(super) fn eval<D: Doc>(n: &Node<D>, env: &Env<D>, depth: usize) -> Option<Va
             }
         }
         "method_invocation" => {
-            let object = eval(&n.field("object")?, env, depth)?;
+            let object = eval(&n.part("object")?, env, depth)?;
             let args: Vec<Node<D>> = n
-                .field("arguments")?
+                .part("arguments")?
                 .children()
                 .filter(|c| c.is_named())
                 .collect();
             let arg = args.first().and_then(|a| eval(a, env, depth));
-            match (n.field("name")?.text().as_ref(), object, arg) {
+            match (n.part("name")?.text().as_ref(), object, arg) {
                 ("charAt", Value::Str(s), Some(Value::Int(i))) => char_at(&s, i),
                 ("equals", a, Some(b)) => Some(Value::Bool(a == b)),
                 ("contains", Value::Str(s), Some(Value::Str(t))) => {

@@ -2,6 +2,7 @@
 //! `m['a']`; `m.put("b", x)` then `m.get("a")` is clean. Reading the whole
 //! map (`m`, `str(m)`) still sees every tainted entry.
 
+use super::kotlin::Part;
 use super::summary::args;
 use ast_grep_core::{Doc, Node};
 
@@ -29,9 +30,9 @@ pub(super) fn entry<D: Doc>(n: &Node<D>) -> Option<String> {
         if !READS.iter().chain(WRITES.iter()).any(|w| text.contains(w)) {
             return None;
         }
-        let member = n.field("function");
+        let member = n.part("function");
         let member = member.as_ref().unwrap_or(n);
-        let method = member.field("property").or_else(|| member.field("name"))?;
+        let method = member.part("property").or_else(|| member.part("name"))?;
         let method = method.text();
         // `m.get(k)` reads, `m.put(k, v)` writes; `Paths.get("/srv", x)` is
         // neither (a class, and more arguments).
@@ -42,7 +43,7 @@ pub(super) fn entry<D: Doc>(n: &Node<D>) -> Option<String> {
         } else {
             return None;
         };
-        let object = member.field("object")?;
+        let object = member.part("object")?;
         let all = args(n);
         if all.len() != arity || object.text().starts_with(char::is_uppercase) {
             return None;
@@ -62,9 +63,9 @@ pub(super) fn stored<'a, D: Doc>(call: &Node<'a, D>) -> Option<Node<'a, D>> {
     if !WRITES.iter().any(|w| text.contains(w)) {
         return None;
     }
-    let member = call.field("function");
+    let member = call.part("function");
     let member = member.as_ref().unwrap_or(call);
-    let method = member.field("property").or_else(|| member.field("name"))?;
+    let method = member.part("property").or_else(|| member.part("name"))?;
     if !WRITES.contains(&method.text().as_ref()) {
         return None;
     }

@@ -1,0 +1,7 @@
+id: kt-taint-ldap
+valid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        ctx.search(\"ou=people\", \"(uid={0})\", arrayOf(q), SearchControls())\n        return \"ok\"\n    }\n}\n"
+invalid:
+- "@RestController\nclass C(private val jdbc: JdbcTemplate) {\n    @GetMapping(\"/x\")\n    fun x(@RequestParam q: String, request: HttpServletRequest, response: HttpServletResponse, ctx: DirContext): String\
+  \ {\n        ctx.search(\"ou=people\", \"(uid=$q)\", SearchControls())\n        return \"ok\"\n    }\n}\n"

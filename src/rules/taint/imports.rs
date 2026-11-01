@@ -3,8 +3,8 @@
 //! in Python (relative, from the root or `src/`), and in Go the other files of
 //! the same package plus packages of the same module, PHP `require`/`include`,
 //! Java and C# classes of the same directory that the file names, Java
-//! imports of other packages through the source root, Ruby
-//! `require_relative` and Rails autoloading.
+//! imports of other packages through the source root, Kotlin packages and
+//! imports (`.kt` or `.java`), Ruby `require_relative` and Rails autoloading.
 
 use ast_grep_core::{Doc, Node};
 use ast_grep_language::SupportLang;
@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 mod go;
 mod java;
 mod js;
+mod kotlin;
 mod php;
 mod python;
 mod ruby;
@@ -45,6 +46,7 @@ pub fn imports<D: Doc>(lang: SupportLang, root: &Node<D>, file: &Path, repo: &Pa
             all
         }
         SupportLang::CSharp => siblings::imports(root, file),
+        SupportLang::Kotlin => kotlin::imports(root, file, repo),
         SupportLang::Ruby => ruby::imports(root, dir, file, repo),
         _ => Vec::new(),
     };

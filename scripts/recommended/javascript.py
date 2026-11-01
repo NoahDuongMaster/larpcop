@@ -81,8 +81,8 @@ RULES = [
     dict(id="no-weak-hash", langs=JS, severity="error",
          message="MD5 / SHA-1 are broken hash functions.",
          note="Use SHA-256 for checksums and argon2/bcrypt/scrypt for passwords.",
-         rule={"pattern": "$C.createHash($ALG)", "has": {"field": "arguments", "has": {
-             "kind": "string", "regex": "^['\"](md5|sha1|md4|ripemd160)['\"]$"}}}),
+         rule={"pattern": "$C.createHash($ALG)"},
+         resolve={"ALG": "(?i)^(md5|sha1|md4|ripemd160)$"}),
     dict(id="no-mongo-where", langs=JS, severity="error",
          message="MongoDB `$where` runs JavaScript on the server (NoSQL injection).",
          note="Express the condition with query operators ($eq, $in, $expr…) and validated values.",

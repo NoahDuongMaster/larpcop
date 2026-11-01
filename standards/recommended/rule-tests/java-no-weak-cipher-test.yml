@@ -1,7 +1,12 @@
 id: java-no-weak-cipher
 valid:
 - "class T {\n  void f(String name, int id) throws Exception {\n    Cipher.getInstance(\"AES/GCM/NoPadding\");\n  }\n}\n"
+- "class C {\n  private static final String MODE = \"AES/GCM/NoPadding\";\n  Cipher c() throws Exception { return Cipher.getInstance(MODE); }\n}\n"
+- "class C {\n  public static final String TRANSFORMATION = \"RSA/ECB/PKCS1Padding\";\n  Cipher c() throws Exception { return Cipher.getInstance(TRANSFORMATION); }\n  Cipher d() throws Exception { return\
+  \ Cipher.getInstance(\"RSA/ECB/OAEPWithSHA-256AndMGF1Padding\"); }\n}\n"
 invalid:
 - "class T {\n  void f(String name, int id) throws Exception {\n    Cipher.getInstance(\"DES/CBC/PKCS5Padding\");\n  }\n}\n"
 - "class T {\n  void f(String name, int id) throws Exception {\n    Cipher c = Cipher.getInstance(\"AES\");\n  }\n}\n"
 - "class T {\n  void f(String name, int id) throws Exception {\n    javax.crypto.Cipher.getInstance(\"AES/ECB/PKCS5Padding\");\n  }\n}\n"
+- "class C {\n  private static final String MODE = \"DES/ECB/PKCS5Padding\";\n  Cipher c() throws Exception { return Cipher.getInstance(MODE); }\n}\n"
+- "class C {\n  Cipher c() throws Exception { return Cipher.getInstance(\"AES/ECB/PKCS5Padding\"); }\n}\n"

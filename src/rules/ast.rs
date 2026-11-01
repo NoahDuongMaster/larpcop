@@ -3,6 +3,7 @@
 //! Inline suppression comments are deliberately NOT honoured: exceptions must go
 //! through config, where they are visible in review and blocked for locked rules.
 
+use super::values::{Resolve, Settings};
 use super::{Level, RuleInfo, Violation};
 use crate::files::SourceFile;
 use anyhow::{Context, Result, anyhow, bail};
@@ -17,6 +18,9 @@ use std::path::{Path, PathBuf};
 pub struct AstRules {
     collection: RuleCollection<SupportLang>,
     infos: Vec<RuleInfo>,
+    /// (id, language) → `metadata.resolve` of the rule.
+    resolve: std::collections::HashMap<(String, String), Resolve>,
+    settings: Settings,
 }
 
 /// Rule fixtures directory (ast-grep's convention), inside or next to a rule dir.
@@ -55,15 +59,26 @@ pub fn load_all(dirs: &[PathBuf]) -> Result<Vec<RuleConfig<SupportLang>>> {
 }
 
 impl AstRules {
-    pub fn load(dirs: &[PathBuf], disabled: &BTreeSet<String>) -> Result<Self> {
+    pub fn load(dirs: &[PathBuf], disabled: &BTreeSet<String>, root: &Path) -> Result<Self> {
         let configs: Vec<_> = load_all(dirs)?
             .into_iter()
             .filter(|r| !disabled.contains(&r.id) && !matches!(r.severity, Severity::Off))
             .collect();
         let infos = merge_languages(configs.iter().map(info));
+        let mut resolve = std::collections::HashMap::new();
+        for r in &configs {
+            if let Some(spec) = Resolve::of(r)? {
+                resolve.insert((r.id.clone(), r.language.to_string()), spec);
+            }
+        }
         let collection =
             RuleCollection::try_new(configs).context("invalid files/ignores glob in rules")?;
-        Ok(Self { collection, infos })
+        Ok(Self {
+            collection,
+            infos,
+            resolve,
+            settings: Settings::new(root),
+        })
     }
 
     pub fn is_empty(&self) -> bool {
@@ -106,7 +121,13 @@ impl AstRules {
                     file.rel
                 )),
             };
-            for m in grep.root().find_all(&rule.matcher) {
+            let resolve = self
+                .resolve
+                .get(&(rule.id.clone(), rule.language.to_string()));
+            let kept = |m: &ast_grep_core::NodeMatch<_>| {
+                resolve.is_none_or(|r| r.keeps(m, &self.settings))
+            };
+            for m in grep.root().find_all(&rule.matcher).filter(kept) {
                 let pos = m.start_pos();
                 out.push(Violation {
                     rule: rule.id.clone(),

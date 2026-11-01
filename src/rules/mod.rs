@@ -10,6 +10,9 @@ pub mod secrets;
 mod taint;
 pub mod testing;
 mod text;
+pub mod values;
+#[cfg(test)]
+mod values_tests;
 
 /// ast-grep rules defined in `dirs` (for `larpcop learn`).
 pub fn ast_rules(
@@ -91,7 +94,7 @@ impl Engine {
             Some(m) if !cfg.disabled.contains(MAX_LINES_ID) => Some(max_lines::MaxLines::new(m)?),
             _ => None,
         };
-        let ast = ast::AstRules::load(&cfg.rule_dirs, &cfg.disabled)?;
+        let ast = ast::AstRules::load(&cfg.rule_dirs, &cfg.disabled, &cfg.root)?;
         let linters = cfg
             .linters
             .iter()

@@ -25,12 +25,16 @@
           "field": "arguments",
           "has": {
             "nthChild": 1,
-            "kind": "string_literal",
-            "regex": "(?i)^\"(des|desede|tripledes|rc2|rc4|arcfour|blowfish)(/|\"$)|^\"aes\"$|/ecb/"
+            "pattern": "$ALG"
           }
         }
       }
     ]
+  },
+  "metadata": {
+    "resolve": {
+      "ALG": "(?i)^(des|desede|tripledes|rc2|rc4|arcfour|blowfish)(/|$)|^aes$|^(aes|aes_\\d+|camellia|aria|sm4|seed|twofish)/ecb/"
+    }
   },
   "ignores": [
     "**/test/**",

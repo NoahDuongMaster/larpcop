@@ -217,7 +217,7 @@ fn class_of<D: Doc>(n: &Node<D>) -> Option<(usize, usize)> {
 
 mod build;
 mod callbacks;
-mod constant;
+pub(crate) mod constant;
 mod containers;
 mod contexts;
 mod deadcode;
@@ -225,6 +225,7 @@ mod declared;
 mod defs;
 mod destructure;
 mod entries;
+mod env;
 mod events;
 mod fields;
 mod flow;
@@ -259,6 +260,10 @@ mod tests_calls;
 mod tests_csharp;
 #[cfg(test)]
 mod tests_deadcode;
+/// `DUMP=f.java LANG_=java cargo test dump -- --ignored --nocapture` prints a
+/// syntax tree with its fields.
+#[cfg(test)]
+mod tests_dump;
 #[cfg(test)]
 mod tests_entries;
 #[cfg(test)]

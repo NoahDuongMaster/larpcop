@@ -25,11 +25,16 @@
           "field": "arguments",
           "has": {
             "nthChild": 1,
-            "regex": "(?i)^\"(md2|md4|md5|sha|sha-?1)\"$"
+            "pattern": "$ALG"
           }
         }
       }
     ]
+  },
+  "metadata": {
+    "resolve": {
+      "ALG": "(?i)^(md2|md4|md5|sha|sha-?1)$"
+    }
   },
   "ignores": [
     "**/test/**",

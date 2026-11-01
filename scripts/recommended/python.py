@@ -78,9 +78,10 @@ RULES = [
              {"not": {"has": {"field": "arguments", "regex": "usedforsecurity\\s*=\\s*False"}}},
              {"any": [
                  {"has": {"field": "function", "regex": "^(hashlib\\.)?(md5|sha1)$"}},
-                 {"has": {"field": "arguments", "has": {"nthChild": 1, "regex": "^['\"](md5|sha1)['\"]$"}}},
+                 {"has": {"field": "arguments", "has": {"nthChild": 1, "pattern": "$ALG"}}},
              ]},
-         ]}),
+         ]},
+         resolve={"ALG": "(?i)^(md5|sha1)$"}),
     dict(id="py-yaml-safe-load", langs=["Python"], severity="error",
          message="`yaml.load` without a safe loader can construct arbitrary objects.",
          note="Use yaml.safe_load.",

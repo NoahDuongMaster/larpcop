@@ -75,7 +75,7 @@ Kết quả dưới đây là sau bước 15: chỉ có ý nghĩa *không thụt
 | VulnerableApp (97 handler): điểm trung bình (TPR − FPR) | **+77,5%** (lần đầu +7,2%) | +16,5% | – |
 | Juliet C# (1.443 ca web): điểm trung bình (TPR − FPR) | **+93,8%** (lần đầu +43,9%) | +0,8% (`p/default`, `p/csharp`) | – |
 | Juliet Java (1.665 ca servlet): điểm trung bình (TPR − FPR) | **+91,2%** (lần đầu +68,6%) | +22,4% (`p/default`), +33,0% (`p/java`) | – |
-| OWASP Benchmark Java: điểm trung bình (TPR − FPR) | **+86,8%** (lần đầu +37,5%) | +34,9% (`p/default`), +17,7% (`p/java`) | – |
+| OWASP Benchmark Java: điểm trung bình (TPR − FPR) | **+91,9%** (lần đầu +37,5%) | +34,9% (`p/default`), +17,7% (`p/java`) | – |
 | OWASP Benchmark Python: thời gian | **2,7 s** | 8,1 s (`p/python`) | – |
 | OWASP Benchmark Python: điểm trung bình (TPR − FPR) | **+58,9%** (lần đầu +39,8%) | +6,9% (`p/default`), −0,8% (`p/python`) | – |
 | vulnerable-node seeds (/12 file, báo nhầm trên 2 file sạch) | **11**, 1 báo nhầm (11 và 0 báo nhầm nếu bỏ rule chung chung) | 10, 1 báo nhầm (8 và 1 báo nhầm nếu bỏ rule chung chung) | – |

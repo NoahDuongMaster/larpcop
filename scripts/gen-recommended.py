@@ -31,6 +31,8 @@ def doc(spec, lang):
         d["fix"] = spec["fix"]
     if "files" in spec:
         d["files"] = spec["files"]
+    if "resolve" in spec:
+        d["metadata"] = {"resolve": spec["resolve"]}
     if "ignores" in spec:
         d["ignores"] = spec["ignores"]
     elif spec["id"] not in QUALITY and "files" not in spec:

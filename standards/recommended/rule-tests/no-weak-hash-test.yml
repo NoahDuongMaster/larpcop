@@ -1,8 +1,18 @@
 id: no-weak-hash
 valid:
-  - "crypto.createHash('sha256').update(data).digest('hex')"
-  - "crypto.createHash(algorithm)"
-  - "crypto.createHmac('sha256', key)"
+- crypto.createHash('sha256').update(data).digest('hex')
+- crypto.createHash(algorithm)
+- crypto.createHmac('sha256', key)
+- 'const ALG = ''sha256'';
+
+  const digest = crypto.createHash(ALG).update(body).digest(''hex'');
+
+  '
 invalid:
-  - "crypto.createHash('md5').update(data).digest('hex')"
-  - "const h = createHash.call; crypto.createHash(\"sha1\")"
+- crypto.createHash('md5').update(data).digest('hex')
+- const h = createHash.call; crypto.createHash("sha1")
+- 'const ALG = ''md5'';
+
+  const digest = crypto.createHash(ALG).update(body).digest(''hex'');
+
+  '

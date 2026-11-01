@@ -121,7 +121,15 @@ pub fn run(defined: &Defined) -> Result<Report> {
 
 fn check(rule: &RuleConfig<SupportLang>, fixture: &Fixture) -> Vec<String> {
     let lang = rule.language;
-    let hits = |src: &str| lang.ast_grep(src).root().find_all(&rule.matcher).count();
+    let resolve = super::values::Resolve::of(rule).ok().flatten();
+    let settings = super::values::Settings::default();
+    let hits = |src: &str| {
+        lang.ast_grep(src)
+            .root()
+            .find_all(&rule.matcher)
+            .filter(|m| resolve.as_ref().is_none_or(|r| r.keeps(m, &settings)))
+            .count()
+    };
     let mut errors = Vec::new();
     for case in &fixture.invalid {
         if hits(case) == 0 {

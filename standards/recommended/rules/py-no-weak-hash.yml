@@ -35,13 +35,18 @@
               "field": "arguments",
               "has": {
                 "nthChild": 1,
-                "regex": "^['\"](md5|sha1)['\"]$"
+                "pattern": "$ALG"
               }
             }
           }
         ]
       }
     ]
+  },
+  "metadata": {
+    "resolve": {
+      "ALG": "(?i)^(md5|sha1)$"
+    }
   },
   "ignores": [
     "**/test/**",

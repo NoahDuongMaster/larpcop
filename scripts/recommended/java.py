@@ -34,17 +34,21 @@ RULES = [
          rule={"kind": "method_invocation", "all": [
              {"has": {"field": "name", "regex": "^getInstance$"}},
              {"has": {"field": "object", "regex": "(^|\\.)MessageDigest$"}},
-             {"has": {"field": "arguments", "has": {"nthChild": 1, "regex": "(?i)^\"(md2|md4|md5|sha|sha-?1)\"$"}}},
-         ]}),
+             {"has": {"field": "arguments", "has": {"nthChild": 1, "pattern": "$ALG"}}},
+         ]},
+         # What the argument holds: a literal, a constant, a property file entry.
+         resolve={"ALG": "(?i)^(md2|md4|md5|sha|sha-?1)$"}),
     dict(id="java-no-weak-cipher", langs=["Java"], severity="error",
          message="Broken cipher or mode (DES, 3DES, RC2/RC4, Blowfish, ECB; bare \"AES\" means AES/ECB).",
          note="Use AES/GCM/NoPadding (or ChaCha20-Poly1305) with a random IV per message.",
          rule={"kind": "method_invocation", "all": [
              {"has": {"field": "name", "regex": "^getInstance$"}},
              {"has": {"field": "object", "regex": "(^|\\.)Cipher$"}},
-             {"has": {"field": "arguments", "has": {"nthChild": 1, "kind": "string_literal",
-                      "regex": "(?i)^\"(des|desede|tripledes|rc2|rc4|arcfour|blowfish)(/|\"$)|^\"aes\"$|/ecb/"}}},
-         ]}),
+             {"has": {"field": "arguments", "has": {"nthChild": 1, "pattern": "$ALG"}}},
+         ]},
+         # ECB on a block cipher; RSA's "ECB" in a transformation means one block, not the mode.
+         resolve={"ALG": "(?i)^(des|desede|tripledes|rc2|rc4|arcfour|blowfish)(/|$)|^aes$"
+                         "|^(aes|aes_\\d+|camellia|aria|sm4|seed|twofish)/ecb/"}),
     dict(id="java-no-insecure-random", langs=["Java"], severity="warning",
          message="java.util.Random / Math.random are predictable; tokens, ids and keys made with them can be guessed.",
          note="Use java.security.SecureRandom for anything a user must not guess.",

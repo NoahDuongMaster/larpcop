@@ -1,0 +1,100 @@
+{
+  "source": "The 19 issues XVWA's README.md lists (s4n7h0/xvwa fb30fa5), one per module, each mapped to the line of the module's code that has it (the first sink where a module has two). Fixed, with php-taint-stored-xss (9083607), before any tool ran on XVWA.",
+  "lines": [
+    {
+      "file": "vulnerabilities/sqli/home.php",
+      "line": 57,
+      "label": "SQL injection, error based: item id"
+    },
+    {
+      "file": "vulnerabilities/sqli_blind/home.php",
+      "line": 55,
+      "label": "SQL injection, blind: item id"
+    },
+    {
+      "file": "vulnerabilities/cmdi/home.php",
+      "line": 38,
+      "label": "OS command injection: ping target"
+    },
+    {
+      "file": "vulnerabilities/xpath/home.php",
+      "line": 10,
+      "label": "XPath injection: search"
+    },
+    {
+      "file": "vulnerabilities/formula_injection/export.php",
+      "line": 13,
+      "label": "Formula injection: rows exported to CSV as stored"
+    },
+    {
+      "file": "vulnerabilities/php_object_injection/home.php",
+      "line": 38,
+      "label": "PHP object injection: unserialize of r"
+    },
+    {
+      "file": "vulnerabilities/fileupload/home.php",
+      "line": 70,
+      "label": "Unrestricted file upload: any name and type kept"
+    },
+    {
+      "file": "vulnerabilities/reflected_xss/home.php",
+      "line": 32,
+      "label": "Reflected XSS: item"
+    },
+    {
+      "file": "vulnerabilities/stored_xss/home.php",
+      "line": 63,
+      "label": "Stored XSS: comment"
+    },
+    {
+      "file": "vulnerabilities/dom_xss/home.php",
+      "line": 30,
+      "label": "DOM XSS: document.write of location"
+    },
+    {
+      "file": "vulnerabilities/ssrf_xspa/home.php",
+      "line": 33,
+      "label": "SSRF: img_url fetched"
+    },
+    {
+      "file": "vulnerabilities/fi/home.php",
+      "line": 36,
+      "label": "File inclusion: file parameter"
+    },
+    {
+      "file": "login.php",
+      "line": 16,
+      "label": "Session issues: session id not renewed at login"
+    },
+    {
+      "file": "vulnerabilities/idor/home.php",
+      "line": 43,
+      "label": "Insecure direct object reference: item"
+    },
+    {
+      "file": "vulnerabilities/missfunc/home.php",
+      "line": 67,
+      "label": "Missing function level access control: delete without the admin check"
+    },
+    {
+      "file": "vulnerabilities/csrf/home.php",
+      "line": 40,
+      "label": "CSRF: password changed by a GET without a token"
+    },
+    {
+      "file": "login.php",
+      "line": 4,
+      "label": "Cryptography: passwords hashed with unsalted MD5"
+    },
+    {
+      "file": "vulnerabilities/redirect/home.php",
+      "line": 31,
+      "label": "Unvalidated redirect: forward"
+    },
+    {
+      "file": "vulnerabilities/ssti/home.php",
+      "line": 50,
+      "label": "Server-side template injection: Twig template from name"
+    }
+  ]
+}

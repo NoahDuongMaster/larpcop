@@ -1,0 +1,75 @@
+{
+  "source": "The 'Vulnerabilities' list of WackoPicko's README.markdown (adamdoupe/WackoPicko cabc1b3), each entry mapped to the line of code it names. The admin/admin password lives in the database dump, not in code, and is left out. Fixed, with php-taint-stored-xss (9083607), before any tool ran on WackoPicko.",
+  "lines": [
+    {
+      "file": "website/pictures/search.php",
+      "line": 22,
+      "label": "Reflected XSS: query parameter"
+    },
+    {
+      "file": "website/guestbook.php",
+      "line": 38,
+      "label": "Stored XSS: guestbook comment"
+    },
+    {
+      "file": "website/include/admins.php",
+      "line": 66,
+      "label": "Session ID: admin session cookie is an auto-incrementing id"
+    },
+    {
+      "file": "website/include/users.php",
+      "line": 129,
+      "label": "Stored SQL injection: first name saved at registration, used unsanitized by similar.php"
+    },
+    {
+      "file": "website/include/users.php",
+      "line": 99,
+      "label": "Reflected SQL injection: login username"
+    },
+    {
+      "file": "website/pictures/upload.php",
+      "line": 44,
+      "label": "Directory traversal: tag field chooses the upload path"
+    },
+    {
+      "file": "website/pictures/view.php",
+      "line": 53,
+      "label": "Multi-step stored XSS: picture comment"
+    },
+    {
+      "file": "website/pictures/high_quality.php",
+      "line": 20,
+      "label": "Forceful browsing: high-quality picture without a purchase"
+    },
+    {
+      "file": "website/passcheck.php",
+      "line": 11,
+      "label": "Command injection: password field"
+    },
+    {
+      "file": "website/admin/index.php",
+      "line": 4,
+      "label": "File inclusion: page parameter"
+    },
+    {
+      "file": "website/users/sample.php",
+      "line": 3,
+      "label": "Parameter manipulation: any user's page without logging in"
+    },
+    {
+      "file": "website/piccheck.php",
+      "line": 20,
+      "label": "Reflected XSS behind JavaScript: name parameter"
+    },
+    {
+      "file": "website/include/cart.php",
+      "line": 24,
+      "label": "Logic flaw: a coupon can be applied many times"
+    },
+    {
+      "file": "website/submitname.php",
+      "line": 19,
+      "label": "Reflected XSS behind a Flash form: value parameter"
+    }
+  ]
+}

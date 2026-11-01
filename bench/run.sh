@@ -30,6 +30,8 @@ clone BenchmarkJava https://github.com/OWASP-Benchmark/BenchmarkJava.git f40c618
 clone BenchmarkPython https://github.com/OWASP-Benchmark/BenchmarkPython.git f129148
 clone DVWA https://github.com/digininja/DVWA.git a1978a2
 clone railsgoat https://github.com/OWASP/railsgoat.git f5951f1
+clone xvwa https://github.com/s4n7h0/xvwa.git fb30fa5
+clone WackoPicko https://github.com/adamdoupe/WackoPicko.git cabc1b3
 clone java-sec-code https://github.com/JoyChou93/java-sec-code.git 4711f4e
 clone VulnerableApp https://github.com/SasanLabs/VulnerableApp.git 9f45cd5
 # NIST Juliet C# 1.3: only the test cases whose data comes from an HTTP request.
@@ -59,7 +61,7 @@ time_it() {
 
 echo "larpcop $("$LARPCOP" --version | cut -d' ' -f2) | semgrep $(semgrep --version) | gitleaks $(gitleaks version) | $(uname -sm) $(sysctl -n hw.ncpu 2>/dev/null || nproc) cpus" > "$OUT/timing.txt"
 
-for target in juice-shop NodeGoat dvna dvpwa dvws-node govwa railsgoat; do
+for target in juice-shop NodeGoat dvna dvpwa dvws-node govwa railsgoat xvwa WackoPicko; do
   cd "$WORK/$target"
   printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
   "$LARPCOP" check --format json > "$OUT/$target-larpcop.json" || true
@@ -86,6 +88,10 @@ python3 "$HERE/score.py" "$WORK/govwa" "$OUT/govwa-larpcop.json" "$OUT/govwa-sem
   "$OUT/govwa-gitleaks.json" --truth "$HERE/govwa-truth.json" > "$OUT/govwa.md"
 python3 "$HERE/score.py" "$WORK/railsgoat" "$OUT/railsgoat-larpcop.json" "$OUT/railsgoat-semgrep.json" \
   "$OUT/railsgoat-gitleaks.json" --truth "$HERE/railsgoat-truth.json" > "$OUT/railsgoat.md"
+python3 "$HERE/score.py" "$WORK/xvwa" "$OUT/xvwa-larpcop.json" "$OUT/xvwa-semgrep.json" \
+  "$OUT/xvwa-gitleaks.json" --truth "$HERE/xvwa-truth.json" > "$OUT/xvwa.md"
+python3 "$HERE/score.py" "$WORK/WackoPicko" "$OUT/WackoPicko-larpcop.json" "$OUT/WackoPicko-semgrep.json" \
+  "$OUT/WackoPicko-gitleaks.json" --truth "$HERE/wackopicko-truth.json" > "$OUT/WackoPicko.md"
 
 # OWASP Benchmark (Java): 2,740 test cases, scored like the project's scorecard.
 cd "$WORK/BenchmarkJava"
@@ -251,4 +257,4 @@ printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
 semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/seeds-semgrep.json" --quiet sast/seeds || true
 python3 "$HERE/seeds.py" "$WORK/vulnerable-node" "$OUT/seeds-larpcop.json" "$OUT/seeds-semgrep.json" > "$OUT/seeds.md"
 
-cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/dvpwa.md" "$OUT/dvws-node.md" "$OUT/govwa.md" "$OUT/railsgoat.md" "$OUT/owasp-benchmark.md" "$OUT/owasp-benchmark-python.md" "$OUT/dvwa.md" "$OUT/juliet-cs.md" "$OUT/juliet-java.md" "$OUT/juliet-java-stored.md" "$OUT/juliet-cs-stored.md" "$OUT/juliet-c.md" "$OUT/sard-php.md" "$OUT/semgrep-kotlin.md" "$OUT/java-sec-code.md" "$OUT/vulnerableapp.md" "$OUT/seeds.md"
+cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/dvpwa.md" "$OUT/dvws-node.md" "$OUT/govwa.md" "$OUT/railsgoat.md" "$OUT/xvwa.md" "$OUT/WackoPicko.md" "$OUT/owasp-benchmark.md" "$OUT/owasp-benchmark-python.md" "$OUT/dvwa.md" "$OUT/juliet-cs.md" "$OUT/juliet-java.md" "$OUT/juliet-java-stored.md" "$OUT/juliet-cs-stored.md" "$OUT/juliet-c.md" "$OUT/sard-php.md" "$OUT/semgrep-kotlin.md" "$OUT/java-sec-code.md" "$OUT/vulnerableapp.md" "$OUT/seeds.md"

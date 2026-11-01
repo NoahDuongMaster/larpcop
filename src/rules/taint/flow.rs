@@ -12,55 +12,7 @@ use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
 use std::ops::Range;
 
-/// Targets (left) and value (right) of the assignment kinds we follow.
-pub(super) const ASSIGNMENTS: [(&str, &str, &str); 16] = [
-    ("variable_declarator", "name", "value"),
-    // C/C++ `char *p = …`, `char data[100] = …`.
-    ("init_declarator", "declarator", "value"),
-    ("property_declaration", "name", "value"),
-    ("let_declaration", "pattern", "value"),
-    ("var_spec", "name", "value"),
-    ("assignment_expression", "left", "right"),
-    ("augmented_assignment_expression", "left", "right"),
-    ("assignment", "left", "right"),
-    ("augmented_assignment", "left", "right"),
-    ("short_var_declaration", "left", "right"),
-    ("assignment_statement", "left", "right"),
-    ("operator_assignment", "left", "right"),
-    // Loops bind each element of the collection: `for (Cookie c : cookies)`,
-    // `for (const x of xs)`, `for x in xs:`, `for _, x := range xs`.
-    ("enhanced_for_statement", "name", "value"),
-    ("for_in_statement", "left", "right"),
-    ("for_statement", "left", "right"),
-    ("range_clause", "left", "right"),
-];
-
-/// The target and value of an assignment (any kind in `ASSIGNMENTS`). C#'s
-/// `var x = …` leaves the value without a field name: the last other child.
-pub(crate) fn assignment<'a, D: Doc>(n: &Node<'a, D>) -> Option<(Node<'a, D>, Node<'a, D>)> {
-    let kind = n.kind();
-    let (_, l, r) = ASSIGNMENTS.iter().find(|(k, ..)| kind == *k)?;
-    let mut left = n.part(l)?;
-    // C declarators wrap the name: `*p`, `data[100]`.
-    if kind == "init_declarator" {
-        let name = left.dfs().find(|c| c.kind() == "identifier");
-        left = name?;
-    }
-    let right = n.part(r).or_else(|| {
-        n.children()
-            .filter(|c| c.is_named() && c.range() != left.range())
-            .last()
-    })?;
-    Some((left, right))
-}
-
-/// Loop kinds among `ASSIGNMENTS`: they bind before the body, not at the end.
-pub(super) const LOOPS: [&str; 4] = [
-    "enhanced_for_statement",
-    "for_in_statement",
-    "for_statement",
-    "range_clause",
-];
+pub(crate) use super::assign::{LOOPS, assignment};
 
 /// Call kinds: JS/TS/Go/Rust, Python/Ruby, Java (`m()`, `new T()`), C#, PHP.
 pub(super) const CALLS: [&str; 8] = [

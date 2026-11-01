@@ -24,7 +24,8 @@ pub(crate) struct Env<'a, D: Doc> {
     writes: HashMap<String, Vec<Write<'a, D>>>,
 }
 
-const LOOP_KINDS: [&str; 8] = [
+const LOOP_KINDS: [&str; 9] = [
+    "foreach_statement",
     "for_statement",
     "for_in_statement",
     "enhanced_for_statement",

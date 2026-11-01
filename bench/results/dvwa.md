@@ -20,7 +20,10 @@ fixed level is no longer flagged.
 Still missed: the file-inclusion levels only assign `$file` at the top level
 of a file that `fi/index.php` requires through a path chosen at run time
 (`source/{$vulnerabilityFile}`), then includes; variables a required file
-sets are not followed into the file requiring it. The stored-XSS levels write
-the guestbook row, which a shared `dvwaGuestbook()` prints from
-`mysqli_fetch_row`; PHP has no database source. Neither flow is reported, in
-the per-level files the scorer credits or in the shared ones.
+sets are not followed into the file requiring it; this flow is reported
+neither in the per-level files the scorer credits nor in the shared ones. The
+stored-XSS levels write the guestbook row, which a shared `dvwaGuestbook()`
+prints from `mysqli_fetch_row`: `php-taint-stored-xss` (added after this
+bench was seen, so not a held-out result) reports it there
+(`dvwa/includes/dvwaPage.inc.php:625`), not in the per-level files the scorer
+credits.

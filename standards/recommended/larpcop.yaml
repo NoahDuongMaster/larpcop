@@ -612,6 +612,25 @@ taint:
     values: {"ALLOW": '^/\^(\[(\\[dw]|[A-Za-z0-9_]|[A-Za-z0-9]-[A-Za-z0-9])+\]|\\[dw])[*+]?\$/[a-zA-Z]*$', "STRIP": '^/(\\W|\[\^(\\[dw]|[A-Za-z0-9_]|[A-Za-z0-9]-[A-Za-z0-9])+\])[*+]?/[a-zA-Z]*$'}
     guards: ["in_array($X, $L, $$$R)", "array_key_exists($X, $L)", "is_numeric($X)", "ctype_digit($X)", "ctype_alnum($X)", "filter_var($X, FILTER_VALIDATE_INT, $$$R)", "filter_var($X, FILTER_VALIDATE_FLOAT, $$$R)", "filter_var($X, FILTER_VALIDATE_BOOLEAN, $$$R)", "filter_var($X, FILTER_VALIDATE_IP, $$$R)", "preg_match($ALLOW, $X, $$$R)", "settype($X, \"integer\")", "settype($X, 'integer')", "settype($X, \"int\")", "settype($X, 'int')", "settype($X, \"float\")", "settype($X, 'float')", "settype($X, \"double\")", "settype($X, 'double')", "settype($X, \"bool\")", "settype($X, 'bool')", "settype($X, \"boolean\")", "settype($X, 'boolean')"]
     exclude: ["**/tests/**", "**/test/**", "**/*Test.php", "**/vendor/**"]
+
+  - id: php-taint-stored-xss
+    severity: warning
+    languages: [Php]
+    message: "Data read from the database written into the page without escaping (stored XSS)."
+    note: "Whatever a user once saved comes back here. Escape with htmlspecialchars($x, ENT_QUOTES, 'UTF-8') where it is printed (Blade {{ }}, Twig autoescape do it for you)."
+    # Rows read from MySQL, PostgreSQL, SQLite, PDO and WordPress.
+    sources: ["mysqli_fetch_assoc($$$A)", "mysqli_fetch_array($$$A)", "mysqli_fetch_row($$$A)", "mysqli_fetch_object($$$A)", "mysqli_fetch_all($$$A)", "mysqli_fetch_column($$$A)", "mysql_fetch_assoc($$$A)", "mysql_fetch_array($$$A)", "mysql_fetch_row($$$A)", "mysql_fetch_object($$$A)", "mysql_result($$$A)", "pg_fetch_assoc($$$A)", "pg_fetch_array($$$A)", "pg_fetch_row($$$A)", "pg_fetch_object($$$A)", "pg_fetch_all($$$A)", "pg_fetch_result($$$A)", "$R->fetch_assoc()", "$R->fetch_array($$$A)", "$R->fetch_row()", "$R->fetch_object($$$A)", "$R->fetch_all($$$A)", "$S->fetch($$$A)", "$S->fetchAll($$$A)", "$S->fetchColumn($$$A)", "$S->fetchObject($$$A)", "$S->fetchArray($$$A)", "$DB->querySingle($$$A)", "$wpdb->get_results($$$A)", "$wpdb->get_row($$$A)", "$wpdb->get_var($$$A)", "$wpdb->get_col($$$A)"]
+    sinks: ["echo $$$A", "print $X", "printf($$$A)", "vprintf($$$A)", "die($X)", "exit($X)", "print_r($X)"]
+    html_fragments: true
+    # A query returns rows, not its own text (`$r = mysqli_query($c, $q)`).
+    sanitizers: ["intval($X)", "(int) $X", "(int)$X", "(float) $X", "floatval($X)", "boolval($X)", "abs($X)", "filter_var($X, FILTER_VALIDATE_INT)", "filter_var($X, FILTER_VALIDATE_INT, $$$R)", "md5($X)", "sha1($X)", "hash($A, $X, $$$R)", "crc32($X)", "uniqid($$$A)", "htmlspecialchars($X, $$$R)", "htmlentities($X, $$$R)", "strip_tags($X, $$$R)", "e($X)", "esc_html($X)", "esc_attr($X)", "urlencode($X)", "rawurlencode($X)", "json_encode($X, $$$R)", "str_replace(\"<\", \"&lt;\", $X)", "str_replace('<', '&lt;', $X)", "highlight_string($X, $$$R)", "highlight_file($X, $$$R)", "(integer) $X", "(double) $X", "(bool) $X", "(boolean) $X", "filter_var($X, FILTER_SANITIZE_NUMBER_INT, $$$R)", "filter_var($X, FILTER_SANITIZE_NUMBER_FLOAT, $$$R)", "filter_var($X, FILTER_VALIDATE_FLOAT, $$$R)", "filter_var($X, FILTER_VALIDATE_BOOLEAN, $$$R)", "filter_var($X, FILTER_VALIDATE_IP, $$$R)", "preg_replace($STRIP, \"\", $X)", "preg_replace($STRIP, '', $X)", "filter_var($X, FILTER_SANITIZE_SPECIAL_CHARS)", "filter_var($X, FILTER_SANITIZE_SPECIAL_CHARS, $$$R)", "filter_var($X, FILTER_SANITIZE_FULL_SPECIAL_CHARS)", "filter_var($X, FILTER_SANITIZE_FULL_SPECIAL_CHARS, $$$R)", "http_build_query($X)", "http_build_query($X, $$$R)", "mysqli_query($$$A)", "mysql_query($$$A)", "pg_query($$$A)", "pg_query_params($$$A)", "sqlite_query($$$A)", "mysqli_stmt_execute($$$A)"]
+    escape_contexts: true
+    # An anchored allow-list of letters and digits checks a value; a pattern
+    # that strips everything else cleans it.
+    values: {"ALLOW": '^/\^(\[(\\[dw]|[A-Za-z0-9_]|[A-Za-z0-9]-[A-Za-z0-9])+\]|\\[dw])[*+]?\$/[a-zA-Z]*$', "STRIP": '^/(\\W|\[\^(\\[dw]|[A-Za-z0-9_]|[A-Za-z0-9]-[A-Za-z0-9])+\])[*+]?/[a-zA-Z]*$'}
+    guards: ["in_array($X, $L, $$$R)", "array_key_exists($X, $L)", "is_numeric($X)", "ctype_digit($X)", "ctype_alnum($X)", "filter_var($X, FILTER_VALIDATE_INT, $$$R)", "filter_var($X, FILTER_VALIDATE_FLOAT, $$$R)", "filter_var($X, FILTER_VALIDATE_BOOLEAN, $$$R)", "filter_var($X, FILTER_VALIDATE_IP, $$$R)", "preg_match($ALLOW, $X, $$$R)", "settype($X, \"integer\")", "settype($X, 'integer')", "settype($X, \"int\")", "settype($X, 'int')", "settype($X, \"float\")", "settype($X, 'float')", "settype($X, \"double\")", "settype($X, 'double')", "settype($X, \"bool\")", "settype($X, 'bool')", "settype($X, \"boolean\")", "settype($X, 'boolean')"]
+    exclude: ["**/tests/**", "**/test/**", "**/*Test.php", "**/vendor/**"]
+
   - id: php-taint-ssrf
     languages: [Php]
     message: "Request data used as the URL of an outgoing request (SSRF)."

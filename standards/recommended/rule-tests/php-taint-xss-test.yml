@@ -65,6 +65,8 @@ valid:
   echo "<p>" . $row["name"] . "</p>";
 
   '
+- "<?php\nforeach ($_POST[\"ids\"] as $id) {\n  echo \"<li>\" . intval($id) . \"</li>\"\
+  ;\n}\n"
 invalid:
 - '<?php
 
@@ -115,3 +117,5 @@ invalid:
 - '<div onclick="go(''<?= filter_var($_GET["q"], FILTER_SANITIZE_SPECIAL_CHARS) ?>'')"></div>
 
   '
+- "<?php\nforeach ($_POST[\"tags\"] as $i => $tag) {\n  echo \"<li>\" . $tag . \"\
+  </li>\";\n}\n"

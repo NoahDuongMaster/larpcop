@@ -52,6 +52,7 @@ SECURITY = {
     "rb-no-weak-hash", "rb-no-ssl-verify-none", "rb-no-html-safe-interpolation", "rb-no-cookie-httponly-off", "rb-csrf-off",
     "py-taint-xss", "py-taint-shell", "py-taint-redirect", "py-taint-deserialization", "java-taint-ssrf",
     "java-taint-code", "java-taint-deserialization", "php-taint-ldap", "php-taint-xpath",
+    "php-taint-stored-xss",
     "rb-no-json-html-escape-off",
 }
 

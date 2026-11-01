@@ -125,6 +125,7 @@ impl TaintRule {
 }
 
 mod argv;
+mod assign;
 mod build;
 mod callbacks;
 mod check;

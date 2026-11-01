@@ -133,17 +133,18 @@ impl Ctx {
                         if let Some(a) = args.get(*i).filter(|a| self.tainted(a, &names)) {
                             // `readFile(() -> ALLOWED.contains(f), f)`: the callee
                             // reaches its sink only when this check holds.
-                            let checked = s
-                                .conditions
-                                .get(i)
-                                .and_then(|g| args.get(*g))
-                                .is_some_and(|l| {
-                                    super::lambdas::covers(
-                                        a,
-                                        &names,
-                                        &super::lambdas::validated(l, &self.guards),
-                                    )
-                                });
+                            let checked = s.conditions.get(i).is_some_and(|(g, applied)| {
+                                args.get(*g).is_some_and(|check| {
+                                    let applied = applied.and_then(|k| args.get(k));
+                                    let safe = super::lambdas::validated(
+                                        check,
+                                        applied,
+                                        call,
+                                        &self.guards,
+                                    );
+                                    super::lambdas::covers(a, &names, &safe)
+                                })
+                            });
                             if !checked {
                                 on(Seen::Reached(Reached::Call(a.clone(), into.clone())));
                             }

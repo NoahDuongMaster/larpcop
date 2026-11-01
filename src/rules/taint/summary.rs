@@ -24,7 +24,7 @@ pub struct Summary {
     pub method: bool,
     /// Parameter → the function-typed parameter whose call guards every
     /// sink it reaches (`if (cond.get()) read(name)`).
-    pub conditions: std::collections::BTreeMap<usize, usize>,
+    pub conditions: std::collections::BTreeMap<usize, super::lambdas::Condition>,
 }
 
 /// Callee as written (`f`, `db.run`, `utils.clean`) → its summary.
@@ -194,7 +194,7 @@ impl TaintRule {
                 for (i, p) in params.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
                     let start: HashSet<String> = [p.clone()].into();
                     // Every sink of `p` under the same parameter's call, or not.
-                    let mut condition: Option<Option<usize>> = None;
+                    let mut condition: Option<Option<super::lambdas::Condition>> = None;
                     let mut under = |at: &Node<'a, D>| {
                         let c = super::lambdas::condition_param(at, f, params);
                         condition = Some(match condition {

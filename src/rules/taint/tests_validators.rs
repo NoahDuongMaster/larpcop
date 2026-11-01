@@ -142,3 +142,46 @@ function a(req) {
         [9]
     );
 }
+
+/// A method reference applied to the sink's argument, a boolean parameter
+/// computed by a lambda kept in a variable.
+#[test]
+fn method_references_and_boolean_checks() {
+    let java = "\
+class A {
+  private void go(String url, Function<String, Boolean> validator) {
+    if (validator.apply(url)) {
+      sink(url);
+    }
+  }
+  private void ping(String ip, boolean isValid) {
+    if (isValid) {
+      sink(ip);
+    }
+  }
+  void a(Req req) {
+    String u = req.getParameter(\"u\");
+    this.go(u, ALLOWED::contains);
+    this.go(u, Objects::nonNull);
+    Supplier<Boolean> validator = () -> u != null && ALLOWED.contains(u);
+    this.ping(u, validator.get());
+    this.ping(u, u != null);
+  }
+}
+";
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("A.java"), java).unwrap();
+    let r = super::tests_calls::guarded(
+        "Java",
+        dir.path(),
+        &["req.getParameter($K)"],
+        &["sink($X)"],
+        &[],
+        &["$L.contains($X)"],
+    );
+    let lines: Vec<usize> = super::tests_calls::found(&r, dir.path(), "A.java")
+        .iter()
+        .map(|(l, _)| *l)
+        .collect();
+    assert_eq!(lines, [15, 18]);
+}

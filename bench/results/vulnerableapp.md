@@ -25,13 +25,13 @@
 | deserialization (3/1) | 0/3 TP, 0/1 FP (+0%) |
 | ldap (4/2) | 4/4 TP, 0/2 FP (+100%) |
 | path (12/3) | 11/12 TP, 1/3 FP (+58%) |
-| redirect (9/3) | 9/9 TP, 1/3 FP (+67%) |
-| shell (5/1) | 5/5 TP, 1/1 FP (+0%) |
+| redirect (9/3) | 9/9 TP, 0/3 FP (+100%) |
+| shell (5/1) | 5/5 TP, 0/1 FP (+100%) |
 | sql (8/11) | 8/8 TP, 2/11 FP (+82%) |
 | ssrf (6/1) | 6/6 TP, 0/1 FP (+100%) |
 | xss (14/7) | 5/14 TP, 0/7 FP (+36%) |
 | xxe (3/4) | 3/3 TP, 0/4 FP (+100%) |
-| **average** | **+60.3%** |
-| **total** | 51/64 TP, 5/33 FP |
+| **average** | **+75.1%** |
+| **total** | 51/64 TP, 3/33 FP |
 
-Still wrong: a check in a lambda kept in a variable, or with several branches (`Supplier<Boolean> validator = () -> { … }`), and method references (`WHITELISTED_URLS::contains`) are not read; a lambda check `!name.contains("..")` counts as a guard, as it does in an `if`. Stored XSS through the database (6 handlers): the database is not a source. HTML-escaped input in an unquoted attribute (`<img src=%s>`): escaping is not judged by context. Jackson `readValue` behind a project util: `java-no-jackson-default-typing` reports the mapper's configuration, outside the handlers. SQL levels 3/4 concatenate after stripping quotes; `java-no-sql-concat` forbids the concatenation itself. Fixed since the first write-up: JAXB `Unmarshaller.unmarshal(stream)` is XXE; external general entities off without parameter entities off is not a fix.
+Still wrong: a lambda that checks a value derived from the input (`Paths.get(BASE + fileName).normalize().startsWith(base)`) does not clean the input; a lambda check `!name.contains("..")` counts as a guard, as it does in an `if`. Stored XSS through the database (6 handlers): the database is not a source. HTML-escaped input in an unquoted attribute (`<img src=%s>`): escaping is not judged by context. Jackson `readValue` behind a project util: `java-no-jackson-default-typing` reports the mapper's configuration, outside the handlers. SQL levels 3/4 concatenate after stripping quotes; `java-no-sql-concat` forbids the concatenation itself. Fixed since the first write-up: JAXB `Unmarshaller.unmarshal(stream)` is XXE; external general entities off without parameter entities off is not a fix.

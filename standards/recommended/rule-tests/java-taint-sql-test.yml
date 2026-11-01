@@ -8,6 +8,8 @@ valid:
   );\n    md.update(request.getParameter(\"p\").getBytes());\n  }\n}\n"
 - "@RestController\npublic class P {\n  @GetMapping(\"/p\")\n  public List<P> p(@RequestParam String sort) {\n    PExample e = new PExample();\n    e.setOrderByClause(\"id desc\");\n    return mapper.selectByExample(e);\n\
   \  }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doGet(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String sort = request.getParameter(\"sort\");\n    if (ALLOWED_COLUMNS.contains(sort))\
+  \ {\n      stmt.executeQuery(\"SELECT * FROM users ORDER BY \" + sort);\n    }\n  }\n}\n"
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String name = request.getParameter(\"name\");\n    String\
   \ sql = \"SELECT * FROM users WHERE name = '\" + name + \"'\";\n    statement.executeQuery(sql);\n  }\n}\n"

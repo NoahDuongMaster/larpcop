@@ -5,6 +5,14 @@ valid:
 - "@Controller\npublic class R {\n  @GetMapping(\"/r\")\n  public String r(@RequestParam String url, HttpServletResponse response) {\n    return \"redirect:/home\";\n  }\n}\n"
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    HttpHeaders h = new HttpHeaders();\n    h.setLocation(URI.create(\"\
   /home\"));\n  }\n}\n"
+- "public class S {\n    public static String checkURL(String url) {\n        if (null == url){\n            return null;\n        }\n        try {\n            String host = gethost(url);\n           \
+  \ if (!isHttp(url)) {\n                return null;\n            }\n            if (blockDomains.contains(host)){\n                return null;\n            }\n            if (safeDomains.contains(host)){\n\
+  \                return url;\n            }\n            for(String safedomain: safeDomains) {\n                if (false) {}\n                if(host.endsWith(\".\" + safedomain)) {\n               \
+  \     return url;\n                }\n            }\n            return null;\n        } catch (NullPointerException e) {\n            return null;\n        }\n    }\n    public void r(HttpServletRequest\
+  \ request, HttpServletResponse response) throws IOException {\n        String url = request.getParameter(\"url\");\n        if (checkURL(url) == null) {\n            return;\n        }\n        response.sendRedirect(url);\n\
+  \    }\n}\n"
+- "public class T extends HttpServlet {\n  protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {\n    String url = request.getParameter(\"url\");\n    if (ALLOWED.contains(url))\
+  \ {\n      response.sendRedirect(url);\n    }\n  }\n}\n"
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    String next = request.getParameter(\"next\");\n    response.sendRedirect(next);\n\
   \  }\n}\n"

@@ -5,6 +5,8 @@ valid:
   js\");\n    e.eval(\"1 + 1\");\n  }\n}\n"
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    List<String> l = new ArrayList<>();\n    l.execute(request.getParameter(\"\
   q\"), null);\n  }\n}\n"
+- "@RestController\nclass C {\n  @RequestMapping(\"spel/sec\")\n  public String s(String value) {\n    SimpleEvaluationContext context = SimpleEvaluationContext.forReadOnlyDataBinding().build();\n    SpelExpressionParser\
+  \ parser = new SpelExpressionParser();\n    Expression expression = parser.parseExpression(value, new TemplateParserContext());\n    return expression.getValue(context).toString();\n  }\n}\n"
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    ScriptEngine e = new ScriptEngineManager().getEngineByName(\"\
   js\");\n    e.eval(request.getParameter(\"expr\"));\n  }\n}\n"

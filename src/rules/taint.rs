@@ -26,6 +26,8 @@ pub struct TaintRule {
     sink_arg: Option<String>,
     safe_prefix: Option<regex::Regex>,
     sanitizer_names: Option<regex::Regex>,
+    /// `unless`: the function around a sink sets it up safely.
+    unless: Vec<regex::Regex>,
     /// Sources as written, without whitespace (`req.query`), for destructuring.
     source_texts: Vec<String>,
     /// `source_names`: names that are request data wherever they are read.

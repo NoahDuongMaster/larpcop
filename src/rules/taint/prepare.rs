@@ -87,6 +87,17 @@ impl TaintRule {
                     continue;
                 }
                 let node = arg.unwrap_or_else(|| m.get_node().clone());
+                // The function around the sink set it up safely.
+                if !self.unless.is_empty() {
+                    let around = m
+                        .get_node()
+                        .ancestors()
+                        .find(|a| crate::rules::complexity::is_function(a));
+                    let text = around.map(|f| f.text().to_string()).unwrap_or_default();
+                    if self.unless.iter().any(|u| u.is_match(&text)) {
+                        continue;
+                    }
+                }
                 let fixed = self.safe_prefix.as_ref().zip(prefix::leading(&node));
                 if fixed.is_some_and(|(re, start)| re.is_match(&start)) {
                     continue;

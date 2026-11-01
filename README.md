@@ -133,6 +133,7 @@ taint:
     sanitizers: ["Number($X)", "$S.parse($X)"]
     guards: ["$U.startsWith($P)", "$L.includes($U)"]   # đúng khi giá trị an toàn
     rejects: ['$P.includes("$S")']                    # đúng khi giá trị KHÔNG an toàn ("..")
+    unless: ['new\s+Yaml\s*\(\s*new\s+SafeConstructor']  # hàm chứa sink đã dựng nó an toàn: không báo
     safe_prefix: '^/[^/\\]'                          # "/products/" + id: phần đầu cố định là an toàn
     param_decorators: [Body, Query]                   # NestJS: @Body() dto là dữ liệu request
     handler_decorators: '^\w+\.(get|post|route)\('     # Python: mọi tham số của hàm route
@@ -253,7 +254,7 @@ llm:
 | OWASP Benchmark Python (1.230 ca, điểm TPR − FPR): thời gian / điểm | **2,5 s / +56,4%** | 8,1 s / −0,8% (`p/python`), +6,9% (`p/default`) | – |
 | NIST Juliet C# (1.443 ca web, điểm TPR − FPR): thời gian / điểm | **5,0 s / +88,4%** | 16,1 s / +0,8% | – |
 | RailsGoat (Ruby): dòng tìm thấy | **13/14** | 9/14 | – |
-| java-sec-code (Java/Spring, 76 endpoint, điểm TPR − FPR) | **+57,6%** | +20,8% | – |
+| java-sec-code (Java/Spring, 76 endpoint, điểm TPR − FPR) | **+84,6%** | +20,8% | – |
 | VulnerableApp (Java/Spring, 97 handler, điểm TPR − FPR) | **+75,1%** | +16,5% | – |
 | DVWA (PHP, điểm TPR − FPR) | **+60,0%** | +3,3% | – |
 | vulnerable-node `sast/seeds` (chấm bằng script của dự án) | **11/12**, 1 báo nhầm (0 nếu bỏ rule chung chung) | 10/12, 1 báo nhầm (8/12 nếu bỏ rule chung chung) | – |

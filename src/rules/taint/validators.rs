@@ -44,18 +44,64 @@ pub(super) fn validated<D: Doc>(
     params
         .iter()
         .enumerate()
-        .filter(|(_, p)| !p.is_empty() && validates(&returns, &cleared, p, checks))
+        .filter(|(_, p)| !p.is_empty() && validates(&returns, &cleared, &aliases(f, p), checks))
         .map(|(i, _)| i)
         .collect()
 }
 
-/// Does every return fail, or return with `param` checked, and do both occur?
+/// Calls whose result is the same value, decoded or normalized, or the host
+/// it leads to: checking it checks the parameter (`temp =
+/// URLDecoder.decode(temp)`, `host = getHost(url)` against an allow-list).
+const SAME: [&str; 11] = [
+    "decode",
+    "unquote",
+    "unquote_plus",
+    "normalize",
+    "trim",
+    "strip",
+    "toLowerCase",
+    "lower",
+    "getHost",
+    "gethost",
+    "getAuthority",
+];
+
+/// `param` and the locals holding it: copied (`temp = p`) or decoded.
+fn aliases<D: Doc>(f: &Node<D>, param: &str) -> HashSet<String> {
+    let mut out: HashSet<String> = [param.to_string()].into();
+    for _ in 0..2 {
+        for n in f.dfs() {
+            let (left, right) = match n.kind().as_ref() {
+                "variable_declarator" => (n.field("name"), n.field("value")),
+                "assignment" | "assignment_expression" => (n.field("left"), n.field("right")),
+                _ => continue,
+            };
+            let (Some(left), Some(right)) = (left, right) else {
+                continue;
+            };
+            let holds = |x: &Node<D>| x.kind() == "identifier" && out.contains(x.text().as_ref());
+            let same = holds(&right)
+                || (super::flow::CALLS.contains(&right.kind().as_ref())
+                    && super::summary::called_name(&right)
+                        .is_some_and(|m| SAME.contains(&m.as_str()))
+                    && right.dfs().any(|x| holds(&x)));
+            if same && left.kind() == "identifier" {
+                out.insert(left.text().to_string());
+            }
+        }
+    }
+    out
+}
+
+/// Does every return fail, or return with the parameter (or an alias) checked,
+/// and do both occur?
 fn validates<D: Doc>(
     returns: &[Node<D>],
     cleared: &[Guard],
-    param: &str,
+    aliases: &HashSet<String>,
     checks: &[Check],
 ) -> bool {
+    let checked = |names: &HashSet<String>| aliases.iter().any(|a| names.contains(a));
     let (mut failing, mut passing) = (false, false);
     for r in returns {
         let Some(value) = r.children().find(|c| c.is_named() && c.kind() != "comment") else {
@@ -65,7 +111,7 @@ fn validates<D: Doc>(
             failing = true;
             continue;
         }
-        if guards::safe(&value, checks).0.contains(param) {
+        if checked(&guards::safe(&value, checks).0) {
             // `return !p.contains("..")`: false exactly when the check fails.
             failing = true;
             passing = true;
@@ -73,8 +119,8 @@ fn validates<D: Doc>(
         }
         let at = r.range().start;
         let clean = cleared.iter().any(|g| match g {
-            Guard::After(from, names) => *from <= at && names.contains(param),
-            Guard::Within(span, names) => span.contains(&at) && names.contains(param),
+            Guard::After(from, names) => *from <= at && checked(names),
+            Guard::Within(span, names) => span.contains(&at) && checked(names),
             Guard::Settle(..) => false,
         });
         if !clean {

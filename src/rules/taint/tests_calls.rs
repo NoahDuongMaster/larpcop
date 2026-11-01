@@ -36,6 +36,7 @@ pub(super) fn guarded(
             sanitizers: s(sanitizers),
             safe_prefix: None,
             sanitizer_names: None,
+            unless: Vec::new(),
             guards: s(guards),
             param_types: Default::default(),
             source_names: Vec::new(),

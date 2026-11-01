@@ -51,6 +51,12 @@ impl TaintRule {
                 .map(regex::Regex::new)
                 .transpose()
                 .with_context(|| format!("taint `{}`: sanitizer_names", cfg.id))?,
+            unless: cfg
+                .unless
+                .iter()
+                .map(|u| regex::Regex::new(u))
+                .collect::<Result<_, _>>()
+                .with_context(|| format!("taint `{}`: unless", cfg.id))?,
             safe_prefix: cfg
                 .safe_prefix
                 .as_deref()

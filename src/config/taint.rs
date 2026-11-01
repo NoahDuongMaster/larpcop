@@ -33,6 +33,11 @@ pub struct TaintConfig {
     /// ast-grep patterns that make data safe, e.g. `Number($X)`.
     #[serde(default)]
     pub sanitizers: Vec<String>,
+    /// Regexes on the text of the function around a sink: a match means the
+    /// function made the sink safe whatever reaches it
+    /// (`new Yaml(new SafeConstructor())`, `SimpleEvaluationContext`).
+    #[serde(default)]
+    pub unless: Vec<String>,
     /// ast-grep patterns of checks in `if` conditions, e.g. `$X.startsWith($P)`:
     /// a checked name is clean after a branch that returns or throws, and
     /// inside a branch taken when the check passes.

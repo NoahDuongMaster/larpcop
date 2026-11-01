@@ -2,6 +2,8 @@ id: taint-sql
 valid:
 - app.get('/u', (req, res) => db.query('select * from u where id = $1', [req.query.id]));
 - app.get('/u', (req, res) => db.query('select * from u where id = ' + Number(req.query.id)));
+- "const express = require('express');\nconst app = express();\napp.get('/u', (req, res) => {\n  const sort = req.query.sort;\n  if (!ALLOWED_COLUMNS.includes(sort)) return res.status(400).end();\n  db.query('SELECT\
+  \ * FROM users ORDER BY ' + sort);\n});\n"
 invalid:
 - app.get('/u', (req, res) => db.query('select * from u where id = ' + req.query.id));
 - function h(req) { const name = req.body.name; return pool.query(`select * from u where name = '${name}'`); }

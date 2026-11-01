@@ -23,17 +23,17 @@
 
 | category (vuln/safe) | larpcop | semgrep-default | semgrep-java |
 |---|---|---|---|
-| code (5/2) | 5/5 TP, 2/2 FP (+0%) | 4/5 TP, 1/2 FP (+30%) | 0/5 TP, 0/2 FP (+0%) |
-| deserialization (5/2) | 3/5 TP, 0/2 FP (+60%) | 3/5 TP, 0/2 FP (+60%) | 1/5 TP, 0/2 FP (+20%) |
-| path (1/1) | 1/1 TP, 1/1 FP (+0%) | 0/1 TP, 0/1 FP (+0%) | 0/1 TP, 0/1 FP (+0%) |
-| redirect (3/2) | 3/3 TP, 1/2 FP (+50%) | 2/3 TP, 1/2 FP (+17%) | 2/3 TP, 1/2 FP (+17%) |
+| code (5/2) | 5/5 TP, 0/2 FP (+100%) | 4/5 TP, 1/2 FP (+30%) | 0/5 TP, 0/2 FP (+0%) |
+| deserialization (5/2) | 4/5 TP, 0/2 FP (+80%) | 3/5 TP, 0/2 FP (+60%) | 1/5 TP, 0/2 FP (+20%) |
+| path (1/1) | 1/1 TP, 0/1 FP (+100%) | 0/1 TP, 0/1 FP (+0%) | 0/1 TP, 0/1 FP (+0%) |
+| redirect (3/2) | 3/3 TP, 0/2 FP (+100%) | 2/3 TP, 1/2 FP (+17%) | 2/3 TP, 1/2 FP (+17%) |
 | shell (4/1) | 4/4 TP, 0/1 FP (+100%) | 1/4 TP, 0/1 FP (+25%) | 0/4 TP, 0/1 FP (+0%) |
 | sql (5/5) | 2/5 TP, 0/5 FP (+40%) | 2/5 TP, 0/5 FP (+40%) | 2/5 TP, 0/5 FP (+40%) |
 | ssrf (8/9) | 8/8 TP, 5/9 FP (+44%) | 1/8 TP, 0/9 FP (+12%) | 1/8 TP, 0/9 FP (+12%) |
 | ssti (1/0) | 1/1 TP, 0/0 FP (+100%) | 0/1 TP, 0/0 FP (+0%) | 0/1 TP, 0/0 FP (+0%) |
 | xss (2/1) | 2/2 TP, 0/1 FP (+100%) | 0/2 TP, 0/1 FP (+0%) | 0/2 TP, 0/1 FP (+0%) |
 | xxe (11/8) | 9/11 TP, 0/8 FP (+82%) | 4/11 TP, 1/8 FP (+24%) | 4/11 TP, 1/8 FP (+24%) |
-| **average** | **+57.6%** | **+20.8%** | **+11.3%** |
-| **total** | 38/45 TP, 9/31 FP | 17/45 TP, 3/31 FP | 10/45 TP, 2/31 FP |
+| **average** | **+84.6%** | **+20.8%** | **+11.3%** |
+| **total** | 39/45 TP, 5/31 FP | 17/45 TP, 3/31 FP | 10/45 TP, 2/31 FP |
 
 The 5 SSRF `/sec` endpoints rely on a runtime socket hook (`SecurityUtil.startSSRFHook()`); statically they are the same calls as the vulnerable ones. SQL: the 3 MyBatis endpoints are found in the mapper files (`mybatis-sql-interpolation`, `java-no-mybatis-sql-interpolation`), outside the endpoint, so this scorer does not count them.

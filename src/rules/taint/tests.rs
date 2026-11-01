@@ -22,6 +22,7 @@ fn rule(
             sanitizers: s(sanitizers),
             safe_prefix: None,
             sanitizer_names: None,
+            unless: Vec::new(),
             guards: Vec::new(),
             param_types: [("Request".to_string(), "req".to_string())].into(),
             source_names: Vec::new(),

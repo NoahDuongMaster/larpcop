@@ -4,9 +4,11 @@ valid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    ObjectMapper m = new ObjectMapper();\n    Prefs p = m.readValue(request.getInputStream(),\
   \ Prefs.class);\n  }\n}\n"
 - "@RestController\nclass C {\n  @PostMapping(\"/d\")\n  public String d(@RequestBody String params) {\n    User u = JSON.parseObject(params, User.class);\n    return u.getName();\n  }\n}\n"
+- "@RestController\nclass C {\n  @GetMapping(\"/y\")\n  public void y(String content) {\n    Yaml y = new Yaml(new SafeConstructor());\n    y.load(content);\n  }\n}\n"
 invalid:
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    ObjectInputStream in = new ObjectInputStream(request.getInputStream());\n\
   \    Object o = in.readObject();\n  }\n}\n"
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    XMLDecoder d = new XMLDecoder(request.getInputStream());\n\
   \    Object o = d.readObject();\n  }\n}\n"
 - "@RestController\nclass C {\n  @PostMapping(\"/d\")\n  public String d(@RequestBody String params) {\n    JSONObject ob = JSON.parseObject(params);\n    return ob.toString();\n  }\n}\n"
+- "@RestController\nclass C {\n  @GetMapping(\"/y\")\n  public void y(String content) {\n    Yaml y = new Yaml();\n    y.load(content);\n  }\n}\n"

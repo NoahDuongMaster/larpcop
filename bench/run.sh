@@ -128,7 +128,7 @@ printf "extends: ['%s/standards/recommended']\ndisable: [dependency-vulnerabilit
 "$LARPCOP" check --format json > "$OUT/juliet-cs-larpcop.json" || true
 rm .larpcop.yaml
 semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/juliet-cs-semgrep-default.json" --quiet . || true
-python3 "$HERE/juliet.py" . "$OUT/juliet-cs-larpcop.json" "$OUT/juliet-cs-semgrep-default.json" > "$OUT/juliet-cs.md" "$OUT/juliet-java.md"
+python3 "$HERE/juliet.py" . "$OUT/juliet-cs-larpcop.json" "$OUT/juliet-cs-semgrep-default.json" > "$OUT/juliet-cs.md"
 
 # Juliet Java 1.3: servlet test cases (getParameter, getCookies, getQueryString), same scorer.
 if [ ! -d "$WORK/juliet-java-web" ]; then
@@ -169,6 +169,16 @@ semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/vulner
 python3 "$HERE/java_sec_code.py" "$HERE/vulnerableapp-truth.json" . larpcop="$OUT/vulnerableapp-larpcop.json" \
   semgrep="$OUT/vulnerableapp-semgrep.json" > "$OUT/vulnerableapp.md"
 
+# Kotlin: the labeled Kotlin test files of the Semgrep rules repository (pinned),
+# larpcop only (they are Semgrep's own rule tests).
+python3 "$HERE/semgrep_kotlin.py" --fetch "$WORK/semgrep-kotlin"
+cd "$WORK/semgrep-kotlin"
+[ -d .git ] || git init -q
+printf "extends: ['%s/standards/recommended']\ndisable: [dependency-vulnerability]\n" "$REPO" > .larpcop.yaml
+"$LARPCOP" check --format json > "$OUT/semgrep-kotlin-larpcop.json" || true
+rm .larpcop.yaml
+python3 "$HERE/semgrep_kotlin.py" . "$OUT/semgrep-kotlin-larpcop.json" > "$OUT/semgrep-kotlin.md"
+
 # vulnerable-node: only sast/seeds/, scored by the project's own sast/tests/score.js.
 cd "$WORK/vulnerable-node"
 printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
@@ -176,4 +186,4 @@ printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
 semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/seeds-semgrep.json" --quiet sast/seeds || true
 python3 "$HERE/seeds.py" "$WORK/vulnerable-node" "$OUT/seeds-larpcop.json" "$OUT/seeds-semgrep.json" > "$OUT/seeds.md"
 
-cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/dvpwa.md" "$OUT/dvws-node.md" "$OUT/govwa.md" "$OUT/railsgoat.md" "$OUT/owasp-benchmark.md" "$OUT/owasp-benchmark-python.md" "$OUT/dvwa.md" "$OUT/juliet-cs.md" "$OUT/java-sec-code.md" "$OUT/vulnerableapp.md" "$OUT/seeds.md"
+cat "$OUT/timing.txt" "$OUT/juice-shop.md" "$OUT/NodeGoat.md" "$OUT/dvna.md" "$OUT/dvpwa.md" "$OUT/dvws-node.md" "$OUT/govwa.md" "$OUT/railsgoat.md" "$OUT/owasp-benchmark.md" "$OUT/owasp-benchmark-python.md" "$OUT/dvwa.md" "$OUT/juliet-cs.md" "$OUT/juliet-java.md" "$OUT/semgrep-kotlin.md" "$OUT/java-sec-code.md" "$OUT/vulnerableapp.md" "$OUT/seeds.md"

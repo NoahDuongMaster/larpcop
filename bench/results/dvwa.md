@@ -17,8 +17,10 @@ it: comparing with a literal is a guard, and it pins values built only from
 what it checks (`$name = bin2hex(random_bytes(16)) . '.' . $ext`), so the
 fixed level is no longer flagged.
 
-Still missed, because of how the scorer credits a level: the file-inclusion
-levels only assign `$file`, which `fi/index.php` includes; the stored-XSS levels
-write the guestbook row, which a shared `dvwaGuestbook()` prints. larpcop
-reports those flows where the include and the print happen, not in the
-per-level files.
+Still missed: the file-inclusion levels only assign `$file` at the top level
+of a file that `fi/index.php` requires through a path chosen at run time
+(`source/{$vulnerabilityFile}`), then includes; variables a required file
+sets are not followed into the file requiring it. The stored-XSS levels write
+the guestbook row, which a shared `dvwaGuestbook()` prints from
+`mysqli_fetch_row`; PHP has no database source. Neither flow is reported, in
+the per-level files the scorer credits or in the shared ones.

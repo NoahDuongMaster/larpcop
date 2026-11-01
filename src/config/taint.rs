@@ -112,6 +112,10 @@ pub struct TaintConfig {
     /// (declared, or `new T(…)` at the sink).
     #[serde(default)]
     pub strict_sink_types: std::collections::BTreeMap<String, String>,
+    /// Sink metavariable → regex over how the object it names is set up in
+    /// the file (see configured.rs).
+    #[serde(default)]
+    pub sink_configured: std::collections::BTreeMap<String, String>,
     /// Source metavariable → regex over the type its name is declared with in
     /// the file; an undeclared name does not count (see srctypes.rs).
     #[serde(default)]

@@ -1,7 +1,9 @@
 //! Building a taint rule from its configuration: patterns compiled per
 //! language and indexed by node kind, regexes, source texts.
 
-use super::{TaintRule, argv, mapping, outputs, pathobj, routes, scan, srctypes, typed};
+use super::{
+    TaintRule, argv, configured, mapping, outputs, pathobj, routes, scan, srctypes, typed,
+};
 use crate::config::TaintConfig;
 use crate::rules::Level;
 use anyhow::{Context, Result};
@@ -120,6 +122,7 @@ impl TaintRule {
                 })
                 .transpose()?,
             source_types: srctypes::SourceTypes::new(&cfg.id, &cfg.source_types, &cfg.source_text)?,
+            configured: configured::Configured::new(&cfg.id, &cfg.sink_configured)?,
             fixed_routes: routes::FixedRoutes {
                 sources: cfg
                     .fixed_route_sources

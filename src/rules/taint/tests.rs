@@ -32,6 +32,7 @@ fn rule(
             resolver_args: false,
             exclude: Default::default(),
             sink_types: Default::default(),
+            sink_configured: Default::default(),
             strict_sink_types: Default::default(),
             source_types: Default::default(),
             source_text: Default::default(),

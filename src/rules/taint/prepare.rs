@@ -132,6 +132,10 @@ impl TaintRule {
                 {
                     continue;
                 }
+                // `$JM.readValue(…)` on a mapper with default typing on.
+                if !self.configured.holds(&index.root, m.get_env()) {
+                    continue;
+                }
                 let typed = self.typed.metavariables(m.get_env());
                 hits.push((m.range().start, node, typed));
             }

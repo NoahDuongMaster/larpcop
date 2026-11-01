@@ -41,6 +41,7 @@ pub struct TaintRule {
     shell_argv: Option<argv::ShellArgv>,
     fixed_routes: routes::FixedRoutes,
     source_types: srctypes::SourceTypes,
+    configured: configured::Configured,
     path_objects: Option<pathobj::PathObjects>,
     html_fragments: bool,
     /// Sanitizers by name, for functions passed by reference (`map(esc)`).
@@ -125,6 +126,7 @@ mod argv;
 mod build;
 mod callbacks;
 mod check;
+mod configured;
 pub(crate) mod constant;
 mod containers;
 mod contexts;

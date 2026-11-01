@@ -8,7 +8,40 @@ valid:
 - "class C {\n  void f(HttpServletRequest request) throws Exception {\n    String data = request.getParameter(\"q\");\n    ByteArrayOutputStream bytes = new ByteArrayOutputStream();\n    ObjectOutputStream\
   \ out = new ObjectOutputStream(bytes);\n    out.writeObject(data);\n    ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()));\n    String back = (String) in.readObject();\n\
   \  }\n}\n"
+- |
+  @RestController
+  class Prefs {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    @GetMapping("/p")
+    public String p(@CookieValue String prefs) throws Exception {
+      return MAPPER.readValue(prefs, Preferences.class).getTheme();
+    }
+  }
 invalid:
+- |
+  @RestController
+  class Activity {
+    private static final ObjectMapper MAPPER = createMapper();
+    private static ObjectMapper createMapper() {
+      ObjectMapper m = new ObjectMapper();
+      m.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, ObjectMapper.DefaultTyping.NON_FINAL);
+      return m;
+    }
+    @GetMapping("/a")
+    public String a(@CookieValue String activity) throws Exception {
+      return String.valueOf(MAPPER.readValue(activity, Object.class));
+    }
+  }
+- |
+  @RestController
+  class Legacy {
+    private final ObjectMapper mapper = new ObjectMapper();
+    Legacy() { mapper.enableDefaultTyping(); }
+    @PostMapping("/l")
+    public Object l(@RequestBody String body) throws Exception {
+      return mapper.readValue(body, Object.class);
+    }
+  }
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    ObjectInputStream in = new ObjectInputStream(request.getInputStream());\n\
   \    Object o = in.readObject();\n  }\n}\n"
 - "public class T extends HttpServlet {\n  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws Exception {\n    XMLDecoder d = new XMLDecoder(request.getInputStream());\n\

@@ -84,3 +84,56 @@ fn java_class_named_in_full() {
         .collect();
     assert_eq!(lines, [5]);
 }
+
+/// A call through an interface or abstract class reaches the one
+/// implementation: the bodiless declaration does not make the name ambiguous.
+#[test]
+fn through_interface() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("A.java"),
+        r#"interface Runner { void run(String cmd); }
+class ShellRunner implements Runner {
+  public void run(String cmd) { Runtime.getRuntime().exec(cmd); }
+}
+class A {
+  void f(Req req, Runner r) {
+    r.run(req.getParameter("c"));
+  }
+}
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("a.py"),
+        r#"import abc, os
+class Store(abc.ABC):
+    @abc.abstractmethod
+    def save(self, path):
+        ...
+class FileStore(Store):
+    def save(self, path):
+        open(path, 'w')
+def view(req, store):
+    store.save(req.GET['p'])
+"#,
+    )
+    .unwrap();
+    let lines = |lang: &str, rel: &str, source: &str, sink: &str| -> Vec<usize> {
+        let r = super::tests_calls::rule(lang, dir.path(), &[source], &[sink], &[]);
+        super::tests_calls::found(&r, dir.path(), rel)
+            .iter()
+            .map(|(l, _)| *l)
+            .collect()
+    };
+    assert_eq!(
+        lines(
+            "Java",
+            "A.java",
+            "req.getParameter($K)",
+            "Runtime.getRuntime().exec($X)"
+        ),
+        [7]
+    );
+    assert_eq!(lines("Python", "a.py", "req.GET", "open($X, $$$R)"), [10]);
+}

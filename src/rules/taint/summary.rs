@@ -181,7 +181,9 @@ impl TaintRule {
             let validating = super::validators::calls(index, &round);
             round.guards.extend(validating);
             let params_only = round.clone_without_sources();
-            for (name, f, params) in defs {
+            // An interface's or abstract method says nothing of what runs:
+            // leaving it out lets `*.run` stand for the one implementation.
+            for (name, f, params) in defs.iter().filter(|(_, f, _)| !super::defs::bodiless(f)) {
                 let mut s = Summary {
                     method: super::defs::class_of(f).is_some(),
                     ..Summary::default()

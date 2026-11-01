@@ -86,3 +86,24 @@ class R {
     };
     assert!(reported("Java", "R.java", src, cfg).is_empty());
 }
+
+/// A ternary is one of its sides: the condition is not its value, and a
+/// guard in it cleans the side it protects.
+#[test]
+fn ternary_sides() {
+    let js = "\
+function a(req, res) {
+  const u = req.query.next;
+  res.redirect(isLocal(u) ? u : '/');
+  res.redirect(u.startsWith('/') ? '/home' : '/login');
+  res.redirect(isLocal(u) ? '/' : u);
+  res.redirect(u ? u : '/');
+}
+";
+    let cfg = TaintConfig {
+        sinks: vec!["res.redirect($U)".into()],
+        guards: vec!["isLocal($U)".into()],
+        ..Default::default()
+    };
+    assert_eq!(reported("JavaScript", "a.js", js, cfg), [5, 6]);
+}

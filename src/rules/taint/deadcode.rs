@@ -271,7 +271,9 @@ impl Branches {
 
 /// (condition, first side, second side) of a ternary: `c ? a : b` (fields)
 /// or Python's `a if c else b` (in that order).
-fn sides<'a, D: Doc>(n: &Node<'a, D>) -> Option<(Node<'a, D>, Node<'a, D>, Node<'a, D>)> {
+pub(super) fn sides<'a, D: Doc>(
+    n: &Node<'a, D>,
+) -> Option<(Node<'a, D>, Node<'a, D>, Node<'a, D>)> {
     if let (Some(c), Some(a), Some(b)) = (
         n.field("condition"),
         n.field("consequence"),

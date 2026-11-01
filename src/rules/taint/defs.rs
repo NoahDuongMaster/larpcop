@@ -36,6 +36,31 @@ pub(super) fn class_of<D: Doc>(f: &Node<D>) -> Option<String> {
     Some(name.text().split('<').next()?.trim().to_string())
 }
 
+/// No body (`void run(String x);`), or one that only stands in for an
+/// implementation (`pass`, `...`, `raise NotImplementedError`).
+pub(super) fn bodiless<D: Doc>(f: &Node<D>) -> bool {
+    let Some(body) = f.field("body") else {
+        return !matches!(
+            f.kind().as_ref(),
+            "arrow_function" | "lambda" | "lambda_expression"
+        );
+    };
+    let statements: Vec<Node<D>> = body
+        .children()
+        .filter(|c| c.is_named() && c.kind() != "comment")
+        .collect();
+    // `{}` really does nothing.
+    !statements.is_empty()
+        && statements.iter().all(|c| {
+            let text = c.text();
+            matches!(c.kind().as_ref(), "pass_statement")
+                || text == "..."
+                || (c.kind() == "raise_statement" && text.contains("NotImplementedError"))
+                || (c.kind() == "expression_statement"
+                    && c.children().all(|s| s.kind() == "string"))
+        })
+}
+
 fn named<'a, D: Doc>(
     root: &Node<'a, D>,
 ) -> impl Iterator<Item = (String, Node<'a, D>, Vec<String>)> {

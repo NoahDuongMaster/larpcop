@@ -182,6 +182,16 @@ impl Ctx {
         if (NAMES.contains(&kind.as_ref()) || is_field(node)) && names.contains(text.as_ref()) {
             return true;
         }
+        // `c ? a : b` is `a` or `b`, never `c`; a guard in `c` cleans the
+        // side it protects (`isLocal(u) ? u : "/"`).
+        if matches!(
+            kind.as_ref(),
+            "ternary_expression" | "conditional_expression" | "conditional"
+        ) && let Some((cond, a, b)) = super::deadcode::sides(node)
+        {
+            let (holds, fails) = super::guards::safe(&cond, &self.guards);
+            return self.tainted(&a, &(names - &holds)) || self.tainted(&b, &(names - &fails));
+        }
         // Ruby: `custom_fields` alone may be a call of a method returning
         // request data.
         if self.bare_calls

@@ -4,12 +4,12 @@
 
 use super::TaintRule;
 use super::events::Hits;
-use super::flow::{Ctx, Reached};
+use super::flow::Ctx;
 use super::kotlin::Part;
 use crate::files::SourceFile;
 use ast_grep_core::{Doc, Node};
 use ast_grep_language::SupportLang;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 pub use super::defs::{functions, param_names};
 
@@ -155,7 +155,6 @@ impl TaintRule {
         known: &Summaries,
     ) -> Summaries {
         let defs = index.functions();
-        let own = |n: &Node<'a, D>| self.own_names(n);
         let mut out = known.clone();
         for _ in 0..ROUNDS {
             let before = out.clone();
@@ -180,73 +179,21 @@ impl TaintRule {
             // An interface's or abstract method says nothing of what runs:
             // leaving it out lets `*.run` stand for the one implementation.
             for (name, f, params) in defs.iter().filter(|(_, f, _)| !super::defs::bodiless(f)) {
-                let mut s = Summary {
-                    method: super::defs::class_of(f).is_some(),
-                    supers: super::defs::supers_of(f),
-                    ..Summary::default()
-                };
-                for (i, p) in params.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
-                    let start: HashSet<String> = [p.clone()].into();
-                    // Every sink of `p` under the same parameter's call, or not.
-                    let mut condition: Option<Option<super::lambdas::Condition>> = None;
-                    let mut under = |at: &Node<'a, D>| {
-                        let c = super::lambdas::condition_param(at, f, params);
-                        condition = Some(match condition {
-                            None => c,
-                            Some(prev) if prev == c => c,
-                            Some(_) => None,
-                        });
-                    };
-                    params_only.run(f, start, hits, &|_| HashSet::new(), &mut |r| match r {
-                        Reached::Sink(arg, typed) => {
-                            if self.typed.holds(lang, file, &typed) {
-                                under(&arg);
-                                s.sinks.push((i, self.into(name, &arg, &file.rel)));
-                            }
-                        }
-                        Reached::Call(at, into) => {
-                            under(&at);
-                            s.sinks.push((i, format!("`{name}` → {into}")))
-                        }
-                        Reached::Return(_) => {
-                            s.returns.insert(i);
-                        }
-                        Reached::Filled(object) => {
-                            if let Some(j) = params.iter().position(|p| *p == object)
-                                && j != i
-                            {
-                                s.fills.insert((i, j));
-                            }
-                        }
-                        Reached::Field(_) | Reached::Responds(..) => {}
-                    });
-                    if let Some(Some(g)) = condition {
-                        s.conditions.insert(i, g);
-                    }
-                }
-                for key in super::statics::read(f) {
-                    let start: HashSet<String> = [key.clone()].into();
-                    params_only.run(f, start, hits, &|_| HashSet::new(), &mut |r| match r {
-                        Reached::Sink(arg, typed) if self.typed.holds(lang, file, &typed) => {
-                            s.statics
-                                .push((key.clone(), self.into(name, &arg, &file.rel)));
-                        }
-                        Reached::Call(_, into) => {
-                            s.statics.push((key.clone(), format!("`{name}` → {into}")))
-                        }
-                        _ => {}
-                    });
-                }
-                s.statics.dedup_by(|a, b| a.0 == b.0);
-                s.validates = super::validators::validated(f, params, &round.guards);
-                round.run(f, own(f), hits, &own, &mut |r| {
-                    if let Reached::Return(_) = r {
-                        s.returns_source = true;
-                    }
-                });
-                s.sinks.sort();
-                s.sinks.dedup_by_key(|(i, _)| *i);
+                let s = self.summary_of(&round, &params_only, name, f, params, lang, file, hits);
                 out.insert(name.clone(), s);
+                // `render(rows, f)` running `f.apply(row)`: with a cleaning `f`.
+                for (k, p) in params.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
+                    let runs = super::higher::applications(f, p);
+                    if runs.is_empty() {
+                        continue;
+                    }
+                    let (r, po) = (
+                        round.with_sanitizers(&runs),
+                        params_only.with_sanitizers(&runs),
+                    );
+                    let s = self.summary_of(&r, &po, name, f, params, lang, file, hits);
+                    out.insert(super::higher::key(name, k), s);
+                }
             }
             // Nothing new reached this round: later rounds would repeat it.
             if out == before {
@@ -254,24 +201,6 @@ impl TaintRule {
             }
         }
         out
-    }
-
-    fn into<D: Doc>(&self, name: &str, arg: &Node<D>, rel: &str) -> String {
-        let sink = arg
-            .ancestors()
-            .find(|a| super::flow::CALLS.contains(&a.kind().as_ref()))
-            .map_or_else(|| arg.text().to_string(), |c| c.text().to_string());
-        let short: String = sink
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
-            .chars()
-            .take(60)
-            .collect();
-        format!(
-            "`{name}` → `{short}` at {rel}:{}",
-            arg.start_pos().line() + 1
-        )
     }
 }
 

@@ -141,6 +141,7 @@ pub(crate) mod flow;
 mod fragments;
 mod guards;
 mod handlers;
+mod higher;
 mod imports;
 mod iteration;
 mod kotlin;
@@ -168,6 +169,7 @@ mod srctypes;
 mod statics;
 pub use scan::FileIndex;
 mod summary;
+mod summary_of;
 mod switches;
 #[cfg(test)]
 mod tests;
@@ -193,6 +195,8 @@ mod tests_dump;
 mod tests_entries;
 #[cfg(test)]
 mod tests_equality;
+#[cfg(test)]
+mod tests_higher;
 #[cfg(test)]
 mod tests_kotlin;
 #[cfg(test)]

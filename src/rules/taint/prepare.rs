@@ -220,6 +220,7 @@ impl TaintRule {
                 if let Some(s) = theirs.get(exported) {
                     out.insert(local.clone(), s.clone());
                 }
+                super::higher::import_variants(&theirs, exported, local, &mut out);
                 // An imported class: its methods, `Local.method`.
                 let prefix = format!("{exported}.");
                 for (name, s) in theirs.iter() {

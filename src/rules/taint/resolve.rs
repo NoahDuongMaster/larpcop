@@ -40,29 +40,34 @@ impl Ctx {
             }
         }
         let name = callee(call)?;
-        if let Some(s) = self.summaries.get(&name) {
+        if let Some(s) = self.pick(&name, call) {
             return Some((s, false));
         }
         let (receiver, method) = name.rsplit_once('.')?;
         // `Base b = new Impl(); b.run(x)`: the class the object was built as.
         if let Some(class) = self.built_as(call, receiver)
-            && let Some(s) = self.summaries.get(&format!("{class}.{method}"))
+            && let Some(s) = self.pick(&format!("{class}.{method}"), call)
         {
             return Some((s, false));
         }
         // `Store s; s.save(x)`: every known implementation of its type.
         if let Some(object) = receiver_node(call)
             && let Some(ty) = super::declared::declared_type(&object)
-            && let Some(s) = self.summaries.get(&format!(
-                "{}.{method}",
-                ty.split('<').next().unwrap_or(&ty).trim()
-            ))
+            && let Some(s) = self.pick(
+                &format!("{}.{method}", ty.split('<').next().unwrap_or(&ty).trim()),
+                call,
+            )
         {
             return Some((s, false));
         }
-        self.summaries
-            .get(&format!("*.{method}"))
-            .map(|s| (s, true))
+        self.pick(&format!("*.{method}"), call).map(|s| (s, true))
+    }
+
+    /// The summary under `key`; for `render(rows, escape)`, the one with
+    /// `escape`'s calls clean (higher.rs).
+    fn pick<D: Doc>(&self, key: &str, call: &Node<D>) -> Option<&Summary> {
+        let s = self.summaries.get(key)?;
+        Some(self.specialized(key, call).unwrap_or(s))
     }
 
     fn built_as<D: Doc>(&self, call: &Node<D>, name: &str) -> Option<String> {

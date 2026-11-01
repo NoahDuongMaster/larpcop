@@ -76,7 +76,7 @@ Kết quả dưới đây là sau bước 18: chỉ có ý nghĩa *không thụt
 | Juliet C# (1.443 ca web): thời gian | **4,96 s** | 16,1 s (`p/default`) | – |
 | RailsGoat (Ruby): dòng tìm thấy (/14) | **13** (lần đầu 10) | 9 | – |
 | java-sec-code (76 endpoint): điểm trung bình (TPR − FPR) | **+84,6%** (lần đầu +6,6%) | +20,8% (p/default) | – |
-| VulnerableApp (97 handler): điểm trung bình (TPR − FPR) | **+81,2%** (lần đầu +7,2%) | +16,5% | – |
+| VulnerableApp (97 handler): điểm trung bình (TPR − FPR) | **+84,4%** (lần đầu +7,2%) | +16,5% | – |
 | Juliet C# (1.443 ca web): điểm trung bình (TPR − FPR) | **+99,2%** (lần đầu +43,9%) | +0,8% (`p/default`, `p/csharp`) | – |
 | Juliet Java (1.665 ca servlet): điểm trung bình (TPR − FPR) | **+96,4%** (lần đầu +68,6%) | +22,4% (`p/default`), +33,0% (`p/java`) | – |
 | Juliet Java stored XSS (148 ca, dữ liệu từ database): điểm trung bình (TPR − FPR) | **+75,0%** (held-out, CWE81 `sendError` cố ý bỏ qua) | +0,0% (`p/default`, `p/java`) | – |

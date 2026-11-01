@@ -7,6 +7,7 @@
 use super::fields::{class_field, is_field};
 use super::flow::{ASSIGNMENTS, CALLS, LOOPS, enclosing};
 use super::guards::{Check, Guard};
+use super::paths::{CONDITIONAL, compound};
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
 use std::cell::RefCell;
@@ -51,6 +52,9 @@ pub(super) enum Shape<'a, D: Doc> {
     Return(Node<'a, D>),
     Nested(Node<'a, D>),
     If(Node<'a, D>),
+    /// Code that never runs (a branch decided by known values): its sinks
+    /// are not reached.
+    Dead(usize, usize),
 }
 
 pub(super) type Skeleton<'a, D> = Vec<(usize, Shape<'a, D>)>;
@@ -113,8 +117,13 @@ impl<'a, D: Doc> Hits<'a, D> {
 
     fn build(&self, scope: &Node<'a, D>, guards: &[Check]) -> Vec<(usize, Event<'a, D>)> {
         let mut events: Vec<(usize, Event<D>)> = Vec::new();
+        let mut dead = Vec::new();
         for (at, shape) in self.skeleton(scope).iter() {
             let event = match shape {
+                Shape::Dead(start, end) => {
+                    dead.push(*start..*end);
+                    continue;
+                }
                 Shape::Assign(l, r, c, f) => Event::Assign(l.clone(), r.clone(), *c, *f),
                 Shape::Call(n) => Event::Call(n.clone()),
                 Shape::Return(n) => Event::Return(n.clone()),
@@ -139,6 +148,9 @@ impl<'a, D: Doc> Hits<'a, D> {
         }
         for &i in self.by_scope.get(&key(scope)).into_iter().flatten() {
             let (at, sink, typed) = &self.list[i];
+            if dead.iter().any(|d| d.contains(at)) {
+                continue;
+            }
             events.push((*at, Event::Sink(sink.clone(), typed.clone())));
         }
         events.sort_by_key(|(at, _)| *at);
@@ -148,7 +160,11 @@ impl<'a, D: Doc> Hits<'a, D> {
 
 fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
     let mut out: Skeleton<D> = Vec::new();
-    walk(scope, None, &mut |n, conditional| {
+    let branches = super::deadcode::Branches::of(scope);
+    for d in branches.dead() {
+        out.push((d.start, Shape::Dead(d.start, d.end)));
+    }
+    walk(scope, None, &branches, &mut |n, conditional| {
         if is_function(n) {
             out.push((n.range().start, Shape::Nested(n.clone())));
             return;
@@ -166,6 +182,8 @@ fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
                     .last()
             })
         {
+            // `x = c ? a : b` with `c` known: only the side taken.
+            let right = branches.live(right);
             // `x += v` adds to `x`: a clean `v` cleans `x` up to the
             // assignment's own end, that is not at all.
             let conditional = if compound(n, &left, &right) {
@@ -196,88 +214,26 @@ fn skeleton<'a, D: Doc>(scope: &Node<'a, D>) -> Skeleton<'a, D> {
     out
 }
 
-/// Constructs whose insides run on some paths only.
-const CONDITIONAL: [&str; 37] = [
-    "if_statement",
-    "if_expression",
-    "else_clause",
-    "elif_clause",
-    "switch_statement",
-    "switch_expression",
-    "expression_switch_statement",
-    "type_switch_statement",
-    "select_statement",
-    "match_expression",
-    "conditional_expression",
-    "ternary_expression",
-    "while_statement",
-    "while_expression",
-    "do_statement",
-    "for_statement",
-    "enhanced_for_statement",
-    "for_in_statement",
-    "for_expression",
-    "loop_expression",
-    "try_statement",
-    "catch_clause",
-    "except_clause",
-    "case",
-    "when",
-    "rescue",
-    "if",
-    "unless",
-    "if_modifier",
-    "unless_modifier",
-    "while",
-    "until",
-    "while_modifier",
-    "until_modifier",
-    "case",
-    "conditional",
-    "elsif",
-];
-
 /// Nodes of a scope in order, each with the end of the innermost conditional
 /// construct it is in; nested functions are visited, not descended into.
 fn walk<'a, D: Doc>(
     scope: &Node<'a, D>,
     conditional: Option<usize>,
+    branches: &super::deadcode::Branches,
     f: &mut impl FnMut(&Node<'a, D>, Option<usize>),
 ) {
     for c in scope.children() {
+        if branches.is_dead(&c) {
+            continue;
+        }
         f(&c, conditional);
         if !is_function(&c) {
-            let inside = if CONDITIONAL.contains(&c.kind().as_ref()) {
+            let inside = if CONDITIONAL.contains(&c.kind().as_ref()) && !branches.always(&c) {
                 Some(c.range().end)
             } else {
                 conditional
             };
-            walk(&c, inside, f);
+            walk(&c, inside, branches, f);
         }
     }
-}
-
-/// `x += v`, `x .= v`, `x ||= v`: the operator between the sides is more than `=`.
-fn compound<D: Doc>(n: &Node<D>, left: &Node<D>, right: &Node<D>) -> bool {
-    if matches!(
-        n.kind().as_ref(),
-        "augmented_assignment_expression"
-            | "augmented_assignment"
-            | "compound_assignment_expr"
-            | "operator_assignment"
-    ) {
-        return true;
-    }
-    let start = n.range().start;
-    let (from, to) = (left.range().end, right.range().start);
-    if from < start || to < from {
-        return false;
-    }
-    let op = n.text()[from - start..to - start].trim().to_string();
-    op.len() >= 2
-        && op.ends_with('=')
-        && !matches!(op.as_str(), "==" | "<=" | ">=" | "!=" | ":=")
-        && op[..op.len() - 1]
-            .chars()
-            .all(|c| "+-*/%|&^<>?.".contains(c))
 }

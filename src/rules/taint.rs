@@ -199,10 +199,13 @@ fn class_of<D: Doc>(n: &Node<D>) -> Option<(usize, usize)> {
 }
 
 mod build;
+mod constant;
 mod containers;
+mod deadcode;
 mod declared;
 mod defs;
 mod destructure;
+mod entries;
 mod events;
 mod fields;
 mod flow;
@@ -212,6 +215,7 @@ mod imports;
 mod iteration;
 mod membership;
 mod names;
+mod paths;
 mod prefix;
 mod prepare;
 mod responds;
@@ -227,6 +231,10 @@ mod tests_branches;
 mod tests_calls;
 #[cfg(test)]
 mod tests_csharp;
+#[cfg(test)]
+mod tests_deadcode;
+#[cfg(test)]
+mod tests_entries;
 #[cfg(test)]
 mod tests_methods;
 #[cfg(test)]

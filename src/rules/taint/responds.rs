@@ -46,7 +46,7 @@ impl Responds {
         if self
             .values
             .as_ref()
-            .is_some_and(|v| !v.is_match(&value.kind()))
+            .is_some_and(|v| !v.is_match(&value.kind()) && !built_as_string(function, &value))
         {
             return false;
         }
@@ -94,4 +94,26 @@ fn head<D: Doc>(n: &Node<D>) -> String {
         .or_else(|| n.field("definition").and_then(|d| d.field("body")))
         .map_or(text.len(), |b| b.range().start - n.range().start);
     text[..end.min(text.len())].to_string()
+}
+
+/// `out = ""` … `out += f"<p>{x}</p>"` … `return out`: a returned name the
+/// function builds as a string (assigned a string or appended to).
+fn built_as_string<D: Doc>(function: &Node<D>, value: &Node<D>) -> bool {
+    if value.kind() != "identifier" {
+        return false;
+    }
+    let name = value.text();
+    function.dfs().any(|n| {
+        let assigned = match n.kind().as_ref() {
+            "assignment" | "augmented_assignment" => n.field("left"),
+            _ => None,
+        };
+        assigned.is_some_and(|l| l.text() == name)
+            && (n.kind() == "augmented_assignment"
+                || n.field("right").is_some_and(|r| {
+                    matches!(r.kind().as_ref(), "string" | "concatenated_string")
+                        || (r.kind() == "binary_operator"
+                            && r.children().any(|c| c.kind() == "string"))
+                }))
+    })
 }

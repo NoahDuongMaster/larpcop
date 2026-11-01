@@ -126,6 +126,7 @@ impl TaintRule {
             sourcing: Default::default(),
             bare_calls: lang == SupportLang::Ruby,
             safe_prefix: self.safe_prefix.clone(),
+            summarized: Default::default(),
         };
         let known = summary::with_unique_methods(self.imported_summaries(lang, index, file, depth));
         // The file being checked (not an import, whose callers need its
@@ -152,6 +153,7 @@ impl TaintRule {
         let mut ctx = Ctx {
             summaries: summary::with_unique_methods(summaries),
             sourcing: Default::default(),
+            summarized: Default::default(),
             ..base
         };
         let validating = super::validators::calls(index, &ctx);

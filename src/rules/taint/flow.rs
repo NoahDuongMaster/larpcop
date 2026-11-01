@@ -84,6 +84,8 @@ pub(super) struct Ctx {
     pub bare_calls: bool,
     /// The rule's `safe_prefix`: a name that starts safely stays clean through `+=`.
     pub safe_prefix: Option<regex::Regex>,
+    /// Last segments of the summaries' names (computed on first use).
+    pub summarized: std::cell::OnceCell<HashSet<String>>,
 }
 
 fn within(r: &Range<usize>, outer: &Range<usize>) -> bool {
@@ -95,11 +97,32 @@ impl Ctx {
     /// `obj.method(…)` on an object of unknown class, the one method of that
     /// name among the known classes (`*.method`).
     pub fn summary<D: Doc>(&self, call: &Node<D>) -> Option<&super::summary::Summary> {
+        self.summary_guessed(call).map(|(s, _)| s)
+    }
+
+    /// The summary, and whether it was found by method name alone.
+    fn summary_guessed<D: Doc>(&self, call: &Node<D>) -> Option<(&super::summary::Summary, bool)> {
+        // Most calls are of nothing summarized: tell by the called name
+        // before building the whole callee.
+        if let Some(last) = super::summary::called_name(call) {
+            let known = self.summarized.get_or_init(|| {
+                self.summaries
+                    .keys()
+                    .map(|k| k.rsplit('.').next().unwrap_or(k).to_string())
+                    .collect()
+            });
+            if !known.contains(last.as_str()) {
+                return None;
+            }
+        }
         let name = callee(call)?;
-        self.summaries.get(&name).or_else(|| {
-            let (_, method) = name.rsplit_once('.')?;
-            self.summaries.get(&format!("*.{method}"))
-        })
+        if let Some(s) = self.summaries.get(&name) {
+            return Some((s, false));
+        }
+        let (_, method) = name.rsplit_once('.')?;
+        self.summaries
+            .get(&format!("*.{method}"))
+            .map(|s| (s, true))
     }
 
     fn any_sourcing(&self) -> bool {
@@ -123,13 +146,34 @@ impl Ctx {
             return true;
         }
         let text = node.text();
-        // Nothing below can be tainted: no source in it, no tainted name
-        // spelled in it, no call that could return source data.
-        if !self
+        // `m['k']`, `m.get("k")`: that entry, or the whole map.
+        let holds_source = self
             .sources
             .iter()
-            .any(|s| s.start < r.end && r.start < s.end)
-            && !names.iter().any(|n| text.contains(n.as_str()))
+            .any(|s| s.start < r.end && r.start < s.end);
+        let entries = names.iter().any(|n| n.ends_with(']'));
+        if entries
+            && !holds_source
+            && let Some(entry) = super::entries::entry(node)
+        {
+            let base = entry.split('[').next().unwrap_or_default();
+            // The key is a literal: nothing else in the read can carry taint.
+            return names.contains(&entry) || names.contains(base);
+        }
+        // A map read whole holds its tainted entries.
+        if entries
+            && NAMES.contains(&node.kind().as_ref())
+            && super::entries::holds_tainted(&text, names)
+        {
+            return true;
+        }
+        // Nothing below can be tainted: no source in it, no tainted name
+        // spelled in it, no call that could return source data.
+        if !holds_source
+            // An entry `m[k]` is spelled through its map's name.
+            && !names
+                .iter()
+                .any(|n| text.contains(n.split('[').next().unwrap_or(n)))
             && !((text.contains('(') || self.bare_calls) && self.any_sourcing())
         {
             return false;
@@ -152,13 +196,22 @@ impl Ctx {
         }
         // A function we have a summary for: only what it really passes through.
         if CALLS.contains(&kind.as_ref())
-            && let Some(s) = self.summary(node)
+            && let Some((s, guessed)) = self.summary_guessed(node)
         {
-            return s.returns_source
+            let passed = s.returns_source
                 || args(node)
                     .iter()
                     .enumerate()
                     .any(|(i, a)| s.returns.contains(&i) && self.tainted(a, names));
+            // `obj.get(k)` matched to the project's only `get` by name is a
+            // guess: request data it is called on (`request.GET.get('q')`)
+            // still flows out.
+            let receiver = node
+                .field("function")
+                .and_then(|f| f.field("object"))
+                .or_else(|| node.field("object"))
+                .or_else(|| node.field("receiver"));
+            return passed || (guessed && receiver.is_some_and(|r| self.tainted(&r, names)));
         }
         node.children().any(|c| self.tainted(&c, names))
     }

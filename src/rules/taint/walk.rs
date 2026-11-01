@@ -75,6 +75,17 @@ impl Ctx {
                         }
                     }
                     let tainted = !safe_start && self.tainted(right, &names);
+                    // `m['k'] = v`: that entry only.
+                    if let Some(entry) = super::entries::entry(left) {
+                        if tainted {
+                            names.insert(entry);
+                        } else if names.remove(&entry)
+                            && let Some(end) = branch
+                        {
+                            until.push((*end, entry));
+                        }
+                        continue;
+                    }
                     for v in left
                         .dfs()
                         .filter(|n| VARIABLES.contains(&n.kind().as_ref()))
@@ -100,7 +111,16 @@ impl Ctx {
                 Event::Call(call) => {
                     // `list.push(x)`, `map.set(k, x)`, `Object.assign(o, x)`: the
                     // container now holds what was put in.
-                    if let Some(container) = filled(call)
+                    // `m.put("k", v)`: that entry only.
+                    if let Some(value) = super::entries::stored(call)
+                        && let Some(entry) = super::entries::entry(call)
+                    {
+                        if self.tainted(&value, &names) {
+                            names.insert(entry);
+                        } else {
+                            names.remove(&entry);
+                        }
+                    } else if let Some(container) = filled(call)
                         && args(call).iter().any(|a| self.tainted(a, &names))
                     {
                         names.insert(container);

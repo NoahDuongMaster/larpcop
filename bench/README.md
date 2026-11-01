@@ -45,7 +45,9 @@ Một bộ chỉ đo được độ tổng quát khi rule chưa được viết 
 
 13. **VulnerableApp (Java, Spring)** đo các rule Java viết ở bước 12 (XXE, SSTI, MyBatis, Jackson, XSS khi handler trả chuỗi, redirect) và engine mới, commit e913760 trước khi chạy. Đáp án (`vulnerableapp-truth.json`, commit 4b055e8 trước khi chạy): 97 handler, nhãn là `variant = Variant.SECURE` của chính dự án. Lần đầu: larpcop **+7,2%**, Semgrep p/default và p/java **+16,5%**. larpcop lại thua. Nguyên nhân chính: dự án dùng meta-annotation riêng (`@VulnerableAppRequestMapping`, `@VulnerableAppRestController`) nên regex handler Spring không khớp; `getResourceAsStream(base + name)` không phải sink path; LDAP qua UnboundID (`connection.search(base, scope, filter)`); redirect qua `HttpHeaders` và `new ResponseEntity<>(headers, HttpStatus.FOUND)`; guard `$L.contains($H)` làm sạch cả chuỗi bẩn trong `url.contains(NULL_BYTE)`. Sau khi sửa (regex nhận meta-annotation, sink mới, guard membership chỉ làm sạch đối số, guard so bằng `equals` chỉ làm sạch toán hạng là tên trơn, `HtmlUtils.htmlEscapeHex`, `Filter.encodeValue`, container `h.get(k).add(x)`, kiểu khai báo trong try-with-resources): **+46,4%** (`results/vulnerableapp.md`). OWASP Benchmark Java lên +46,8%.
 
-Kết quả dưới đây là sau bước 13: chỉ có ý nghĩa *không thụt lùi* trên cả mười ba bộ. Rule mới cần một bộ chưa ai nhìn.
+14. **OWASP Benchmark Python** (1.230 ca, nhãn trong `expectedresults-0.1.csv` của dự án) đo các rule Python mới (LDAP, XPath, trust boundary, random, cookie, XXE qua xml.sax) và phần Python của `owasp_benchmark.py`, commit 31c1118 trước khi chạy. Lần đầu: larpcop **+39,8%**, Semgrep p/default +6,9%, p/python −0,8%. Bỏ sót chính: `match`/`case` của Python không được coi là nhánh; chuỗi trả về dựng bằng `+=` không được coi là response HTML; thiếu nguồn `request.cookies`/`headers`/`self.request.*`; `codecs.open`, `os.path.exists`, `elementpath.select` không phải sink; method của class tên viết thường không có summary. Sau khi sửa (cùng với phần tử map theo key cố định và nhánh quyết định bởi giá trị biết trước: `if 7 * 42 - num > 200`, `match "ABC"[0]`, `switch` trên `"ABC".charAt(1)`): **+54,3%** (`results/owasp-benchmark-python.md`); OWASP Benchmark Java lên **+72,6%**.
+
+Kết quả dưới đây là sau bước 14: chỉ có ý nghĩa *không thụt lùi* trên cả mười bốn bộ. Rule mới cần một bộ chưa ai nhìn.
 
 ## Kết quả (01/11/2026)
 
@@ -70,7 +72,9 @@ Kết quả dưới đây là sau bước 13: chỉ có ý nghĩa *không thụt
 | java-sec-code (76 endpoint): điểm trung bình (TPR − FPR) | **+50,6%** (lần đầu +6,6%) | +20,8% (p/default) | – |
 | VulnerableApp (97 handler): điểm trung bình (TPR − FPR) | **+46,4%** (lần đầu +7,2%) | +16,5% | – |
 | Juliet C# (1.443 ca web): điểm trung bình (TPR − FPR) | **+86,5%** (lần đầu +43,9%) | +0,8% (`p/default`, `p/csharp`) | – |
-| OWASP Benchmark Java: điểm trung bình (TPR − FPR) | **+46,2%** (lần đầu +37,5%) | +34,9% (`p/default`), +17,7% (`p/java`) | – |
+| OWASP Benchmark Java: điểm trung bình (TPR − FPR) | **+72,6%** (lần đầu +37,5%) | +34,9% (`p/default`), +17,7% (`p/java`) | – |
+| OWASP Benchmark Python: thời gian | **2,7 s** | 8,1 s (`p/python`) | – |
+| OWASP Benchmark Python: điểm trung bình (TPR − FPR) | **+54,3%** (lần đầu +39,8%) | +6,9% (`p/default`), −0,8% (`p/python`) | – |
 | vulnerable-node seeds (/12 file, báo nhầm trên 2 file sạch) | **11**, 1 báo nhầm (11 và 0 báo nhầm nếu bỏ rule chung chung) | 10, 1 báo nhầm (8 và 1 báo nhầm nếu bỏ rule chung chung) | – |
 | Secrets (so với gitleaks) | 69/69 và 3/3 trùng khớp | – | 69 và 3 |
 

@@ -2,6 +2,8 @@ id: py-taint-trust-boundary
 file: app/views.py
 valid:
 - "from flask import Flask, request, session\nimport ldap\nfrom lxml import etree\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    session['user_id'] = current_user.id\n"
+- "from flask import Flask, request, session\nimport codecs, os\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    session['seen'] = True\n"
 invalid:
 - "from flask import Flask, request, session\nimport ldap\nfrom lxml import etree\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    session['role'] = request.args.get('role')\n"
 - "from flask import Flask, request, session\nimport ldap\nfrom lxml import etree\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    name = request.form['name']\n    session['name'] = name\n"
+- "from flask import Flask, request, session\nimport codecs, os\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    session[request.args['k']] = '1'\n"

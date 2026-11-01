@@ -3,7 +3,13 @@ file: app/views.py
 valid:
 - "from flask import Flask, request, session\nimport ldap\nfrom lxml import etree\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    root = etree.parse('users.xml')\n    r = root.xpath('//user[@name=$n]',\
   \ n=request.args['n'])\n"
+- "from flask import Flask, request\nimport lxml.etree, elementpath\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    bar = request.args['id']\n    if '\\'' in bar:\n        return 'no'\n   \
+  \ root = lxml.etree.parse('e.xml')\n    nodes = root.xpath(f\"/E[@id='{bar}']\")\n"
 invalid:
 - "from flask import Flask, request, session\nimport ldap\nfrom lxml import etree\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    root = etree.parse('users.xml')\n    r = root.xpath(\"//user[@name='\"\
   \ + request.args['n'] + \"']\")\n"
 - "from flask import Flask, request, session\nimport ldap\nfrom lxml import etree\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    expr = '//user[@id=%s]' % request.args['id']\n    find = etree.XPath(expr)\n"
+- "from flask import Flask, request\nimport urllib.parse, lxml.etree\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    p = urllib.parse.unquote_plus(request.cookies.get('id', 'none'))\n    run\
+  \ = lxml.etree.XPath(f\"/E[@id='{p}']\")\n"
+- "from flask import Flask, request\nimport lxml.etree, elementpath\napp = Flask(__name__)\n\n@app.route('/x')\ndef view():\n    p = request.form.get('id')\n    match p[:1]:\n        case 'A':\n       \
+  \     bar = p\n        case _:\n            bar = 'bob'\n    nodes = elementpath.select(root, f\"/E[@id='{bar}']\")\n"

@@ -19,7 +19,7 @@ pub fn functions<'a, D: Doc>(root: &Node<'a, D>) -> Vec<(String, Node<'a, D>, Ve
 
 /// The class a method is defined in: the enclosing class, the receiver type
 /// of a Go method (`func (p *Profile) Load()`), the type of a Rust `impl`.
-fn class_of<D: Doc>(f: &Node<D>) -> Option<String> {
+pub(super) fn class_of<D: Doc>(f: &Node<D>) -> Option<String> {
     if f.kind() == "method_declaration"
         && let Some(receiver) = f.field("receiver")
     {

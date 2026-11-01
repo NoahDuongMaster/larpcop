@@ -20,6 +20,8 @@ pub struct Summary {
     pub returns_source: bool,
     /// Parameters it validates: it fails (null, false) unless they pass a guard.
     pub validates: BTreeSet<usize>,
+    /// Defined in a class (a method), whatever the class is called.
+    pub method: bool,
 }
 
 /// Callee as written (`f`, `db.run`, `utils.clean`) → its summary.
@@ -57,6 +59,26 @@ pub fn callee<D: Doc>(call: &Node<D>) -> Option<String> {
         return Some(text);
     }
     constructed(call)
+}
+
+/// The name a call calls, without its receiver: `run` in `a.b.run(…)`,
+/// `Helper` in `new Helper<T>(…)`; `None` when it is not a plain name.
+pub fn called_name<D: Doc>(call: &Node<D>) -> Option<String> {
+    let target = match call.field("function") {
+        Some(f) => ["property", "attribute", "field", "name"]
+            .iter()
+            .find_map(|k| f.field(k))
+            .unwrap_or(f),
+        None => call
+            .field("name")
+            .or_else(|| call.field("method"))
+            .or_else(|| call.field("type"))?,
+    };
+    let text = target.text();
+    let name = text.split('<').next()?.trim();
+    name.chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '$')
+        .then(|| name.to_string())
 }
 
 /// `new Helper().run(…)`, `(new Helper()).run(…)`: `Helper.run`.
@@ -99,21 +121,28 @@ pub fn args<'a, D: Doc>(call: &Node<'a, D>) -> Vec<Node<'a, D>> {
         .collect()
 }
 
-/// Adds `*.method` for every method name exactly one known class defines.
+/// Adds `*.method` for every method name the known classes define alike
+/// (one class, or several that behave the same: the same method seen as
+/// `Class.m` and `module.Class.m`).
 pub fn with_unique_methods(mut s: Summaries) -> Summaries {
-    let mut seen: HashMap<String, Vec<String>> = HashMap::new();
-    for key in s.keys() {
-        if let Some((class, method)) = key.rsplit_once('.')
-            && class.chars().next().is_some_and(char::is_uppercase)
-        {
-            seen.entry(method.to_string())
-                .or_default()
-                .push(key.clone());
+    type Behaviour = (Vec<usize>, BTreeSet<usize>, bool, BTreeSet<usize>);
+    let mut seen: HashMap<String, (HashSet<Behaviour>, String)> = HashMap::new();
+    for (key, summary) in s.iter().filter(|(_, v)| v.method) {
+        if let Some((_, method)) = key.rsplit_once('.') {
+            let behaviour = (
+                summary.sinks.iter().map(|(i, _)| *i).collect(),
+                summary.returns.clone(),
+                summary.returns_source,
+                summary.validates.clone(),
+            );
+            let entry = seen.entry(method.to_string()).or_default();
+            entry.0.insert(behaviour);
+            entry.1 = key.clone();
         }
     }
-    for (method, keys) in seen {
-        if let [only] = keys.as_slice()
-            && let Some(summary) = s.get(only).cloned()
+    for (method, (behaviours, key)) in seen {
+        if behaviours.len() == 1
+            && let Some(summary) = s.get(&key).cloned()
         {
             s.insert(format!("*.{method}"), summary);
         }
@@ -147,12 +176,16 @@ impl TaintRule {
                 sourcing: Default::default(),
                 bare_calls: ctx.bare_calls,
                 safe_prefix: ctx.safe_prefix.clone(),
+                summarized: Default::default(),
             };
             let validating = super::validators::calls(index, &round);
             round.guards.extend(validating);
             let params_only = round.clone_without_sources();
             for (name, f, params) in defs {
-                let mut s = Summary::default();
+                let mut s = Summary {
+                    method: super::defs::class_of(f).is_some(),
+                    ..Summary::default()
+                };
                 for (i, p) in params.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
                     let start: HashSet<String> = [p.clone()].into();
                     params_only.run(f, start, hits, &|_| HashSet::new(), &mut |r| match r {
@@ -216,6 +249,7 @@ impl Ctx {
             sourcing: Default::default(),
             bare_calls: self.bare_calls,
             safe_prefix: self.safe_prefix.clone(),
+            summarized: Default::default(),
         }
     }
 }

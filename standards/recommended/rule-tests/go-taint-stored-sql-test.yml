@@ -1,0 +1,8 @@
+id: go-taint-stored-sql
+file: users.go
+valid:
+- "package main\n\nfunc a(db *sql.DB, rows *sql.Rows) {\n\tvar n string\n\trows.Scan(&n)\n\
+  \tdb.Query(\"SELECT * FROM u WHERE name = $1\", n)\n}\n"
+invalid:
+- "package main\n\nfunc a(db *sql.DB, rows *sql.Rows) {\n\tvar n string\n\trows.Scan(&n)\n\
+  \tdb.Query(\"SELECT * FROM u WHERE name = '\" + n + \"'\")\n}\n"

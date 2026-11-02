@@ -771,6 +771,69 @@ taint:
     sanitizers: ["intval($X)", "(int) $X", "(int)$X", "(float) $X", "floatval($X)", "boolval($X)", "abs($X)", "filter_var($X, FILTER_VALIDATE_INT)", "filter_var($X, FILTER_VALIDATE_INT, $$$R)", "md5($X)", "sha1($X)", "hash($A, $X, $$$R)", "crc32($X)", "uniqid($$$A)", "mysqli_real_escape_string($C, $X)", "mysql_real_escape_string($X)", "$DB->real_escape_string($X)", "$DB->quote($X)", "pg_escape_string($$$A)", "addslashes($X)", "(integer) $X", "(double) $X", "(bool) $X", "(boolean) $X", "filter_var($X, FILTER_SANITIZE_NUMBER_INT, $$$R)", "filter_var($X, FILTER_SANITIZE_NUMBER_FLOAT, $$$R)", "filter_var($X, FILTER_VALIDATE_FLOAT, $$$R)", "filter_var($X, FILTER_VALIDATE_BOOLEAN, $$$R)", "filter_var($X, FILTER_VALIDATE_IP, $$$R)", "preg_replace($STRIP, \"\", $X)", "preg_replace($STRIP, '', $X)", "filter_var($X, FILTER_SANITIZE_MAGIC_QUOTES)", "filter_var($X, FILTER_SANITIZE_ADD_SLASHES)", "number_format($$$A)", "count($X)", "strlen($X)", "sizeof($X)", "round($$$A)", "floor($X)", "ceil($X)", "date($DATE)", "date($DATE, $$$R)", "gmdate($DATE)", "gmdate($DATE, $$$R)", "base64_encode($X)", "bin2hex($X)", "password_hash($X, $$$R)", "crypt($X, $$$R)", "hash_hmac($A, $X, $$$R)"]
     exclude: ["**/tests/**", "**/test/**", "**/*Test.php", "**/vendor/**"]
 
+  - id: java-taint-stored-sql
+    severity: warning
+    languages: ["Java"]
+    message: "A value read back from the database is written into SQL unbound (second-order SQL injection)."
+    note: "Keep the value a placeholder until it is written again; never build the next query around it."
+    # Rows only: `executeQuery` is also the sink, so it cannot be the source.
+    # One argument: `param.getBytes()` is not a row being read.
+    sources: ["$RS.getString($A)", "$RS.getObject($A)", "$RS.getStringAsync($A)"]
+    source_types: {"REPO": "(Repository|Dao|DAO)(<.*>)?$"}
+    source_text: {"READ": "^(find|get|read|query|search|stream|select|list)\\w*$"}
+    sinks: ["$S.executeQuery($SQL, $$$R)", "$S.execute($SQL, $$$R)", "$S.executeUpdate($SQL, $$$R)", "$S.executeLargeUpdate($SQL, $$$R)", "$S.addBatch($SQL, $$$R)", "$S.prepareStatement($SQL, $$$R)", "$S.prepareCall($SQL, $$$R)", "$S.nativeSQL($SQL, $$$R)", "jdbcTemplate.queryForObject($SQL, $$$R)", "jdbcTemplate.queryForList($SQL, $$$R)", "jdbcTemplate.queryForMap($SQL, $$$R)", "jdbcTemplate.queryForRowSet($SQL, $$$R)", "jdbcTemplate.queryForStream($SQL, $$$R)", "jdbcTemplate.update($SQL, $$$R)", "jdbcTemplate.batchUpdate($SQL, $$$R)", "jdbcTemplate.query($SQL, $$$R)", "jdbcTemplate.execute($SQL, $$$R)", "jdbc.queryForObject($SQL, $$$R)", "jdbc.queryForList($SQL, $$$R)", "jdbc.queryForMap($SQL, $$$R)", "jdbc.queryForRowSet($SQL, $$$R)", "jdbc.queryForStream($SQL, $$$R)", "jdbc.update($SQL, $$$R)", "jdbc.batchUpdate($SQL, $$$R)", "jdbc.query($SQL, $$$R)", "jdbc.execute($SQL, $$$R)", "template.queryForObject($SQL, $$$R)", "template.queryForList($SQL, $$$R)", "template.queryForMap($SQL, $$$R)", "template.queryForRowSet($SQL, $$$R)", "template.queryForStream($SQL, $$$R)", "template.update($SQL, $$$R)", "template.batchUpdate($SQL, $$$R)", "template.query($SQL, $$$R)", "template.execute($SQL, $$$R)", "namedParameterJdbcTemplate.queryForObject($SQL, $$$R)", "namedParameterJdbcTemplate.queryForList($SQL, $$$R)", "namedParameterJdbcTemplate.queryForMap($SQL, $$$R)", "namedParameterJdbcTemplate.queryForRowSet($SQL, $$$R)", "namedParameterJdbcTemplate.queryForStream($SQL, $$$R)", "namedParameterJdbcTemplate.update($SQL, $$$R)", "namedParameterJdbcTemplate.batchUpdate($SQL, $$$R)", "namedParameterJdbcTemplate.query($SQL, $$$R)", "namedParameterJdbcTemplate.execute($SQL, $$$R)", "this.jdbcTemplate.queryForObject($SQL, $$$R)", "this.jdbcTemplate.queryForList($SQL, $$$R)", "this.jdbcTemplate.queryForMap($SQL, $$$R)", "this.jdbcTemplate.queryForRowSet($SQL, $$$R)", "this.jdbcTemplate.queryForStream($SQL, $$$R)", "this.jdbcTemplate.update($SQL, $$$R)", "this.jdbcTemplate.batchUpdate($SQL, $$$R)", "this.jdbcTemplate.query($SQL, $$$R)", "this.jdbcTemplate.execute($SQL, $$$R)", "getJdbcTemplate().queryForObject($SQL, $$$R)", "getJdbcTemplate().queryForList($SQL, $$$R)", "getJdbcTemplate().queryForMap($SQL, $$$R)", "getJdbcTemplate().queryForRowSet($SQL, $$$R)", "getJdbcTemplate().queryForStream($SQL, $$$R)", "getJdbcTemplate().update($SQL, $$$R)", "getJdbcTemplate().batchUpdate($SQL, $$$R)", "getJdbcTemplate().query($SQL, $$$R)", "getJdbcTemplate().execute($SQL, $$$R)", "$EM.createQuery($SQL, $$$R)", "$EM.createNativeQuery($SQL, $$$R)", "$S.createSQLQuery($SQL)", "$E.setOrderByClause($SQL)", "PageHelper.orderBy($SQL)", "PageHelper.startPage($N, $S, $SQL)"]
+    sink_arg: "SQL"
+    sink_types: {"S": "(Statement|Connection|Session|JdbcTemplate|JdbcOperations|NamedParameterJdbcTemplate|SQLiteDatabase|QueryRunner)(<.*>)?$", "EM": "(EntityManager|Session|StatelessSession)$"}
+    quote_escapers: "encodeForSQL\\s*\\("
+    guards: ["$L.contains($H)", "$L.containsKey($H)", "$P.matcher($X).matches()", "$X.matches($R)", "Pattern.matches($R, $X)", "$C.equals($X)", "$C.equalsIgnoreCase($X)", "Objects.equals($A, $B)", "$C.contentEquals($X)"]
+    sanitizers: ["Integer.parseInt($X)", "Long.parseLong($X)", "Double.parseDouble($X)", "$RS.getInt($$$A)", "$RS.getLong($$$A)"]
+    exclude: ["**/src/test/**", "**/test/**", "**/*Test.java", "**/*Tests.java", "**/*IT.java"]
+
+  - id: cs-taint-stored-sql
+    severity: warning
+    languages: ["CSharp"]
+    message: "A value read back from the database is written into SQL unbound (second-order SQL injection)."
+    note: "Keep the value a placeholder until it is written again; never build the next query around it."
+    # Rows only: `executeQuery` is also the sink, so it cannot be the source.
+    # One argument: `x.GetString()` of anything else is not a row.
+    sources: ["$R.GetString($A)", "$R.GetValue($A)", "$R.GetFieldValue<$T>($A)"]
+    sinks: ["new SqlCommand($SQL, $$$R)", "new SqliteCommand($SQL, $$$R)", "new NpgsqlCommand($SQL, $$$R)", "new MySqlCommand($SQL, $$$R)", "new OleDbCommand($SQL, $$$R)", "new SqlDataAdapter($SQL, $$$R)", "$C.CommandText = $SQL", "$DB.Database.ExecuteSqlRaw($SQL, $$$R)", "$DB.Database.ExecuteSqlRawAsync($SQL, $$$R)", "$SET.FromSqlRaw($SQL, $$$R)", "$DB.Database.SqlQueryRaw($SQL, $$$R)", "connection.Query($SQL, $$$R)", "connection.QueryAsync($SQL, $$$R)", "connection.QueryFirst($SQL, $$$R)", "connection.QueryFirstOrDefault($SQL, $$$R)", "connection.QuerySingle($SQL, $$$R)", "connection.Execute($SQL, $$$R)", "connection.ExecuteAsync($SQL, $$$R)", "connection.ExecuteScalar($SQL, $$$R)", "connection.QueryFirstOrDefaultAsync($SQL, $$$R)", "conn.Query($SQL, $$$R)", "conn.QueryAsync($SQL, $$$R)", "conn.QueryFirst($SQL, $$$R)", "conn.QueryFirstOrDefault($SQL, $$$R)", "conn.QuerySingle($SQL, $$$R)", "conn.Execute($SQL, $$$R)", "conn.ExecuteAsync($SQL, $$$R)", "conn.ExecuteScalar($SQL, $$$R)", "conn.QueryFirstOrDefaultAsync($SQL, $$$R)", "db.Query($SQL, $$$R)", "db.QueryAsync($SQL, $$$R)", "db.QueryFirst($SQL, $$$R)", "db.QueryFirstOrDefault($SQL, $$$R)", "db.QuerySingle($SQL, $$$R)", "db.Execute($SQL, $$$R)", "db.ExecuteAsync($SQL, $$$R)", "db.ExecuteScalar($SQL, $$$R)", "db.QueryFirstOrDefaultAsync($SQL, $$$R)", "_db.Query($SQL, $$$R)", "_db.QueryAsync($SQL, $$$R)", "_db.QueryFirst($SQL, $$$R)", "_db.QueryFirstOrDefault($SQL, $$$R)", "_db.QuerySingle($SQL, $$$R)", "_db.Execute($SQL, $$$R)", "_db.ExecuteAsync($SQL, $$$R)", "_db.ExecuteScalar($SQL, $$$R)", "_db.QueryFirstOrDefaultAsync($SQL, $$$R)", "_connection.Query($SQL, $$$R)", "_connection.QueryAsync($SQL, $$$R)", "_connection.QueryFirst($SQL, $$$R)", "_connection.QueryFirstOrDefault($SQL, $$$R)", "_connection.QuerySingle($SQL, $$$R)", "_connection.Execute($SQL, $$$R)", "_connection.ExecuteAsync($SQL, $$$R)", "_connection.ExecuteScalar($SQL, $$$R)", "_connection.QueryFirstOrDefaultAsync($SQL, $$$R)", "cnn.Query($SQL, $$$R)", "cnn.QueryAsync($SQL, $$$R)", "cnn.QueryFirst($SQL, $$$R)", "cnn.QueryFirstOrDefault($SQL, $$$R)", "cnn.QuerySingle($SQL, $$$R)", "cnn.Execute($SQL, $$$R)", "cnn.ExecuteAsync($SQL, $$$R)", "cnn.ExecuteScalar($SQL, $$$R)", "cnn.QueryFirstOrDefaultAsync($SQL, $$$R)", "Connection.Query($SQL, $$$R)", "Connection.QueryAsync($SQL, $$$R)", "Connection.QueryFirst($SQL, $$$R)", "Connection.QueryFirstOrDefault($SQL, $$$R)", "Connection.QuerySingle($SQL, $$$R)", "Connection.Execute($SQL, $$$R)", "Connection.ExecuteAsync($SQL, $$$R)", "Connection.ExecuteScalar($SQL, $$$R)", "Connection.QueryFirstOrDefaultAsync($SQL, $$$R)", "connection.Query<$T>($SQL, $$$R)", "connection.QueryAsync<$T>($SQL, $$$R)", "connection.QueryFirst<$T>($SQL, $$$R)", "connection.QueryFirstOrDefault<$T>($SQL, $$$R)", "connection.QuerySingle<$T>($SQL, $$$R)", "connection.ExecuteScalar<$T>($SQL, $$$R)", "connection.QueryFirstOrDefaultAsync<$T>($SQL, $$$R)", "conn.Query<$T>($SQL, $$$R)", "conn.QueryAsync<$T>($SQL, $$$R)", "conn.QueryFirst<$T>($SQL, $$$R)", "conn.QueryFirstOrDefault<$T>($SQL, $$$R)", "conn.QuerySingle<$T>($SQL, $$$R)", "conn.ExecuteScalar<$T>($SQL, $$$R)", "conn.QueryFirstOrDefaultAsync<$T>($SQL, $$$R)", "db.Query<$T>($SQL, $$$R)", "db.QueryAsync<$T>($SQL, $$$R)", "db.QueryFirst<$T>($SQL, $$$R)", "db.QueryFirstOrDefault<$T>($SQL, $$$R)", "db.QuerySingle<$T>($SQL, $$$R)", "db.ExecuteScalar<$T>($SQL, $$$R)", "db.QueryFirstOrDefaultAsync<$T>($SQL, $$$R)", "_db.Query<$T>($SQL, $$$R)", "_db.QueryAsync<$T>($SQL, $$$R)", "_db.QueryFirst<$T>($SQL, $$$R)", "_db.QueryFirstOrDefault<$T>($SQL, $$$R)", "_db.QuerySingle<$T>($SQL, $$$R)", "_db.ExecuteScalar<$T>($SQL, $$$R)", "_db.QueryFirstOrDefaultAsync<$T>($SQL, $$$R)", "_connection.Query<$T>($SQL, $$$R)", "_connection.QueryAsync<$T>($SQL, $$$R)", "_connection.QueryFirst<$T>($SQL, $$$R)", "_connection.QueryFirstOrDefault<$T>($SQL, $$$R)", "_connection.QuerySingle<$T>($SQL, $$$R)", "_connection.ExecuteScalar<$T>($SQL, $$$R)", "_connection.QueryFirstOrDefaultAsync<$T>($SQL, $$$R)", "cnn.Query<$T>($SQL, $$$R)", "cnn.QueryAsync<$T>($SQL, $$$R)", "cnn.QueryFirst<$T>($SQL, $$$R)", "cnn.QueryFirstOrDefault<$T>($SQL, $$$R)", "cnn.QuerySingle<$T>($SQL, $$$R)", "cnn.ExecuteScalar<$T>($SQL, $$$R)", "cnn.QueryFirstOrDefaultAsync<$T>($SQL, $$$R)", "Connection.Query<$T>($SQL, $$$R)", "Connection.QueryAsync<$T>($SQL, $$$R)", "Connection.QueryFirst<$T>($SQL, $$$R)", "Connection.QueryFirstOrDefault<$T>($SQL, $$$R)", "Connection.QuerySingle<$T>($SQL, $$$R)", "Connection.ExecuteScalar<$T>($SQL, $$$R)", "Connection.QueryFirstOrDefaultAsync<$T>($SQL, $$$R)", "$DB.Database.SqlQueryRaw<$T>($SQL, $$$R)"]
+    sink_arg: "SQL"
+    sink_types: {"SET": "^(DbSet<.*>|DatabaseFacade|IQueryable<.*>)$"}
+    guards: ["int.TryParse($X, $$$R)", "long.TryParse($X, $$$R)", "Guid.TryParse($X, $$$R)", "Regex.IsMatch($X, $$$R)", "$L.Contains($X)"]
+    sanitizers: ["int.Parse($X)", "long.Parse($X)", "double.Parse($X)", "Convert.ToInt32($X)", "$R.GetInt32($$$A)", "$R.GetInt64($$$A)"]
+    exclude: ["**/*Tests/**", "**/*.Tests/**", "**/Tests/**", "**/test/**", "**/*Test.cs", "**/*Tests.cs"]
+
+  - id: py-taint-stored-sql
+    severity: warning
+    languages: ["Python"]
+    message: "A value read back from the database is written into SQL unbound (second-order SQL injection)."
+    note: "Keep the value a placeholder until it is written again; never build the next query around it."
+    sources: ["$CUR.fetchone()", "$CUR.fetchall()", "$CUR.fetchmany($$$A)", "$CUR.fetchone()[$K]", "$CUR.fetchall()[$K]"]
+    handler_classes: "Servicer\\b"
+    handler_decorators: "^\\w+\\.(get|post|put|patch|delete|route|api_route|websocket)\\("
+    resolver_args: true
+    fixed_route_sources: ["request.path"]
+    rejects: ["$X not in $L"]
+    sinks: ["$C.execute($SQL)", "$C.execute($SQL, $$$P)", "$C.executemany($SQL, $$$P)", "$C.raw($SQL)", "$C.raw($SQL, $$$P)"]
+    sink_arg: "SQL"
+    sanitizers: ["int($X)", "float($X)"]
+    exclude: ["**/test/**", "**/tests/**", "**/__tests__/**", "**/spec/**", "**/*.test.*", "**/*.spec.*", "**/*_test.py", "**/test_*.py", "**/tests.py", "**/conftest.py", "**/*_test.go"]
+
+  - id: go-taint-stored-sql
+    severity: warning
+    languages: ["Go"]
+    message: "A value read back from the database is written into SQL unbound (second-order SQL injection)."
+    note: "Keep the value a placeholder until it is written again; never build the next query around it."
+    sources: ["$ROWS.Scan($$$A)"]
+    # `rows.Scan(&x)` writes the row into the names it is given.
+    source_writes: ["Scan:0.."]
+    input_types: "^\\*\\w+\\.\\w+Request$"
+    sinks: ["$DB.Query($SQL, $$$R)", "$DB.QueryRow($SQL, $$$R)", "$DB.Exec($SQL, $$$R)", "$DB.Raw($SQL, $$$R)", "$DB.QueryContext($CTX, $SQL, $$$R)", "$DB.QueryRowContext($CTX, $SQL, $$$R)", "$DB.ExecContext($CTX, $SQL, $$$R)", "$DB.Get($DEST, $SQL, $$$R)", "$DB.Select($DEST, $SQL, $$$R)", "$DB.GetContext($CTX, $DEST, $SQL, $$$R)", "$DB.SelectContext($CTX, $DEST, $SQL, $$$R)"]
+    sink_arg: "SQL"
+    sanitizers: ["strconv.Atoi($X)", "strconv.ParseInt($$$A)"]
+    exclude: ["**/*_test.go", "**/testdata/**"]
+
   - id: php-taint-ssrf
     languages: [Php]
     message: "Request data used as the URL of an outgoing request (SSRF)."

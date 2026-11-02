@@ -1,0 +1,8 @@
+id: py-taint-stored-sql
+file: app/users.py
+valid:
+- "def a(cur):\n    row = cur.fetchone()\n    cur.execute(\"SELECT * FROM u WHERE\
+  \ name = %s\", (row[\"name\"],))\n"
+invalid:
+- "def a(cur):\n    row = cur.fetchone()\n    cur.execute(\"SELECT * FROM u WHERE\
+  \ name = '%s'\" % row[\"name\"])\n"

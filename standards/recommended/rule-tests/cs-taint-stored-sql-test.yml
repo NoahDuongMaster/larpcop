@@ -1,0 +1,9 @@
+id: cs-taint-stored-sql
+file: Users.cs
+valid:
+- "class Users {\n  void A(SqlDataReader r, SqlCommand p) {\n    var n = r.GetString(0);\n\
+  \    p.Parameters.AddWithValue(\"@n\", n);\n    p.ExecuteReader();\n  }\n}\n"
+invalid:
+- "class Users {\n  void A(SqlDataReader r) {\n    var n = r.GetString(0);\n    var\
+  \ cmd = new SqlCommand(\"SELECT * FROM u WHERE firstname LIKE '%\" + n + \"%'\"\
+  );\n  }\n}\n"

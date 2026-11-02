@@ -1,0 +1,10 @@
+id: java-taint-stored-sql
+file: src/Users.java
+valid:
+- "class Users {\n  void a(Connection c, PreparedStatement p) throws Exception {\n\
+  \    String n = c.createStatement().executeQuery(\"SELECT name FROM u WHERE id =\
+  \ 1\").getString(1);\n    p.setString(1, n);\n    p.executeQuery();\n  }\n}\n"
+invalid:
+- "class Users {\n  void a(Connection c) throws Exception {\n    String n = c.createStatement().executeQuery(\"\
+  SELECT name FROM u WHERE id = 1\").getString(1);\n    c.createStatement().executeQuery(\"\
+  SELECT * FROM u WHERE firstname LIKE '%\" + n + \"%'\");\n  }\n}\n"

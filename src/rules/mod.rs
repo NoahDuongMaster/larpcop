@@ -2,9 +2,9 @@
 
 mod ast;
 mod ast_fix;
-mod file;
 mod ast_walk;
 mod complexity;
+mod file;
 mod linters;
 pub mod macros;
 mod max_lines;

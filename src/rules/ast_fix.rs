@@ -46,4 +46,3 @@ pub fn apply_fixes(
     }
     (text, total)
 }
-

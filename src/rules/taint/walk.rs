@@ -266,8 +266,7 @@ impl Ctx {
         };
         let first = super::prefix::leftmost(value);
         let r = first.range();
-        self.sanitizers.covers(&r)
-            || super::prefix::safe_start(safe, value)
+        self.sanitizers.covers(&r) || super::prefix::safe_start(safe, value)
     }
 }
 

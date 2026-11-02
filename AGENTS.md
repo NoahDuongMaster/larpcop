@@ -7,7 +7,7 @@ Every rule below is checked mechanically by `larpcop`. Code that breaks an `erro
 
 Workflow:
 
-1. Follow the guidelines and rules below while writing code. If the `larpcop` MCP server is available, call `rules_for` before editing a file and `check_content` before writing it.
+1. Follow the guidelines and rules below while writing code. Before editing a file, see the rules that apply to it: `rules_for` when the `larpcop` MCP server is available, `larpcop rules --for <file>` otherwise; `check_content` / `larpcop check <file>` before writing it.
 2. Before finishing a task, run `larpcop check --changed` and fix every violation.
 3. These rules are enforced by the pre-commit hook and CI: violating code cannot be committed or merged, whoever wrote it. Fix what the rule is about, not its wording: rewriting the same construct in another form to dodge a check (aliases, computed property access, eval, indirection) is a violation too. Do not add suppression comments, use `--no-verify`, or edit `.larpcop.yaml`; if a rule looks wrong, stop and ask a human.
 

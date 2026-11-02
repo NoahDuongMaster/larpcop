@@ -31,8 +31,7 @@ impl Metrics {
 
     /// Are either of the two metrics on, and is this file not excluded?
     pub fn applies(&self, rel: &str) -> bool {
-        (self.max_complexity.is_some() || self.max_lines.is_some())
-            && !self.exclude.is_match(rel)
+        (self.max_complexity.is_some() || self.max_lines.is_some()) && !self.exclude.is_match(rel)
     }
 
     pub fn infos(&self) -> Vec<RuleInfo> {

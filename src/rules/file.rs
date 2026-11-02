@@ -1,8 +1,8 @@
 //! The rules on one file: one parse of the tree, handed to every rule set.
 
 use super::Engine;
-use crate::files::SourceFile;
 use super::{Violation, macros, scripts, taint};
+use crate::files::SourceFile;
 
 impl Engine {
     /// Every built-in rule on one file. A minified bundle (a vendored library

@@ -39,10 +39,10 @@ impl<'t, D: Doc> Buckets<'t, D> {
                 continue;
             }
             for i in bucket {
-                if let Some(m) = matcher.match_node(self.nodes[*i].clone()) {
-                    if kept(&m) {
-                        out.push((*i, m));
-                    }
+                if let Some(m) = matcher.match_node(self.nodes[*i].clone())
+                    && kept(&m)
+                {
+                    out.push((*i, m));
                 }
             }
         }

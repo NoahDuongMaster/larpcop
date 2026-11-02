@@ -178,3 +178,7 @@ answers it in one AND. It cost 39 failing rule fixtures: the prune is a
 *substring* test, and word-level bits do not cover it - `valid` contains `id`,
 `$obj->name` is not the word `name`. Only a Bloom over every substring would
 be exact, and building that costs more than the scan it replaces.
+
+Skipping parameters a function body never names - each one costs a full walk
+of the body for its summary - measured neutral (36.1 s against 35.9 s), so the
+walk per parameter is cheap and the parameters are used.

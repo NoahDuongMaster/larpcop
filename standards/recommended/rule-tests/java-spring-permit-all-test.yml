@@ -1,0 +1,11 @@
+id: java-spring-permit-all
+file: src/SecurityConfig.java
+valid:
+- "import org.springframework.security.config.annotation.web.builders.HttpSecurity;\n\
+  class SecurityConfig {\n  void a(HttpSecurity http) throws Exception {\n    http.authorizeHttpRequests(auth\
+  \ -> auth.requestMatchers(\"/login\").permitAll().anyRequest().authenticated());\n\
+  \  }\n}\n"
+invalid:
+- "import org.springframework.security.config.annotation.web.builders.HttpSecurity;\n\
+  class SecurityConfig {\n  void a(HttpSecurity http) throws Exception {\n    http.authorizeHttpRequests(auth\
+  \ -> auth.anyRequest().permitAll());\n  }\n}\n"

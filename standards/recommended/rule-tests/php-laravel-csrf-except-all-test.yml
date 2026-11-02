@@ -1,0 +1,8 @@
+id: php-laravel-csrf-except-all
+file: app/Http/Middleware/VerifyCsrfToken.php
+valid:
+- "<?php\nclass VerifyCsrfToken extends Middleware {\n  protected $except = [\"stripe/webhook\"\
+  , \"github/hook\"];\n}\n"
+invalid:
+- "<?php\nclass VerifyCsrfToken extends Middleware {\n  protected $except = [\"*\"\
+  ];\n}\n"

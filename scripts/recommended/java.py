@@ -158,6 +158,10 @@ RULES = [
          rule={"kind": "method_invocation", "any": [
              {"regex": "\\.csrf\\(\\s*\\)\\s*\\.disable\\(\\s*\\)"},
              {"regex": "\\.csrf\\(\\s*\\w+\\s*->\\s*\\w+\\.disable\\(\\s*\\)\\s*\\)"}]}),
+    dict(id="java-spring-permit-all", langs=["Java"], severity="error",
+         message="`.anyRequest().permitAll()` leaves every URL public.",
+         note="Deny by default and name what is public: `.requestMatchers(\"/login\", \"/health\").permitAll().anyRequest().authenticated()`.",
+         rule={"kind": "method_invocation", "regex": "\\.anyRequest\\(\\s*\\)\\s*\\.permitAll\\(\\s*\\)"}),
     dict(id="java-spring-cors-wildcard", langs=["Java"], severity="warning",
          message="CORS open to every origin.",
          note="Name the origins the frontend runs on; `*` cannot be combined with credentials, and the usual workaround reflects any origin.",

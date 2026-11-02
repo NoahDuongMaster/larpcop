@@ -102,10 +102,13 @@ fn declared<D: Doc>(at: &Node<D>) -> Option<(String, bool)> {
         for c in scope.children() {
             let kind = c.kind();
             if DECLARATIONS.contains(&kind.as_ref()) {
-                if c.start_pos().line() <= line || kind == "field_declaration" {
+                // The line check first: it is cheap and skips most declarations.
+                if (c.start_pos().line() <= line || kind == "field_declaration")
+                    && c.text().contains(name.as_ref())
+                {
                     found = typed(&c, &name).or(found);
                 }
-            } else if PARAMETER_LISTS.contains(&kind.as_ref()) {
+            } else if PARAMETER_LISTS.contains(&kind.as_ref()) && c.text().contains(name.as_ref()) {
                 for p in c
                     .children()
                     .filter(|p| PARAMETERS.contains(&p.kind().as_ref()))
@@ -133,22 +136,27 @@ fn declared<D: Doc>(at: &Node<D>) -> Option<(String, bool)> {
 /// The type of `name` if `decl` declares it, and whether it is an annotation.
 pub(super) fn typed<D: Doc>(decl: &Node<D>, name: &str) -> Option<(String, bool)> {
     // Java/C# locals and fields: `T a = …, b;` (C# nests a variable_declaration).
-    let declarators: Vec<Node<D>> = decl
-        .dfs()
-        .filter(|n| n.kind() == "variable_declarator")
-        .collect();
     let declares = |n: &Node<D>| {
         n.part("name")
             .or_else(|| n.children().find(|c| c.kind() == "identifier"))
             .is_some_and(|id| id.text() == name)
     };
+    let mut declares_it = false;
+    let mut declarator = None;
+    for d in decl.dfs().filter(|n| n.kind() == "variable_declarator") {
+        declares_it = true;
+        if declares(&d) {
+            declarator = Some(d);
+            break;
+        }
+    }
     let ty = decl.part("type").or_else(|| {
         decl.children()
             .find(|c| c.kind() == "variable_declaration")?
             .part("type")
     });
-    if !declarators.is_empty() {
-        let declarator = declarators.iter().find(|d| declares(d))?;
+    if declares_it {
+        let declarator = &declarator?;
         // TypeScript keeps the annotation on the declarator: `const db: Pool`.
         let ty = ty.or_else(|| declarator.part("type"))?.text().to_string();
         let annotation = ty.starts_with(':');

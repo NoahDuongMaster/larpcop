@@ -11,6 +11,13 @@ use std::fs;
 
 pub fn run(cli: Cli) -> Result<u8> {
     let g = cli.global;
+    // One pool for the whole run: `--jobs` keeps a laptop usable while a
+    // whole repository is checked.
+    if let Some(jobs) = g.jobs {
+        let _ = rayon::ThreadPoolBuilder::new()
+            .num_threads(jobs.max(1))
+            .build_global();
+    }
     let ctx = || Ctx::new(&g.dir, g.extends.clone(), g.refresh);
     match cli.cmd {
         Cmd::Check {

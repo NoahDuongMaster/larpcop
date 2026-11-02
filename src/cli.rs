@@ -27,6 +27,10 @@ pub struct Global {
     /// Run as if started in DIR.
     #[arg(short = 'C', long = "dir", global = true, default_value = ".")]
     pub dir: PathBuf,
+    /// Threads to check files with (default: every core). Lower it to keep the
+    /// machine responsive: `LARPCOP_JOBS=2 larpcop check`.
+    #[arg(long, global = true, env = "LARPCOP_JOBS", value_name = "N")]
+    pub jobs: Option<usize>,
 }
 
 /// Which files a command covers.

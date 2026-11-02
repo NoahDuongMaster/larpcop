@@ -8,11 +8,20 @@ false positive of ours.
 | | django/django `a05e16a` | rails/rails `d0f264a` |
 |---|---|---|
 | Files read | 2,939 `.py` | 3,481 `.rb` |
-| Whole repository | **142 s** (142–165 s over runs) | **18 s** |
+| Whole repository | **131 s** warm, 162 s cold (8 cores) | **18 s** |
 | Parsing alone (`larpcop metrics`) | 3.9 s | – |
 | Findings | 632 | 266 |
 
 Run with `standards/recommended` and `dependency-vulnerability` disabled
+(no network in this measurement). The machine was otherwise idle for the
+final pair of runs. `--changed` and `--staged`, what an agent hook and a
+pre-commit run, stay under a second on both.
+
+A full check uses every core: 500–670% of 800% on this machine, which is
+why a laptop feels stuck for the two minutes it runs. `--jobs` (or
+`LARPCOP_JOBS`) caps it — the same Django run takes 277 s on 2 threads —
+and loading the rules costs 0.41 s per invocation whatever the repository,
+so the incremental modes are what a hook should use.
 (no network in this measurement). The machine was otherwise idle for the
 final pair of runs. `--changed` and `--staged`, what an agent hook and a
 pre-commit run, stay under a second on both.

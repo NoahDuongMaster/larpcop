@@ -283,7 +283,8 @@ Mỗi bộ từng là bộ kiểm chứng ở lần chạy đầu, rồi đượ
 ## Lệnh
 
 ```sh
-larpcop check [paths…] [--staged | --changed | --since REF] [--format text|json|github|sarif|gitlab|markdown] [--output FORMAT=FILE]
+larpcop check [paths…] [--staged | --changed | --since REF] [--jobs N] [--format text|json|github|sarif|gitlab|markdown] [--output FORMAT=FILE]
+                               # --jobs (hoặc LARPCOP_JOBS): số luồng, để máy vẫn dùng được khi check cả repo
 larpcop fix [paths…] [--changed | --since REF] [--dry-run]   # áp `fix:` của rule rồi check lại
 larpcop baseline [--prune]    # ghi nhận vi phạm cũ; --prune chỉ xoá entry đã sửa
 larpcop test [STANDARDS_DIR] [--require-all]  # chạy fixture trong rule-tests/ (valid, invalid, fixed)

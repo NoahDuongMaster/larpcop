@@ -28,17 +28,26 @@ pub const TESTS_DIR: &str = "rule-tests";
 
 /// Every rule defined in `dirs`, enabled or not (`larpcop test` checks them all).
 pub fn load_all(dirs: &[PathBuf]) -> Result<Vec<RuleConfig<SupportLang>>> {
+    use rayon::prelude::*;
+    // Reading and parsing rule files is what every command pays first: in
+    // parallel it costs one file's worth instead of all of them.
+    let parsed: Vec<(PathBuf, Vec<RuleConfig<SupportLang>>)> = rule_files(dirs)?
+        .into_par_iter()
+        .map(|file| {
+            let text =
+                fs::read_to_string(&file).with_context(|| format!("reading {}", file.display()))?;
+            let text = super::pattern_fixes::rewrite_rule_file(&text).unwrap_or(text);
+            let rules = from_yaml_string::<SupportLang>(&text, &GlobalRules::default())
+                .map_err(|e| anyhow!("invalid rule file {}: {}", file.display(), chain(&e)))?;
+            Ok((file, rules))
+        })
+        .collect::<Result<Vec<_>>>()?;
     let mut out = Vec::new();
     // One id may exist once per language (`no-eval` for TypeScript, Tsx and
     // JavaScript): disabling or locking the id covers all of them.
     let mut origin: BTreeMap<(String, String), PathBuf> = BTreeMap::new();
-    for file in rule_files(dirs)? {
-        let text =
-            fs::read_to_string(&file).with_context(|| format!("reading {}", file.display()))?;
-        let text = super::pattern_fixes::rewrite_rule_file(&text).unwrap_or(text);
-        let parsed = from_yaml_string::<SupportLang>(&text, &GlobalRules::default())
-            .map_err(|e| anyhow!("invalid rule file {}: {}", file.display(), chain(&e)))?;
-        for rule in parsed {
+    for (file, rules) in parsed {
+        for rule in rules {
             if rule.id.is_empty() {
                 bail!("rule without `id` in {}", file.display());
             }

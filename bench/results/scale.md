@@ -98,9 +98,11 @@ What the walk does with a file, before and after:
 | Source/sanitizer lookup per node | scan of every span in the file | binary search |
 
 Measured on `rails/activerecord` (1,363 files) single-threaded, median of
-three runs each: **41.3 s → 39.5 s (-4.4%)**, every finding the same on the 19
+three runs each: **41.3 s → 37.1 s (-10.2%)**, every finding the same on the 19
 benches. Wall-clock on 8 cores is dominated by machine noise (±20%), which is
-why this was measured on one thread.
+why this was measured on one thread: the table above is -4.4%, the allocator
+below another -5.5%, and reading each node's text once per pattern group the
+last -0.3%.
 
 ### The allocator was the second bottleneck
 

@@ -128,6 +128,8 @@ Four further optimizations were written, measured and **rejected**:
 | Skip a rule whose literal "needles" appear nowhere in the file | fast, but lost 6 `java-taint-xss` findings in java-sec-code and 4 `php-taint-xss` in DVWA: a finding that comes through a callee in another file has no needle in this one |
 | Re-summarize only functions that name a callee whose summary changed | slower: scanning each function's text for every changed name cost more than the round it saved |
 | Largest file first, to keep threads from waiting on one big file | no effect in the noise; reverted |
+| `Rc` snapshots of the summaries, rebuilt only when a round changed them | 38.9 s against 36.7 s: comparing each inserted summary replaced one map comparison per round with one per function |
+| One `Env` per function instead of one per sanitizer, and a sorted span set for "is this sink call a source" | 37.9 s against 37.4 s: inside the noise, and `prepare` costs what the pattern scan costs, not what these two did |
 
 What is left is the structural one: the taint walk and its summaries are
 computed per rule, and a function with five parameters is walked five times

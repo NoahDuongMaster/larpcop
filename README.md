@@ -477,7 +477,7 @@ Binary nặng 47 MB trên đĩa, nhưng chỉ khoảng **4 MB khi tải về** (
 - Cache standards dùng thư mục chuẩn của từng OS: `%LOCALAPPDATA%` trên Windows, `~/Library/Caches` trên macOS, XDG trên Linux. Có thể ghi đè bằng `LARPCOP_CACHE_DIR`.
 - Path được chuẩn hoá bằng `dunce`, không bị dạng `\\?\C:\...`.
 - File CRLF do `autocrlf` không bị tính là drift, và AGENTS.md sinh ra luôn dùng LF.
-- [`ci.yml`](.github/workflows/ci.yml) chạy fmt, clippy và toàn bộ test trên ubuntu, macOS và Windows.
+- [`ci.yml`](.github/workflows/ci.yml) chạy fmt, clippy và toàn bộ test trên ubuntu, macOS và Windows. Ba test type-query (tsserver, gopls, rust-analyzer) chỉ chạy trên ubuntu và macOS: client LSP không có mã riêng cho Windows, còn rust-analyzer trên runner Windows mất ~40 giây cho request đầu tiên.
 
 ## Đã kiểm chứng
 

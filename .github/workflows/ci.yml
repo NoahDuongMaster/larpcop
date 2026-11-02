@@ -5,8 +5,28 @@ on:
     branches: [main]
   pull_request:
 
+# A push supersedes the run already in flight: ten minutes of feedback on a
+# commit nobody will merge is not feedback.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Debug info is what made the Windows job slow: rustc writes a PDB next to
+  # every one of the ~19 test binaries, which roughly doubles link time and
+  # doubles the cache archive with it. Panic messages keep file:line without
+  # it; only backtraces lose frames.
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  GOPLS: "0.24.0"
+  TSLS: "4"
+  TS: "5"
+
 jobs:
-  test:
+  lint:
+    name: lint (${{ matrix.os }})
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -16,19 +36,66 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt, rust-analyzer
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
+        with:
+          # One cache per OS serves both jobs; only `test` writes it, so a
+          # restore-key hit never races a second upload of the same archive.
+          shared-key: ci-${{ matrix.os }}
+          add-job-id-key: "false"
+          save-if: false
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
-      # A real language server, so the type-query test runs instead of skipping.
-      - run: npm install -g typescript-language-server@4 typescript@5
-      # Go and gopls for the Go type-query test (macOS images ship without Go).
+
+  test:
+    name: test (${{ matrix.os }})
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Add rust-analyzer
+        # The type-query tests need real servers instead of skipping. The LSP
+        # client has no platform-specific code (src/types), and rust-analyzer's
+        # first request costs ~40 s of pure wait on the Windows runners, so the
+        # servers are installed on Linux and macOS only; on Windows those three
+        # tests skip themselves (`skipped: <bin> is not installed`).
+        if: runner.os != 'Windows'
+        run: rustup component add --toolchain stable rust-analyzer
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-${{ matrix.os }}
+          add-job-id-key: "false"
+          # Pull requests only read: a per-branch copy of the target directory
+          # would evict the cache main actually needs.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: TypeScript language server
+        if: runner.os != 'Windows'
+        run: npm install -g typescript-language-server@${{ env.TSLS }} typescript@${{ env.TS }}
       - uses: actions/setup-go@v6
+        if: runner.os != 'Windows'
         with:
           go-version: stable
           cache: false
-      - run: go install golang.org/x/tools/gopls@v0.24.0 && echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-        shell: bash
+      - name: Restore gopls
+        id: gopls
+        if: runner.os != 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin
+          key: gopls-${{ env.GOPLS }}-${{ runner.os }}
+      - name: Build gopls
+        # `go install` compiles the whole x/tools tree: 110 s on the Windows
+        # image, 20 s on macOS, 80 s on Ubuntu. Cached, it is a 2 s restore.
+        if: runner.os != 'Windows' && steps.gopls.outputs.cache-hit != 'true'
+        run: go install golang.org/x/tools/gopls@v${{ env.GOPLS }}
+      - name: Put gopls on PATH
+        if: runner.os != 'Windows'
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - run: cargo test
       # larpcop enforces its own rules and keeps its generated agent files current
       - run: cargo run -- check

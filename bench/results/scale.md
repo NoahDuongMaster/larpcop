@@ -96,6 +96,9 @@ on eight threads. Small enough that it is not the default build - it needs
 `llvm-profdata` and a training corpus - but the recipe is there for a release
 build that wants the last 2%.
 
+`-Ctarget-cpu=native` measured neutral-to-worse (35.3 s against 34.8 s): the
+arm64 baseline this already builds for is not what the walk is waiting on.
+
 ## What this says about cost
 
 Python costs about eight times what Ruby does per file here (2,939 files in

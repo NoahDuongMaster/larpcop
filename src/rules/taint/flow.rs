@@ -6,11 +6,11 @@ use super::NAMES;
 use super::events::Hits;
 use super::fields::is_field;
 use super::kotlin::Part;
+use super::spans::Spans;
 use super::summary::{Summaries, args};
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
-use std::ops::Range;
 
 pub(crate) use super::assign::{LOOPS, assignment};
 
@@ -51,8 +51,8 @@ pub(super) enum Seen<'a, D: Doc> {
 }
 
 pub(super) struct Ctx {
-    pub sources: Vec<Range<usize>>,
-    pub sanitizers: Vec<Range<usize>>,
+    pub sources: Spans,
+    pub sanitizers: Spans,
     pub guards: Vec<super::guards::Check>,
     pub summaries: Summaries,
     pub source_texts: Vec<String>,
@@ -77,10 +77,6 @@ pub(super) struct Ctx {
     pub numbers: bool,
 }
 
-fn within(r: &Range<usize>, outer: &Range<usize>) -> bool {
-    outer.start <= r.start && r.end <= outer.end
-}
-
 impl Ctx {
     fn any_sourcing(&self) -> bool {
         *self
@@ -96,18 +92,15 @@ impl Ctx {
             return false;
         }
         let r = node.range();
-        if self.sanitizers.iter().any(|s| within(&r, s)) {
+        if self.sanitizers.covers(&r) {
             return false;
         }
-        if self.sources.iter().any(|s| within(&r, s)) {
+        if self.sources.covers(&r) {
             return true;
         }
         let text = node.text();
         // `m['k']`, `m.get("k")`: that entry, or the whole map.
-        let holds_source = self
-            .sources
-            .iter()
-            .any(|s| s.start < r.end && r.start < s.end);
+        let holds_source = self.sources.overlaps(&r);
         let entries = names.iter().any(|n| n.ends_with(']'));
         if entries
             && !holds_source

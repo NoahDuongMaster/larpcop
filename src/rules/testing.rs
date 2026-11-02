@@ -146,7 +146,7 @@ fn check(rule: &RuleConfig<SupportLang>, fixture: &Fixture) -> Vec<String> {
             errors.push("`fixed` cases given but the rule has no `fix:`".into());
             break;
         }
-        let (out, _) = ast::apply_fixes(lang, &case.before, &[rule]);
+        let (out, _) = super::ast_fix::apply_fixes(lang, &case.before, &[rule]);
         if out.trim_end() != case.after.trim_end() {
             errors.push(format!(
                 "fix of {} gave {}, expected {}",

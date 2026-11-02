@@ -5,7 +5,7 @@ use super::{Level, RuleInfo, Violation};
 use crate::config::MetricsConfig;
 use crate::files::{SourceFile, globset};
 use anyhow::Result;
-use ast_grep_core::Language;
+use ast_grep_core::{Doc, Language, Node};
 use ast_grep_language::SupportLang;
 use globset::GlobSet;
 use serde::Serialize;
@@ -27,6 +27,12 @@ impl Metrics {
             max_lines: cfg.max_function_lines,
             exclude: globset(&cfg.exclude)?,
         })
+    }
+
+    /// Are either of the two metrics on, and is this file not excluded?
+    pub fn applies(&self, rel: &str) -> bool {
+        (self.max_complexity.is_some() || self.max_lines.is_some())
+            && !self.exclude.is_match(rel)
     }
 
     pub fn infos(&self) -> Vec<RuleInfo> {
@@ -52,15 +58,13 @@ impl Metrics {
         out
     }
 
-    pub fn check(&self, file: &SourceFile) -> Vec<Violation> {
-        let Some(lang) = SupportLang::from_path(&file.rel) else {
-            return Vec::new();
-        };
+    /// Metrics of a tree that has already been parsed.
+    pub fn check_root<D: Doc>(&self, file: &SourceFile, root: &Node<D>) -> Vec<Violation> {
         if self.exclude.is_match(&file.rel) {
             return Vec::new();
         }
         let mut out = Vec::new();
-        for f in complexity::functions(lang, &file.content) {
+        for f in complexity::functions_of(root) {
             if let Some(max) = self.max_complexity.filter(|m| f.complexity > *m) {
                 out.push(self.violation(
                     file,

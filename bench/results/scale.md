@@ -82,28 +82,36 @@ where the wildcard never reaches production.
 ## What this says about cost
 
 Python costs about eight times what Ruby does per file here (2,939 files in
-131 s against 3,481 in 18 s), and parsing is 3.9 s of it: the rest is the
-taint summaries, which are recomputed per rule.
+131 s against 3,481 in 18 s), and parsing is a small part of it: the rest is
+the taint walk, which is recomputed per rule.
 
 A whole-repository check uses every core — 500–670% of 800% on this machine —
 which is why a laptop feels stuck for the two minutes it runs. `--jobs` (or
 `LARPCOP_JOBS`) caps that: the same Django run takes 277 s on 2 threads.
 
-Three further optimizations were written, measured and **rejected**; the
-machine varies by ±20% between runs, so a change had to win by more than that
-*and* keep every finding on the 19 benches:
+What the walk does with a file, before and after:
+
+| | Before | After |
+|---|---|---|
+| Parses of one file | 3 (ast rules, metrics, taint) | 1, shared by all three |
+| Walks of the tree for ast rules | 1 per rule (83) | 1, bucketed by node kind |
+| Source/sanitizer lookup per node | scan of every span in the file | binary search |
+
+Measured on `rails/activerecord` (1,363 files) single-threaded, median of
+three runs each: **41.3 s → 39.5 s (-4.4%)**, every finding the same on the 19
+benches. Wall-clock on 8 cores is dominated by machine noise (±20%), which is
+why this was measured on one thread.
+
+Four further optimizations were written, measured and **rejected**:
 
 | Attempt | Result |
 |---|---|
-| Per-file cache of declared types, call names and constructed objects | 148–162 s, slower: the cache key (document, range, kind) cost more than the lookups |
-| Skip a rule whose literal "needles" appear nowhere in the file | 115 s, but lost 6 `java-taint-xss` findings in java-sec-code and 4 `php-taint-xss` in DVWA: a finding that comes through a callee in another file has no needle in this one |
-| Re-summarize only functions that name a callee whose summary changed | 157 s, slower: scanning each function's text for every changed name cost more than the round it saved |
+| Per-file cache of declared types, call names and constructed objects | slower: the cache key cost more than the lookups it saved |
+| Skip a rule whose literal "needles" appear nowhere in the file | fast, but lost 6 `java-taint-xss` findings in java-sec-code and 4 `php-taint-xss` in DVWA: a finding that comes through a callee in another file has no needle in this one |
+| Re-summarize only functions that name a callee whose summary changed | slower: scanning each function's text for every changed name cost more than the round it saved |
+| Largest file first, to keep threads from waiting on one big file | no effect in the noise; reverted |
 
-Kept: the type lookup no longer walks declarations that cannot contain the
-name (142 s → 131 s), rule files are read and parsed in parallel, and
-`--jobs`.
-
-What is left is the structural one: the walk and the summaries are computed
-per rule, and sharing them across rules means tracking, per rule, which names
-are sanitized (they differ per rule), which is a rewrite of the walker, not a
-patch.
+What is left is the structural one: the taint walk and its summaries are
+computed per rule, and a function with five parameters is walked five times
+(once per parameter, per round). Sharing that means tracking, per parameter,
+which names are tainted — a rewrite of the walker's core type, not a patch.

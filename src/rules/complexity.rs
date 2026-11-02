@@ -113,8 +113,12 @@ fn name<D: Doc>(node: &Node<D>) -> String {
 
 pub fn functions(lang: SupportLang, source: &str) -> Vec<Function> {
     let grep = lang.ast_grep(source);
-    grep.root()
-        .dfs()
+    functions_of(&grep.root())
+}
+
+/// The functions of a tree that has already been parsed.
+pub fn functions_of<D: Doc>(root: &Node<D>) -> Vec<Function> {
+    root.dfs()
         .filter(|n| is_function(n))
         .map(|f| {
             let (start, end) = (f.start_pos().line(), f.end_pos().line());

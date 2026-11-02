@@ -1,6 +1,9 @@
 //! Rule engine: built-in rules, ast-grep rules and delegated linters.
 
 mod ast;
+mod ast_fix;
+mod file;
+mod ast_walk;
 mod complexity;
 mod linters;
 pub mod macros;
@@ -179,69 +182,6 @@ impl Engine {
         let mut v = self.check_file(file);
         sort(&mut v);
         v
-    }
-
-    /// Every built-in rule on one file. A minified bundle (a vendored library
-    /// nobody edits) is only searched for secrets, which do ship in bundles.
-    fn check_file(&self, file: &SourceFile) -> Vec<Violation> {
-        let mut v = self.secrets(file);
-        if crate::files::minified(&file.content) {
-            return v;
-        }
-        v.extend(self.ast.check(file));
-        v.extend(self.max_lines.as_ref().and_then(|m| m.check(file)));
-        v.extend(self.metrics.iter().flat_map(|m| m.check(file)));
-        v.extend(self.taint_check(file));
-        v.extend(self.text.iter().flat_map(|t| t.check(file)));
-        v.extend(self.page_scripts(file));
-        v
-    }
-
-    /// The JavaScript rules on a page's `<script>` blocks (scripts.rs),
-    /// reported at the page's path and lines.
-    fn page_scripts(&self, file: &SourceFile) -> Vec<Violation> {
-        let Some((view, ts)) = scripts::view(&file.rel, &file.content) else {
-            return Vec::new();
-        };
-        let suffix = if ts {
-            scripts::SUFFIX_TS
-        } else {
-            scripts::SUFFIX_JS
-        };
-        let page = SourceFile {
-            rel: format!("{}{suffix}", file.rel),
-            content: view,
-        };
-        let mut found = self.ast.check(&page);
-        found.extend(self.taint_check(&page));
-        for v in &mut found {
-            v.file.clone_from(&file.rel);
-        }
-        found
-    }
-
-    /// Taint rules on one parse and one walk of the file: each rule only
-    /// matches its patterns against the nodes of the kinds they can match.
-    fn taint_check(&self, file: &SourceFile) -> Vec<Violation> {
-        use ast_grep_language::{Language, LanguageExt, SupportLang};
-        let Some(lang) =
-            SupportLang::from_path(&file.rel).filter(|l| self.taint.iter().any(|t| t.handles(*l)))
-        else {
-            return Vec::new();
-        };
-        let grep = lang.ast_grep(macros::expand(lang, &file.content));
-        let index = taint::FileIndex::new(grep.root());
-        self.taint
-            .iter()
-            .flat_map(|t| t.check_indexed(file, lang, &index))
-            .collect()
-    }
-
-    fn secrets(&self, file: &SourceFile) -> Vec<Violation> {
-        match &self.secrets {
-            Some((s, exclude)) if !exclude.is_match(&file.rel) => s.check(&file.rel, &file.content),
-            _ => Vec::new(),
-        }
     }
 
     /// Auto-fixes from ast-grep rules: `(file, new content, fixes applied)`.

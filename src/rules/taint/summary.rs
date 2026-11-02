@@ -253,7 +253,7 @@ impl TaintRule {
 impl Ctx {
     fn clone_without_sources(&self) -> Ctx {
         Ctx {
-            sources: Vec::new(),
+            sources: super::spans::Spans::default(),
             sanitizers: self.sanitizers.clone(),
             guards: self.guards.clone(),
             summaries: self.summaries.clone(),

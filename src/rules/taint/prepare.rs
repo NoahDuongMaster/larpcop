@@ -4,6 +4,7 @@
 use super::events::{Hit, Hits};
 use super::flow::Ctx;
 use super::scan::FileIndex;
+use super::spans::Spans;
 use super::summary::{self, Summaries};
 use super::{IMPORT_DEPTH, TaintRule, prefix};
 use crate::files::SourceFile;
@@ -144,11 +145,12 @@ impl TaintRule {
         hits.dedup_by_key(|(at, node, _)| (*at, node.range().start, node.range().end));
         let hits = Hits::new(hits, &index.root, index.skeletons.clone());
         let base = Ctx {
-            sources: ranges(sources)
-                .into_iter()
-                .chain(index.named(&self.source_names))
-                .collect(),
-            sanitizers: cleaned,
+            sources: Spans::new(
+                ranges(sources)
+                    .into_iter()
+                    .chain(index.named(&self.source_names)),
+            ),
+            sanitizers: Spans::new(cleaned),
             guards: guards
                 .iter()
                 .filter(|(m, _)| prefix::guard_holds(m.get_node(), self.safe_prefix.as_ref()))

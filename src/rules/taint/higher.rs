@@ -84,7 +84,7 @@ impl Ctx {
     pub(super) fn with_sanitizers(&self, extra: &[Range<usize>]) -> Ctx {
         Ctx {
             sources: self.sources.clone(),
-            sanitizers: self.sanitizers.iter().chain(extra).cloned().collect(),
+            sanitizers: self.sanitizers.with_extra(extra.iter().cloned()),
             guards: self.guards.clone(),
             summaries: self.summaries.clone(),
             source_texts: self.source_texts.clone(),

@@ -8,7 +8,7 @@ use super::{Level, RuleInfo, Violation};
 use crate::files::SourceFile;
 use anyhow::{Context, Result, anyhow, bail};
 use ast_grep_config::{GlobalRules, RuleCollection, RuleConfig, Severity, from_yaml_string};
-use ast_grep_core::Language;
+use ast_grep_core::{Doc, Language, Node};
 use ast_grep_language::{LanguageExt, SupportLang};
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -98,6 +98,11 @@ impl AstRules {
         &self.infos
     }
 
+    /// Are there ast-grep rules for this path at all?
+    pub fn applies(&self, rel: &str) -> bool {
+        !self.collection.for_path(rel).is_empty()
+    }
+
     pub fn infos_for(&self, rel: &str) -> Vec<RuleInfo> {
         if SupportLang::from_path(rel).is_none() {
             return Vec::new();
@@ -110,14 +115,20 @@ impl AstRules {
     }
 
     pub fn check(&self, file: &SourceFile) -> Vec<Violation> {
-        let rules = self.collection.for_path(&file.rel);
         let Some(lang) = SupportLang::from_path(&file.rel) else {
             return Vec::new();
         };
+        let grep = lang.ast_grep(super::macros::expand(lang, &file.content));
+        self.check_root(file, &grep.root())
+    }
+
+    /// Rules on a tree that has already been parsed.
+    pub fn check_root<D: Doc>(&self, file: &SourceFile, root: &Node<D>) -> Vec<Violation> {
+        let rules = self.collection.for_path(&file.rel);
         if rules.is_empty() {
             return Vec::new();
         }
-        let grep = lang.ast_grep(super::macros::expand(lang, &file.content));
+        let buckets = super::ast_walk::Buckets::new(root);
         let mut out = Vec::new();
         for rule in rules {
             let note = match (&rule.note, rule.fixer.is_empty()) {
@@ -139,7 +150,8 @@ impl AstRules {
             // `any:` branches matching a node and its parent at the same start
             // (a call and its statement) report once.
             let mut seen = std::collections::HashSet::new();
-            for m in grep.root().find_all(&rule.matcher).filter(kept) {
+            let matches = buckets.matches(root, &rule.matcher, kept);
+            for m in matches {
                 let pos = m.start_pos();
                 if !seen.insert((pos.line(), pos.column(m.get_node()))) {
                     continue;
@@ -163,53 +175,9 @@ impl AstRules {
     pub fn fix(&self, file: &SourceFile) -> Option<(String, usize)> {
         let lang = SupportLang::from_path(&file.rel)?;
         let rules: Vec<_> = self.collection.for_path(&file.rel);
-        let (text, total) = apply_fixes(lang, &file.content, &rules);
+        let (text, total) = super::ast_fix::apply_fixes(lang, &file.content, &rules);
         (total > 0).then_some((text, total))
     }
-}
-
-/// Fixes can expose new matches, so this repeats (bounded); overlapping edits
-/// wait for the next pass. Returns the new text and how many fixes were applied.
-pub fn apply_fixes(
-    lang: SupportLang,
-    source: &str,
-    rules: &[&RuleConfig<SupportLang>],
-) -> (String, usize) {
-    let mut text = source.to_string();
-    let mut total = 0;
-    for _ in 0..5 {
-        let grep = lang.ast_grep(&text);
-        let mut edits: Vec<_> = rules
-            .iter()
-            .filter(|r| !r.fixer.is_empty())
-            .flat_map(|rule| {
-                grep.root()
-                    .find_all(&rule.matcher)
-                    .map(|m| m.make_edit(&rule.matcher, &rule.fixer[0]))
-                    .collect::<Vec<_>>()
-            })
-            .collect();
-        if edits.is_empty() {
-            break;
-        }
-        edits.sort_by_key(|e| e.position);
-        let mut bytes = text.clone().into_bytes();
-        let mut next_start = usize::MAX;
-        for e in edits.iter().rev() {
-            if e.position + e.deleted_length > next_start {
-                continue;
-            }
-            let range = e.position..e.position + e.deleted_length;
-            bytes.splice(range, e.inserted_text.iter().copied());
-            next_start = e.position;
-            total += 1;
-        }
-        match String::from_utf8(bytes) {
-            Ok(t) => text = t,
-            Err(_) => break,
-        }
-    }
-    (text, total)
 }
 
 fn rule_files(dirs: &[PathBuf]) -> Result<Vec<PathBuf>> {

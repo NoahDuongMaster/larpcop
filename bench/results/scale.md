@@ -79,6 +79,17 @@ Every one opened was either a real habit upstream or a rule we could sharpen:
 Three real findings out of four applications, and one on a Vite dev plugin
 where the wildcard never reaches production.
 
+### End to end, against the commit this round started from
+
+| | `e2920aa` | now |
+|---|---|---|
+| `django/django`, 8 threads, wall | 132.9 s | **125.1 s** (-5.9%) |
+| `django/django`, 8 threads, CPU | 912 s | **840 s** (-7.9%) |
+| `rails/activerecord`, 1 thread | 41.3 s | **35.5 s** (-14.0%) |
+
+CPU is the number to trust on eight threads: wall time on this machine moves
+by ±10% between runs that do identical work.
+
 ## What this says about cost
 
 Python costs about eight times what Ruby does per file here (2,939 files in

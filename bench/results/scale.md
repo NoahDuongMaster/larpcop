@@ -170,3 +170,11 @@ findings** on Juliet C, where the sink is a buffer written through an argument
 between rules is load-bearing: which mechanisms can report is per rule
 (`writes`, `responds`, configured sinks), and the walk is where all of them
 meet.
+
+Cheapening the walk's own prune fails the same way. The walk asks "does this
+subtree's text contain a tainted name" and answers by scanning the text; a
+64-bit Bloom of the words under each node (built in one pass over the tree)
+answers it in one AND. It cost 39 failing rule fixtures: the prune is a
+*substring* test, and word-level bits do not cover it - `valid` contains `id`,
+`$obj->name` is not the word `name`. Only a Bloom over every substring would
+be exact, and building that costs more than the scan it replaces.

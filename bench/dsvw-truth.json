@@ -1,0 +1,20 @@
+{
+  "source": "stamparm/DSVW 9ca3c9a. The app's own CASES table documents 25 attacks and the endpoint each exploits; each attack class is pinned here to the sink line in dsvw.py that makes it possible, read from the source. Fixed before any tool ran on DSVW.",
+  "lines": [
+    {"file": "dsvw.py", "line": 22, "label": "SQL injection (?id= concatenated into the query)"},
+    {"file": "dsvw.py", "line": 25, "label": "reflected XSS (?v= substituted into the page)"},
+    {"file": "dsvw.py", "line": 27, "label": "insecure deserialization (pickle.loads of ?object=)"},
+    {"file": "dsvw.py", "line": 29, "label": "path traversal / SSRF (?path= opened or fetched)"},
+    {"file": "dsvw.py", "line": 31, "label": "command injection (nslookup of ?domain= through a shell)"},
+    {"file": "dsvw.py", "line": 33, "label": "XXE (external entities resolved on ?xml=)"},
+    {"file": "dsvw.py", "line": 35, "label": "XPath injection (?name= inside the xpath expression)"},
+    {"file": "dsvw.py", "line": 42, "label": "SQL injection (?comment= concatenated into the INSERT)"},
+    {"file": "dsvw.py", "line": 46, "label": "stored XSS (stored comments rendered into the page)"},
+    {"file": "dsvw.py", "line": 48, "label": "file inclusion (?include= opened or fetched)"},
+    {"file": "dsvw.py", "line": 49, "label": "code execution (exec of the included program)"},
+    {"file": "dsvw.py", "line": 55, "label": "server-side template injection (?tmpl= formatted)"},
+    {"file": "dsvw.py", "line": 59, "label": "JSONP XSS (?callback= wrapped around the JSON)"},
+    {"file": "dsvw.py", "line": 61, "label": "SQL injection (login username and password concatenated)"},
+    {"file": "dsvw.py", "line": 70, "label": "open redirect (Location header from ?redir=)"}
+  ]
+}

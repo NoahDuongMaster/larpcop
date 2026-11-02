@@ -82,7 +82,28 @@ where the wildcard never reaches production.
 ## What this says about cost
 
 Python costs about eight times what Ruby does per file here (2,939 files in
-142 s against 3,481 in 18 s), and parsing is 3.9 s of it: the rest is the
-taint summaries, which are recomputed per rule. That is the next thing to
-optimize if a Python monorepo has to run the whole set in CI; the incremental
-modes are unaffected.
+131 s against 3,481 in 18 s), and parsing is 3.9 s of it: the rest is the
+taint summaries, which are recomputed per rule.
+
+A whole-repository check uses every core — 500–670% of 800% on this machine —
+which is why a laptop feels stuck for the two minutes it runs. `--jobs` (or
+`LARPCOP_JOBS`) caps that: the same Django run takes 277 s on 2 threads.
+
+Three further optimizations were written, measured and **rejected**; the
+machine varies by ±20% between runs, so a change had to win by more than that
+*and* keep every finding on the 19 benches:
+
+| Attempt | Result |
+|---|---|
+| Per-file cache of declared types, call names and constructed objects | 148–162 s, slower: the cache key (document, range, kind) cost more than the lookups |
+| Skip a rule whose literal "needles" appear nowhere in the file | 115 s, but lost 6 `java-taint-xss` findings in java-sec-code and 4 `php-taint-xss` in DVWA: a finding that comes through a callee in another file has no needle in this one |
+| Re-summarize only functions that name a callee whose summary changed | 157 s, slower: scanning each function's text for every changed name cost more than the round it saved |
+
+Kept: the type lookup no longer walks declarations that cannot contain the
+name (142 s → 131 s), rule files are read and parsed in parallel, and
+`--jobs`.
+
+What is left is the structural one: the walk and the summaries are computed
+per rule, and sharing them across rules means tracking, per rule, which names
+are sanitized (they differ per rule), which is a rewrite of the walker, not a
+patch.

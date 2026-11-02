@@ -43,5 +43,12 @@ serde_json = "1.0.154"
 tempfile = "3.27.0"
 
 # The profile that 'dist' will build with: identical to release (full LTO).
+[profile.release]
+# A whole-repository check is one long run of the same few loops over
+# tree-sitter nodes: cross-crate inlining is worth more here than build time.
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+
 [profile.dist]
 inherits = "release"

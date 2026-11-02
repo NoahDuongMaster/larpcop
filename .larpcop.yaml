@@ -16,6 +16,7 @@ dependencies:
     - cargo:jsonc-parser
     - cargo:lsp-server
     - cargo:lsp-types
+    - cargo:mimalloc
     - cargo:percent-encoding
     - cargo:rmcp
     - cargo:roxmltree

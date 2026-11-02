@@ -102,6 +102,24 @@ three runs each: **41.3 s → 39.5 s (-4.4%)**, every finding the same on the 19
 benches. Wall-clock on 8 cores is dominated by machine noise (±20%), which is
 why this was measured on one thread.
 
+### The allocator was the second bottleneck
+
+Four threads took the same wall time as eight on `django/django` (160.0 s
+against 160.1 s) while using 611 s of CPU instead of 935 s: eight threads were
+spending a third of their time inside the system allocator's per-thread
+magazine locks, not in the rules. Swapping it for mimalloc (`[global_allocator]`,
+three lines):
+
+| | System malloc | mimalloc |
+|---|---|---|
+| `django/django`, 8 threads | 160.1 s / 935 s CPU | **146.0 s / 874 s CPU** |
+| `django/django`, 4 threads | 160.0 s / 611 s CPU | 152.6 s / 588 s CPU |
+| `rails/activerecord`, 1 thread | 39.5 s | **36.7 s** |
+
+Every rule allocates: a parse per file, a node per token, a `String` per name.
+That is why the allocator showed up at all - and why `--jobs 4` now buys
+almost nothing: the lock is gone, and what is left is memory bandwidth.
+
 Four further optimizations were written, measured and **rejected**:
 
 | Attempt | Result |

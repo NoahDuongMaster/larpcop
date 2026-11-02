@@ -137,3 +137,27 @@ What is left is the structural one: the taint walk and its summaries are
 computed per rule, and a function with five parameters is walked five times
 (once per parameter, per round). Sharing that means tracking, per parameter,
 which names are tainted — a rewrite of the walker's core type, not a patch.
+
+### Where a file's time actually goes
+
+Timer inside `check_file`, summed over `rails/activerecord` (1,363 files, one
+thread, 39 s):
+
+| Step | Time |
+|---|---|
+| **taint rules** | **34 s** |
+| everything else (parse, ast rules, metrics, secrets, text, page scripts) | 5 s |
+| of the taint time: `prepare` (pattern scan, sanitizer filtering, summaries) | **2 s** |
+
+Two things this corrected:
+
+- The sampling profiler said `prepare` was 27% of the run. It was wrong: with
+  a full LTO build the samples land in inlined code and the nearest symbol is
+  not the function running. The timers say `prepare` is 5% of the file.
+- The first version of those timers printed `0 s` for everything, because they
+  summed `elapsed().as_millis()` per call and every call is shorter than a
+  millisecond. Microseconds show the real split.
+
+So the walk is not one of several costs to trim - it *is* the cost. Every rule
+walks the same file and re-evaluates the same expressions for its own taint
+set.

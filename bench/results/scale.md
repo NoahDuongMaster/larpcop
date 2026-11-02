@@ -90,6 +90,12 @@ where the wildcard never reaches production.
 CPU is the number to trust on eight threads: wall time on this machine moves
 by ±10% between runs that do identical work.
 
+Profile-guided optimisation (`bench/pgo.sh`) was measured too: -2.4% on
+rails/activerecord (34.9 s -> 34.1 s, one thread, median of two) and nothing
+on eight threads. Small enough that it is not the default build - it needs
+`llvm-profdata` and a training corpus - but the recipe is there for a release
+build that wants the last 2%.
+
 ## What this says about cost
 
 Python costs about eight times what Ruby does per file here (2,939 files in

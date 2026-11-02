@@ -161,3 +161,12 @@ Two things this corrected:
 So the walk is not one of several costs to trim - it *is* the cost. Every rule
 walks the same file and re-evaluates the same expressions for its own taint
 set.
+
+Skipping that walk when it cannot report looks safe and is not: a finding is
+always at a sink, so a rule with no sink matched in the file and no sink in any
+summary it can call should have nothing to say. It cost **160 `c-taint-format`
+findings** on Juliet C, where the sink is a buffer written through an argument
+(`sprintf(buf, …)`) and never appears in the rule's sink hits. The redundancy
+between rules is load-bearing: which mechanisms can report is per rule
+(`writes`, `responds`, configured sinks), and the walk is where all of them
+meet.

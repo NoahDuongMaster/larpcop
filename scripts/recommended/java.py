@@ -152,4 +152,16 @@ RULES = [
          rule={"kind": "annotation", "all": [
              {"has": {"field": "name", "regex": "^(Select|Update|Insert|Delete)$"}},
              {"has": {"field": "arguments", "stopBy": "end", "kind": "string_literal", "regex": "\\$\\{"}}]}),
+    dict(id="java-spring-csrf-disabled", langs=["Java"], severity="error",
+         message="Spring Security's CSRF protection switched off for the whole chain.",
+         note="Keep CSRF on for anything a browser session drives; disable it only on a stateless token API, in that API's own chain.",
+         rule={"kind": "method_invocation", "any": [
+             {"regex": "\\.csrf\\(\\s*\\)\\s*\\.disable\\(\\s*\\)"},
+             {"regex": "\\.csrf\\(\\s*\\w+\\s*->\\s*\\w+\\.disable\\(\\s*\\)\\s*\\)"}]}),
+    dict(id="java-spring-cors-wildcard", langs=["Java"], severity="warning",
+         message="CORS open to every origin.",
+         note="Name the origins the frontend runs on; `*` cannot be combined with credentials, and the usual workaround reflects any origin.",
+         rule={"any": [
+             {"kind": "annotation", "regex": "^@CrossOrigin\\s*\\([^)]*\"\\*\""},
+             {"kind": "method_invocation", "regex": "allowedOrigin(s|Patterns)?\\(\\s*\"\\*\"\\s*\\)"}]}),
 ]

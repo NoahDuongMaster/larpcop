@@ -268,4 +268,17 @@ RULES = [
          message="`console` call in committed code.",
          note="Use the project's logger so output is levelled and can be turned off.",
          rule={"pattern": "console.$METHOD($$$ARGS)"}),
+    dict(id="no-cors-any-origin", langs=JS, severity="warning",
+         message="CORS open to every origin (`cors()` with no options, `origin: \"*\"`).",
+         note="List the origins allowed, per environment; with credentials a wildcard is refused anyway and reflecting the origin is worse.",
+         rule={"any": [
+             {"kind": "call_expression", "regex": "^cors\\(\\s*\\)$"},
+             {"kind": "pair", "all": [
+                 {"has": {"field": "key", "regex": "^(origin|Access-Control-Allow-Origin)$"}},
+                 {"has": {"field": "value", "regex": "^['\"]\\*['\"]$"}}]},
+             # res.setHeader("Access-Control-Allow-Origin", "*"), res.header(…).
+             {"kind": "call_expression", "all": [
+                 {"has": {"field": "function", "regex": "\\.(setHeader|header|set)$"}},
+                 {"has": {"field": "arguments", "regex": "Access-Control-Allow-Origin['\"]?\\s*,\\s*['\"]\\*"}}]},
+         ]}),
 ]

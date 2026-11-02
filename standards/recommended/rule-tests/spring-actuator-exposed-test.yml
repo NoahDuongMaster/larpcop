@@ -1,0 +1,16 @@
+id: spring-actuator-exposed
+file: src/main/resources/application.properties
+valid:
+- 'management.endpoints.web.exposure.include=health,info
+
+  '
+- 'management.endpoints.web.exposure.include=health
+
+  '
+invalid:
+- 'management.endpoints.web.exposure.include=*
+
+  '
+- 'management.endpoints.web.exposure.include="*"
+
+  '

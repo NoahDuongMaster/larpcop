@@ -1,0 +1,10 @@
+id: py-django-allowed-hosts-wildcard
+file: myapp/settings.py
+valid:
+- 'ALLOWED_HOSTS = ["example.com", "www.example.com"]
+
+  '
+invalid:
+- 'ALLOWED_HOSTS = ["*"]
+
+  '

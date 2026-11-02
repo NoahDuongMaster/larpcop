@@ -3,7 +3,8 @@
 //! writes through a numeric placeholder (`sprintf("… id=%d", $t)`,
 //! `String.format("%d", n)`). Go's `Sprintf` is left out: `%d` of a string
 //! prints the string (`%!d(string=…)`). `%c` writes a character, so it is
-//! not one.
+//! not one. A count — `len(x)`, `count($x)`, `x.size()` — is a number
+//! whatever the data it counted was.
 
 use super::constant::{Env, Value, eval};
 use super::summary::{args, called_name};
@@ -28,6 +29,36 @@ pub(super) fn arithmetic<D: Doc>(node: &Node<D>) -> bool {
             o.text().as_ref(),
             "+" | "-" | "*" | "/" | "%" | "**" | "+=" | "-=" | "*=" | "/=" | "%=" | "**="
         )
+    })
+}
+
+/// Calls whose result is a count: `len(x)`, `strlen($x)`, `buf.size()`.
+const COUNTING: [&str; 14] = [
+    "len",
+    "__len__",
+    "count",
+    "strlen",
+    "mb_strlen",
+    "mb_strwidth",
+    "sizeof",
+    "size",
+    "length",
+    "nchar",
+    "nbytes",
+    "ord",
+    "abs",
+    "count_chars",
+];
+
+/// Is `node` a call of a counting function? Its value is a number, so no
+/// text a user wrote can be injected through it.
+pub(super) fn counted<D: Doc>(node: &Node<D>) -> bool {
+    if !super::flow::CALLS.contains(&node.kind().as_ref()) {
+        return false;
+    }
+    super::summary::called_name(node).is_some_and(|name| {
+        let last = name.rsplit('.').next().unwrap_or(&name);
+        COUNTING.contains(&last)
     })
 }
 

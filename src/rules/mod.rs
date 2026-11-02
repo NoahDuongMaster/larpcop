@@ -253,11 +253,20 @@ impl Engine {
     }
 
     /// Rules that apply to one root-relative path (language and `files` globs).
+    /// The rules that apply to one root-relative path: its language, the
+    /// rule's `files:` globs, its `exclude:`.
     pub fn rules_for(&self, rel: &str) -> Vec<RuleInfo> {
+        use ast_grep_language::Language;
+        let lang = ast_grep_language::SupportLang::from_path(rel);
         let mut out: Vec<RuleInfo> = self.max_lines.iter().map(|m| m.info()).collect();
         out.extend(self.metrics.iter().flat_map(|m| m.infos()));
         out.extend(self.secrets.iter().map(|_| secrets::Secrets::info()));
-        out.extend(self.taint.iter().map(|t| t.info()));
+        out.extend(
+            self.taint
+                .iter()
+                .filter(|t| lang.is_some_and(|l| t.handles(l)))
+                .map(|t| t.info()),
+        );
         out.extend(
             self.text
                 .iter()

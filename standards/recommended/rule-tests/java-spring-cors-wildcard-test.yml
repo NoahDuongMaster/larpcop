@@ -1,0 +1,7 @@
+id: java-spring-cors-wildcard
+file: src/ApiController.java
+valid:
+- "class ApiController {\n  @CrossOrigin(origins = \"https://app.example.com\")\n\
+  \  void a() {}\n}\n"
+invalid:
+- "class ApiController {\n  @CrossOrigin(origins = \"*\")\n  void a() {}\n}\n"

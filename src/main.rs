@@ -8,6 +8,7 @@ mod dashboard;
 mod deps;
 mod files;
 mod hook;
+mod inspect;
 mod install;
 mod lsp;
 mod mcp;
@@ -16,6 +17,7 @@ mod report;
 mod rules;
 mod shell;
 mod shell_ast;
+mod stats;
 mod sync;
 mod types;
 

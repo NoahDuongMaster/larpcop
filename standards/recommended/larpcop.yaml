@@ -40,6 +40,11 @@ text:
     not: '(?i)=\s*[''"]?(change[-_]?(me|this|it)|your[-_]|<|\{\{|xxx|example|placeholder|dummy|test|none|null|false|true)'
     message: Secret value committed in an env file.
     note: Keep real values out of the repo (.gitignore the file, commit a .env.example with placeholders) and rotate this one; it is in the git history.
+  - id: spring-actuator-exposed
+    files: ["**/application*.properties", "**/application*.yml", "**/application*.yaml", "**/bootstrap*.properties", "**/bootstrap*.yml"]
+    regex: '(?i)management[._-]?endpoints[._-]?web[._-]?exposure[._-]?include[\s]*[=:][\s]*["'']?\*'
+    message: Spring Boot exposes every actuator endpoint.
+    note: Expose only what monitoring needs (health, info, metrics) on a management port bound to localhost; env, heapdump and threaddump leak secrets and memory.
   - id: mybatis-sql-interpolation
     files: ["**/*Mapper.xml", "**/*Dao.xml", "**/mapper/**/*.xml", "**/mappers/**/*.xml", "**/mybatis/**/*.xml"]
     # After SQL syntax only: `value="${jdbc.url}"` in a config file is a property.

@@ -170,7 +170,24 @@ pub enum Cmd {
         json: bool,
     },
     /// List the effective rules and where they come from.
-    Rules,
+    Rules {
+        /// Only the rules that apply to this file (its language, `files:` and
+        /// `exclude:` globs) — what an agent needs for the file it is editing.
+        #[arg(long = "for", value_name = "PATH")]
+        for_path: Option<std::path::PathBuf>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Which rules fire here, which caught nothing, which apply to no file.
+    Stats {
+        #[command(flatten)]
+        scope: ScopeArgs,
+        /// How many rules of the table to list.
+        #[arg(long, default_value_t = 20)]
+        top: usize,
+        #[arg(long)]
+        json: bool,
+    },
     /// Generate AGENTS.md, CLAUDE.md and agent hook settings from the rules.
     Sync {
         /// Do not write; exit 1 if any generated file is out of date (for CI).

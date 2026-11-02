@@ -1,0 +1,16 @@
+id: no-cors-any-origin
+file: src/server.js
+valid:
+- 'import cors from "cors";
+
+  app.use(cors({ origin: ["https://app.example.com"] }));
+
+  '
+invalid:
+- 'import cors from "cors";
+
+  app.use(cors());
+
+  '
+- "app.use((req, res, next) => {\n  res.setHeader(\"Access-Control-Allow-Origin\"\
+  , \"*\");\n  next();\n});\n"

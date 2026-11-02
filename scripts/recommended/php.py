@@ -65,4 +65,8 @@ RULES = [
                      {"not": {"has": {"stopBy": "end", "regex": "^session_regenerate_id\\s*\\("}}},
                  ]}},
          ]}),
+    dict(id="php-laravel-unguarded", langs=["Php"], severity="error",
+         message="$guarded = [] leaves every column mass-assignable (Laravel).",
+         note="List the columns a form may set in `$fillable`, and leave `id`, `role`, `is_admin`, `owner_id` out of it.",
+         rule={"kind": "property_declaration", "regex": "\\$guarded\\s*=\\s*\\[\\s*\\]"}),
 ]

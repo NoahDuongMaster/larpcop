@@ -1,0 +1,13 @@
+id: py-django-debug-true
+file: myapp/settings.py
+valid:
+- 'DEBUG = False
+
+  '
+- 'DEBUG = os.environ.get("DJANGO_DEBUG") == "1"
+
+  '
+invalid:
+- 'DEBUG = True
+
+  '

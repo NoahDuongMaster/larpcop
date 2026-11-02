@@ -1,0 +1,9 @@
+id: php-laravel-unguarded
+file: app/Models/User.php
+valid:
+- "<?php\nclass User extends Model {\n  protected $fillable = [\"name\", \"email\"\
+  ];\n}\n"
+- "<?php\nclass User extends Model {\n  protected $guarded = [\"id\", \"role\", \"\
+  is_admin\"];\n}\n"
+invalid:
+- "<?php\nclass User extends Model {\n  protected $guarded = [];\n}\n"

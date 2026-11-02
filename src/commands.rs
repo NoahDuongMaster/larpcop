@@ -126,7 +126,8 @@ pub fn run(cli: Cli) -> Result<u8> {
             }
             Ok(0)
         }
-        Cmd::Rules => rules(&ctx()?),
+        Cmd::Rules { for_path, json } => crate::inspect::rules(&ctx()?, for_path, json),
+        Cmd::Stats { scope, top, json } => crate::inspect::stats(&ctx()?, scope.scope(), top, json),
         Cmd::Sync {
             check,
             managed,
@@ -230,29 +231,6 @@ fn fix(ctx: &Ctx, scope: Scope, dry_run: bool) -> Result<u8> {
     let outcome = ctx.check(&scope)?;
     print!("{}", report::render(&outcome, Format::Text));
     Ok(u8::from(outcome.errors() > 0))
-}
-
-fn rules(ctx: &Ctx) -> Result<u8> {
-    let (cfg, engine) = ctx.load()?;
-    println!(
-        "root: {}\nsources: {}\n",
-        cfg.root.display(),
-        cfg.sources.join(" → ")
-    );
-    for r in engine.rules() {
-        let lock = cfg
-            .locked
-            .get(&r.id)
-            .map_or(String::new(), |by| format!("  [locked by {by}]"));
-        println!(
-            "{:<24} {:<7} {:<22} {}{lock}",
-            r.id,
-            r.level.as_str(),
-            r.scope,
-            r.message
-        );
-    }
-    Ok(0)
 }
 
 fn sync(ctx: &Ctx, check: bool) -> Result<u8> {

@@ -1,0 +1,13 @@
+id: py-flask-debug-true
+file: app.py
+valid:
+- 'app.run(host="127.0.0.1", port=5000)
+
+  '
+- 'app.run(debug=False)
+
+  '
+invalid:
+- 'app.run(debug=True)
+
+  '

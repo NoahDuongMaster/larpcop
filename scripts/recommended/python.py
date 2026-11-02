@@ -1,6 +1,6 @@
 """Python rule specs."""
 
-from .common import SQL_TEXT
+from .common import SQL_TEXT, TESTS
 
 RULES = [
     dict(id="py-no-sql-interpolation", langs=["Python"], severity="error",
@@ -130,4 +130,37 @@ RULES = [
                  {"not": {"has": {"field": "arguments", "regex": "\\bsecure\\s*=\\s*True\\b"}}},
                  {"has": {"field": "arguments", "regex": "\\bhttponly\\s*=\\s*False\\b"}},
              ]}]}),
+    # A settings file named dev/local/test is not what runs in production.
+    dict(id="py-django-debug-true", langs=["Python"], files=["**/settings.py", "**/settings/*.py", "**/*settings*.py"],
+         ignores=TESTS + ["**/settings/*dev*.py", "**/settings/*local*.py", "**/settings/*development*.py",
+                          "**/settings/test*.py", "**/settings/*test*.py"], severity="error",
+         message="DEBUG = True in Django settings: a stack trace shows settings, SQL and source to whoever triggers an error.",
+         note="Keep DEBUG False in the committed settings; run with DJANGO_DEBUG=1 or a local settings file instead.",
+         rule={"kind": "assignment", "all": [
+             {"has": {"field": "left", "regex": "^DEBUG$"}},
+             {"has": {"field": "right", "regex": "^True$"}}]}),
+    dict(id="py-django-allowed-hosts-wildcard", langs=["Python"], files=["**/settings.py", "**/settings/*.py", "**/*settings*.py"], severity="error",
+         message="ALLOWED_HOSTS accepts any host: the Host header decides links, caches and password-reset URLs.",
+         note="List the hostnames the site is served on and let the proxy pass the real Host.",
+         rule={"kind": "assignment", "all": [
+             {"has": {"field": "left", "regex": "^ALLOWED_HOSTS$"}},
+             {"has": {"field": "right", "regex": "\\*"}}]}),
+    dict(id="py-django-csrf-exempt", langs=["Python"], severity="error",
+         message="`@csrf_exempt` switches Django's CSRF check off for a view.",
+         note="Keep the check; for a token-authenticated API use DRF's authentication classes instead of exempting the view.",
+         # A webhook receiver verifies the sender's signature instead (Stripe,
+         # GitHub, Twilio…): no session, nothing for CSRF to protect.
+         # Decorators are siblings of the function: the decorated definition
+         # holds both, so it is what the rule matches.
+         rule={"kind": "decorated_definition", "all": [
+             {"has": {"stopBy": "end", "kind": "decorator", "regex": "^@csrf_exempt\\b"}},
+             {"not": {"has": {"stopBy": "end", "kind": "function_definition",
+                              "regex": "(?i)def\\s+\\w*(webhook|hook|stripe|github|twilio|slack|payment)"}}},
+         ]}),
+    dict(id="py-flask-debug-true", langs=["Python"], severity="error",
+         message="Flask started with `debug=True`: the Werkzeug console runs code and the tracebacks show source.",
+         note="Leave debug off in the code; run `flask --debug` (or FLASK_DEBUG=1) locally.",
+         rule={"kind": "keyword_argument", "all": [
+             {"has": {"field": "name", "regex": "^debug$"}},
+             {"has": {"field": "value", "regex": "^True$"}}]}),
 ]

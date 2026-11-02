@@ -60,6 +60,8 @@ Một bộ chỉ đo được độ tổng quát khi rule chưa được viết 
 21. **XVWA** (`s4n7h0/xvwa` `fb30fa5`, PHP): 19 module, mỗi module một lỗi mà README của dự án liệt kê. Đáp án [`xvwa-truth.json`](xvwa-truth.json) (kèm `php-taint-stored-xss` và `foreach` của PHP, commit 9083607, trước khi chạy bất kỳ công cụ nào). Lần đầu: larpcop **12/19** (11 đúng loại), Semgrep 5/19. Sau khi sửa: **17/19** (`results/php-apps.md`); hai dòng còn lại là IDOR và `delete` thiếu kiểm tra admin.
 22. **WackoPicko** (`adamdoupe/WackoPicko` `cabc1b3`, PHP): 14 lỗi README liệt kê (mật khẩu admin/admin nằm trong database, không có trong code). Đáp án [`wackopicko-truth.json`](wackopicko-truth.json), commit cùng bước 21. Lần đầu: larpcop **9/14**, Semgrep 1/14. Sau khi sửa: **11/14**; ba dòng còn lại là forceful browsing, trang xem không cần đăng nhập và coupon dùng lại được.
 
+Ngoài các bộ có đáp án, `bench/scale.sh` chạy trên hai repo thật (`django/django`, `rails/rails`) để đo thời gian và xem báo cáo trên code không viết cho benchmark: [`results/scale.md`](results/scale.md).
+
 Kết quả dưới đây là sau bước 22: chỉ có ý nghĩa *không thụt lùi* trên cả hai mươi hai bộ. Rule mới cần một bộ chưa ai nhìn.
 
 ## Kết quả (01/11/2026)

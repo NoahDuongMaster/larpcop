@@ -146,6 +146,10 @@ impl Ctx {
         if self.numbers && kind == "binary_expression" && super::numeric::arithmetic(node) {
             return false;
         }
+        // `len(keys)`, `buf.size()`: a count, whatever was counted.
+        if super::numeric::counted(node) {
+            return false;
+        }
         // `c ? a : b` is `a` or `b`, never `c`; a guard in `c` cleans the
         // side it protects (`isLocal(u) ? u : "/"`).
         if matches!(

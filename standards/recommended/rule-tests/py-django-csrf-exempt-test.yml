@@ -1,0 +1,11 @@
+id: py-django-csrf-exempt
+file: myapp/views.py
+valid:
+- "from django.views.decorators.csrf import csrf_exempt\nfrom django.views.decorators.http\
+  \ import require_POST\n\n@require_POST\n@csrf_exempt\ndef receive_webhook(request):\n\
+  \    return None\n"
+- "from django.views.decorators.csrf import csrf_protect\n\n@csrf_protect\ndef pay(request):\n\
+  \    return None\n"
+invalid:
+- "from django.views.decorators.csrf import csrf_exempt\n\n@csrf_exempt\ndef pay(request):\n\
+  \    return None\n"

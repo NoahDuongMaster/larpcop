@@ -75,9 +75,14 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: TypeScript language server
         if: runner.os != 'Windows'
+        timeout-minutes: 5
         run: npm install -g typescript-language-server@${{ env.TSLS }} typescript@${{ env.TS }}
       - uses: actions/setup-go@v6
         if: runner.os != 'Windows'
+        # The download hangs rather than failing when the Go mirror stalls
+        # (seen once on macOS: 20 minutes inside this step). Cap it so a flake
+        # costs five minutes of one runner, not the whole job budget.
+        timeout-minutes: 5
         with:
           go-version: stable
           cache: false
@@ -92,6 +97,7 @@ jobs:
         # `go install` compiles the whole x/tools tree: 110 s on the Windows
         # image, 20 s on macOS, 80 s on Ubuntu. Cached, it is a 2 s restore.
         if: runner.os != 'Windows' && steps.gopls.outputs.cache-hit != 'true'
+        timeout-minutes: 10
         run: go install golang.org/x/tools/gopls@v${{ env.GOPLS }}
       - name: Put gopls on PATH
         if: runner.os != 'Windows'

@@ -96,6 +96,12 @@ on eight threads. Small enough that it is not the default build - it needs
 `llvm-profdata` and a training corpus - but the recipe is there for a release
 build that wants the last 2%.
 
+Caching the OSV `querybatch` answer for a few hours (a hook asks the same
+question at every edit) was written and rejected: the project's own test
+requires advisory details to be refetched when OSV reports an edit, because a
+package that becomes malware today must block today. Freshness beats the wait,
+so an offline run is allowed to take eight seconds to fail closed.
+
 `-Ctarget-cpu=native` measured neutral-to-worse (35.3 s against 34.8 s): the
 arm64 baseline this already builds for is not what the walk is waiting on.
 

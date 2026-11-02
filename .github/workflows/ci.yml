@@ -19,6 +19,8 @@ env:
   # it; only backtraces lose frames.
   CARGO_PROFILE_DEV_DEBUG: "0"
   CARGO_PROFILE_TEST_DEBUG: "0"
+  # Link with LLD on Windows instead of MSVC link.exe.
+  CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld.exe
   GOPLS: "0.24.0"
   TSLS: "4"
   TS: "5"
@@ -29,8 +31,12 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
+      # Only two sites in src use #[cfg(unix)] / #[cfg(windows)], and the
+      # Windows test job compiles the crate anyway. Running clippy on Ubuntu
+      # and macOS covers both cfg(unix) flavors without paying a second
+      # uncached Windows build per push.
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7

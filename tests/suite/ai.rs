@@ -1,8 +1,6 @@
 //! AI review and rule learning, against a fake model CLI (a shell script).
 
-mod common;
-
-use common::Repo;
+use crate::common::Repo;
 use std::fs;
 use std::path::Path;
 

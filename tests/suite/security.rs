@@ -1,10 +1,8 @@
 //! Security rules: secrets, known vulnerabilities and malware (fake OSV.dev),
 //! intraprocedural taint.
 
-mod common;
-
-use common::deps::{fake_deps_dev, npm_lock, repo};
-use common::hook_input;
+use crate::common::deps::{fake_deps_dev, npm_lock, repo};
+use crate::common::hook_input;
 use serde_json::json;
 
 fn fake_osv() -> String {

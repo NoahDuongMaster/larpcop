@@ -1,8 +1,6 @@
 //! `larpcop dashboard`: per-rule counts, baseline debt trend, hotspots.
 
-mod common;
-
-use common::Repo;
+use crate::common::Repo;
 
 #[test]
 fn dashboard_shows_open_and_baselined_violations_and_the_debt_trend() {

@@ -1,8 +1,6 @@
 //! Sonar/Codacy replacements: CI report formats, function metrics, the LSP server.
 
-mod common;
-
-use common::*;
+use crate::common::*;
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};

@@ -2,10 +2,8 @@
 //! it runs; dependency code does not run while the lockfile fails the checks;
 //! package managers without their own age gate must use resolve-only forms.
 
-mod common;
-
-use common::deps::{fake_deps_dev, npm_lock, repo};
-use common::*;
+use crate::common::deps::{fake_deps_dev, npm_lock, repo};
+use crate::common::*;
 use serde_json::json;
 
 fn bash(event: &str, dir: &std::path::Path, call: &str, command: &str) -> String {

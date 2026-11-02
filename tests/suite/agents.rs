@@ -1,8 +1,6 @@
 //! Codex, Gemini CLI and Cursor adapters, driven with each agent's real payload shape.
 
-mod common;
-
-use common::{BAD_TS, GOOD_TS, Repo};
+use crate::common::{BAD_TS, GOOD_TS, Repo};
 use serde_json::{Value, json};
 
 fn payload(repo: &Repo, fields: Value) -> String {

@@ -1,9 +1,7 @@
 //! `stats` (which rules fire, which caught nothing) and `rules --for` (only
 //! the rules that apply to one file).
 
-mod common;
-
-use common::{BAD_TS, GOOD_TS, Repo};
+use crate::common::{BAD_TS, GOOD_TS, Repo};
 
 #[test]
 fn stats_says_which_rules_fire_and_which_stay_silent() {

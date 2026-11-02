@@ -1,6 +1,4 @@
-mod common;
-
-use common::deps::{AGE, fake_deps_dev, npm_lock, repo};
+use crate::common::deps::{AGE, fake_deps_dev, npm_lock, repo};
 use serde_json::json;
 
 #[test]

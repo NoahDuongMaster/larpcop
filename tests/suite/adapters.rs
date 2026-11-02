@@ -1,9 +1,7 @@
 //! Adapters added for Kiro, Copilot CLI and Factory Droid, the `agents:` filter
 //! and `sync --managed`. Kiro payloads are the ones recorded from kiro-cli 2.37 `--v3`.
 
-mod common;
-
-use common::*;
+use crate::common::*;
 use serde_json::{Value, json};
 
 fn kiro(event: &str, tool: &str, dir: &std::path::Path, input: Value) -> String {

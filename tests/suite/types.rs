@@ -1,8 +1,6 @@
 //! `sink_types`: the project's language server decides which sinks count.
 
-mod common;
-
-use common::Repo;
+use crate::common::Repo;
 
 const DB: &str =
     "export class Pool { query(sql: string): Promise<unknown> { return Promise.resolve(sql); } }

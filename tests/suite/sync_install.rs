@@ -1,6 +1,4 @@
-mod common;
-
-use common::{BAD_TS, GOOD_TS, Repo, STANDARDS, copy_dir, extends_yaml};
+use crate::common::{BAD_TS, GOOD_TS, Repo, STANDARDS, copy_dir, extends_yaml};
 use std::fs;
 use std::path::Path;
 

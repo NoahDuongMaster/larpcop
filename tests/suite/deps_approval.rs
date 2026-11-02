@@ -1,7 +1,5 @@
-mod common;
-
-use common::deps::{APPROVAL, repo};
-use common::{extends_yaml, hook_input};
+use crate::common::deps::{APPROVAL, repo};
+use crate::common::{extends_yaml, hook_input};
 use serde_json::json;
 
 #[test]

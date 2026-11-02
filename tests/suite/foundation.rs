@@ -1,8 +1,6 @@
 //! `fix`, `baseline` and `test`.
 
-mod common;
-
-use common::*;
+use crate::common::*;
 
 const VAR_RULE: &str = r#"id: no-var
 language: TypeScript

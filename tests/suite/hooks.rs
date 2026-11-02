@@ -1,6 +1,4 @@
-mod common;
-
-use common::{BAD_TS, GOOD_TS, Repo, hook_input};
+use crate::common::{BAD_TS, GOOD_TS, Repo, hook_input};
 use serde_json::json;
 
 const HOOK: [&str; 2] = ["hook", "claude-code"];

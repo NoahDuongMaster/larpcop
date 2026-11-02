@@ -228,26 +228,33 @@ impl Indexed {
         index: &FileIndex<'a, D>,
     ) -> [Vec<(NodeMatch<'a, D>, usize)>; GROUPS] {
         let mut found: [Vec<(usize, NodeMatch<'a, D>, usize)>; GROUPS] = Default::default();
-        let mut try_at = |at: usize, (g, i): (usize, usize)| {
-            let (pattern, needle, weight) = &self.groups[g][i];
+        // The text of a node is read once, for all the patterns that ask about
+        // it, instead of once per pattern.
+        let mut try_patterns = |at: usize, patterns: &[(usize, usize)]| {
             let node = &index.nodes[at];
-            if needle
-                .as_ref()
-                .is_some_and(|n| !node.text().contains(n.as_str()))
-            {
-                return;
-            }
-            if let Some(m) = pattern.match_node(node.clone()) {
-                found[g].push((at, m, *weight));
+            let mut text: Option<std::borrow::Cow<'_, str>> = None;
+            for &(g, i) in patterns {
+                let (pattern, needle, weight) = &self.groups[g][i];
+                if let Some(n) = needle {
+                    let t = text.get_or_insert_with(|| node.text());
+                    if !t.contains(n.as_str()) {
+                        continue;
+                    }
+                }
+                if let Some(m) = pattern.match_node(node.clone()) {
+                    found[g].push((at, m, *weight));
+                }
             }
         };
         for (kind, patterns) in &self.by_kind {
             for &at in index.by_kind.get(kind).into_iter().flatten() {
-                patterns.iter().for_each(|&p| try_at(at, p));
+                try_patterns(at, patterns);
             }
         }
-        for &p in &self.any {
-            (0..index.nodes.len()).for_each(|at| try_at(at, p));
+        if !self.any.is_empty() {
+            for at in 0..index.nodes.len() {
+                try_patterns(at, &self.any);
+            }
         }
         found.map(|mut ms| {
             ms.sort_by_key(|(at, ..)| *at);

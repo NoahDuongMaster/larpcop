@@ -105,15 +105,13 @@ impl TaintRule {
                 }
                 let node = arg.unwrap_or_else(|| m.get_node().clone());
                 // The function around the sink set it up safely.
-                if !self.unless.is_empty() {
-                    let around = m
-                        .get_node()
+                if !self.unless.is_empty()
+                    && m.get_node()
                         .ancestors()
-                        .find(|a| crate::rules::complexity::is_function(a));
-                    let text = around.map(|f| f.text().to_string()).unwrap_or_default();
-                    if self.unless.iter().any(|u| u.is_match(&text)) {
-                        continue;
-                    }
+                        .find(|a| crate::rules::complexity::is_function(a))
+                        .is_some_and(|f| self.unless.iter().any(|u| u.is_match(f.text().as_ref())))
+                {
+                    continue;
                 }
                 if (self.safe_prefix.as_ref()).is_some_and(|re| prefix::safe_start(re, &node)) {
                     continue;
@@ -179,7 +177,7 @@ impl TaintRule {
             && !self.source_texts.iter().any(|s| property(s) == Some(true))
             && !known.values().any(|s| s.returns_source)
             && !self.decorated_input(&file.content)
-            && !self.writes.reads_input(&index.root.text())
+            && !self.writes.reads_input(&file.content)
         {
             return None;
         }
@@ -189,7 +187,7 @@ impl TaintRule {
         // Passing on everything it imported made a package of n files cost n².
         if depth > 0 && lang == SupportLang::Go {
             let own: std::collections::HashSet<&str> =
-                index.functions().iter().map(|(n, ..)| n.as_str()).collect();
+                index.functions().iter().map(|d| d.name.as_str()).collect();
             summaries.retain(|name, _| own.contains(name.as_str()));
         }
         let mut ctx = Ctx {

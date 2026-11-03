@@ -28,7 +28,7 @@ use crate::rules::{Level, RuleInfo, Violation};
 use anyhow::Result;
 use ecosystem::Patterns;
 use globset::GlobSet;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 pub const AGE_ID: &str = "dependency-release-age";
@@ -46,7 +46,7 @@ pub struct Deps {
 }
 
 /// Both sides of a change: the scope's content (worktree or index) and the base commit.
-struct View<'a> {
+pub(super) struct View<'a> {
     root: &'a Path,
     staged: bool,
     base: Option<String>,
@@ -184,6 +184,15 @@ or worse vulnerability (OSV.dev)."
     }
 
     pub fn check(&self, root: &Path, scope: &Scope) -> Result<Vec<Violation>> {
+        self.check_listed(root, scope, &files::list(root, scope)?)
+    }
+
+    pub fn check_listed(
+        &self,
+        root: &Path,
+        scope: &Scope,
+        listed: &[String],
+    ) -> Result<Vec<Violation>> {
         let view = View {
             root,
             staged: matches!(scope, Scope::Staged),
@@ -193,21 +202,20 @@ or worse vulnerability (OSV.dev)."
         let mut fresh = Vec::new();
         let mut gated_dirs = BTreeSet::new();
         let mut known = None;
-        let mut locked = Vec::new();
-        let audit = matches!(scope, Scope::All | Scope::Paths(_));
-        for rel in files::list(root, scope)? {
-            if self.exclude.is_match(&rel) {
+        let mut locks = BTreeMap::new();
+        for rel in listed {
+            if self.exclude.is_match(rel) {
                 continue;
             }
-            let name = file_name(&rel);
+            let name = file_name(rel);
             if self.approval && manifest::is_manifest(name) {
                 let known = known.get_or_insert_with(|| approval::known(&view));
-                out.extend(self.unapproved(&rel, name, &view, known));
+                out.extend(self.unapproved(rel, name, &view, known));
             }
             if self.min_days.is_some() {
-                fresh.extend(self.fresh_pins(&rel, name, &view, &mut out));
+                fresh.extend(self.collect_fresh(rel, name, &view, &mut locks, &mut out));
                 if pm_config::relevant(name) {
-                    gated_dirs.insert(dir_of(&rel).to_string());
+                    gated_dirs.insert(dir_of(rel).to_string());
                 }
             }
         }
@@ -215,15 +223,16 @@ or worse vulnerability (OSV.dev)."
             // Every lockfile, not only changed ones: a package reported as malware
             // today must block even a pull request that does not touch it. Hook
             // feedback on a few edited files only looks at those (Stop covers all).
-            let all = match scope {
-                Scope::Paths(_) | Scope::Touched(_) => files::list(root, scope)?,
-                _ => files::list(root, &Scope::All)?,
-            };
-            for rel in all {
-                if !self.exclude.is_match(&rel) {
-                    locked.extend(self.locked(&rel, file_name(&rel), &view, audit));
+            let all;
+            let scan: &[String] = match scope {
+                Scope::All | Scope::Paths(_) | Scope::Touched(_) => listed,
+                _ => {
+                    all = files::list(root, &Scope::All)?;
+                    &all
                 }
-            }
+            };
+            let audit = matches!(scope, Scope::All | Scope::Paths(_));
+            let locked = self.collect_locked(scan, &view, &locks, audit);
             out.extend(self.vulnerable(min, &locked));
         }
         if let Some(days) = self.min_days {

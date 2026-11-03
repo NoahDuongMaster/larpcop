@@ -180,65 +180,42 @@ impl TaintRule {
             let validating = super::validators::calls(index, &round);
             round.guards.extend(validating);
             let params_only = round.clone_without_sources();
+            let empty = HashSet::new();
             // An interface's or abstract method says nothing of what runs:
             // leaving it out lets `*.run` stand for the one implementation.
-            for (name, f, params) in defs.iter().filter(|(_, f, _)| !super::defs::bodiless(f)) {
-                let class = super::check::class_of(f);
-                let mine = class
+            for def in defs.iter().filter(|d| !d.bodiless) {
+                let mine = def
+                    .class_range
                     .and_then(|c| fields_before.get(&c))
-                    .cloned()
-                    .unwrap_or_default();
-                let (s, stored) = self.summary_of(
-                    &round,
-                    &params_only,
-                    name,
-                    f,
-                    params,
-                    lang,
-                    file,
-                    hits,
-                    &mine,
-                );
-                if let Some(c) = class {
+                    .unwrap_or(&empty);
+                let (s, stored) =
+                    self.summary_of(&round, &params_only, def, lang, file, hits, mine);
+                if let Some(c) = def.class_range {
                     fields.entry(c).or_default().extend(stored);
                 }
                 // `f($x, $vuln = False)`: one summary per value of the flag.
-                for (k, default) in super::flags::flags(f, params) {
+                for &(k, default) in &def.flags {
                     for value in [true, false] {
-                        let (v, _) = hits.seeded(f, &params[k], value, || {
-                            self.summary_of(
-                                &round,
-                                &params_only,
-                                name,
-                                f,
-                                params,
-                                lang,
-                                file,
-                                hits,
-                                &mine,
-                            )
+                        let (v, _) = hits.seeded(&def.node, &def.params[k], value, || {
+                            self.summary_of(&round, &params_only, def, lang, file, hits, mine)
                         });
                         if v != s {
                             if default == Some(value) {
-                                out.insert(super::flags::key(name, k, None), v.clone());
+                                out.insert(super::flags::key(&def.name, k, None), v.clone());
                             }
-                            out.insert(super::flags::key(name, k, Some(value)), v);
+                            out.insert(super::flags::key(&def.name, k, Some(value)), v);
                         }
                     }
                 }
-                out.insert(name.clone(), s);
+                out.insert(def.name.clone(), s);
                 // `render(rows, f)` running `f.apply(row)`: with a cleaning `f`.
-                for (k, p) in params.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
-                    let runs = super::higher::applications(f, p);
-                    if runs.is_empty() {
-                        continue;
-                    }
+                for (k, runs) in &def.apps {
                     let (r, po) = (
-                        round.with_sanitizers(&runs),
-                        params_only.with_sanitizers(&runs),
+                        round.with_sanitizers(runs),
+                        params_only.with_sanitizers(runs),
                     );
-                    let (s, _) = self.summary_of(&r, &po, name, f, params, lang, file, hits, &mine);
-                    out.insert(super::higher::key(name, k), s);
+                    let (s, _) = self.summary_of(&r, &po, def, lang, file, hits, mine);
+                    out.insert(super::higher::key(&def.name, *k), s);
                 }
             }
             // Nothing new reached this round: later rounds would repeat it.

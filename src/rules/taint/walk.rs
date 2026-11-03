@@ -77,14 +77,15 @@ impl Ctx {
                     joined.push((range.clone(), set.clone(), HashSet::new()))
                 }
                 Event::Assign(left, right, branch, true) => {
+                    let ltext = left.text();
                     if self.tainted(right, &names) {
-                        mark(&mut joined, *at, &left.text());
-                        names.insert(left.text().to_string());
+                        mark(&mut joined, *at, &ltext);
+                        names.insert(ltext.to_string());
                         on(Seen::Reached(Reached::Field(left.clone())));
-                    } else if names.remove(left.text().as_ref())
+                    } else if names.remove(ltext.as_ref())
                         && let Some(end) = branch
                     {
-                        until.push((*end, left.text().to_string()));
+                        until.push((*end, ltext.to_string()));
                     }
                 }
                 Event::Assign(left, right, branch, false) => {
@@ -113,11 +114,10 @@ impl Ctx {
                     let tainted = !numeric && !safe_start && self.tainted(right, &names);
                     // Built from tainted names only, or from a source itself.
                     let from = (tainted && !self.tainted(right, &HashSet::new())).then(|| {
-                        let used = super::guards::names(right);
-                        names
-                            .iter()
-                            .filter(|n| used.contains(*n))
-                            .cloned()
+                        right
+                            .dfs()
+                            .filter(|c| NAMES.contains(&c.kind().as_ref()))
+                            .filter_map(|c| names.get(c.text().as_ref()).cloned())
                             .collect()
                     });
                     if right.kind() == "object_creation_expression" && left.kind() == "identifier" {
@@ -142,20 +142,21 @@ impl Ctx {
                         .dfs()
                         .filter(|n| VARIABLES.contains(&n.kind().as_ref()))
                     {
+                        let vtext = v.text();
                         if tainted {
                             let adds = appended || branch.is_some();
                             origins.record(
-                                &v.text(),
+                                &vtext,
                                 from.clone(),
-                                adds && names.contains(v.text().as_ref()),
+                                adds && names.contains(vtext.as_ref()),
                             );
-                            mark(&mut joined, *at, &v.text());
-                            names.insert(v.text().to_string());
+                            mark(&mut joined, *at, &vtext);
+                            names.insert(vtext.to_string());
                         } else if NAMES.contains(&left.kind().as_ref())
-                            && names.remove(v.text().as_ref())
+                            && names.remove(vtext.as_ref())
                             && let Some(end) = branch
                         {
-                            until.push((*end, v.text().to_string()));
+                            until.push((*end, vtext.to_string()));
                         }
                     }
                     if !tainted && right.kind() == "identifier" {

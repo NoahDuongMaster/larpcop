@@ -98,6 +98,28 @@ impl Ctx {
         if self.sources.covers(&r) {
             return true;
         }
+        // A bare name token: only these three checks below can decide it, so
+        // the rest (entries, counts, branches, calls, children) is skipped.
+        if node.is_leaf() && NAMES.contains(&node.kind().as_ref()) {
+            let text = node.text();
+            if names.contains(text.as_ref()) {
+                // `int n = rs.getInt(1)`: a number holds no injected text.
+                return !super::declared::scalar(node);
+            }
+            // A map read whole holds its tainted entries.
+            if names.iter().any(|n| n.ends_with(']')) && super::entries::holds_tainted(&text, names)
+            {
+                return true;
+            }
+            // Ruby: `custom_fields` alone may be a call of a method returning
+            // request data.
+            return self.bare_calls
+                && node.kind() == "identifier"
+                && self
+                    .summaries
+                    .get(text.as_ref())
+                    .is_some_and(|s| s.returns_source);
+        }
         let text = node.text();
         // `m['k']`, `m.get("k")`: that entry, or the whole map.
         let holds_source = self.sources.overlaps(&r);
@@ -124,9 +146,13 @@ impl Ctx {
         // spelled in it, no call that could return source data.
         if !holds_source
             // An entry `m[k]` is spelled through its map's name.
-            && !names
-                .iter()
-                .any(|n| text.contains(n.split('[').next().unwrap_or(n)))
+            && !names.iter().any(|n| {
+                let needle = match n.find('[') {
+                    Some(i) => &n[..i],
+                    None => n.as_str(),
+                };
+                text.contains(needle)
+            })
             && !((text.contains('(') || self.bare_calls) && self.any_sourcing())
         {
             return false;

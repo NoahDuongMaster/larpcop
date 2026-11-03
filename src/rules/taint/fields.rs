@@ -38,8 +38,7 @@ pub(super) fn class_field<D: Doc>(node: &Node<D>) -> bool {
             "class_declaration" | "struct_declaration" | "record_declaration"
             | "enum_declaration" => {
                 // The class's own members first: most names are not fields.
-                return fields(&a).iter().any(|f| f == name.as_ref())
-                    && !method.is_some_and(|m| declares(&m, &name));
+                return has_field(&a, &name) && !method.is_some_and(|m| declares(&m, &name));
             }
             "lambda_expression" | "arrow_function" | "function_definition" => return false,
             _ => {}
@@ -48,24 +47,22 @@ pub(super) fn class_field<D: Doc>(node: &Node<D>) -> bool {
     false
 }
 
-/// Names a class declares as fields.
-fn fields<D: Doc>(class: &Node<D>) -> Vec<String> {
+/// Does `class` declare `name` as a field?
+fn has_field<D: Doc>(class: &Node<D>, name: &str) -> bool {
     let Some(body) = class.part("body") else {
-        return Vec::new();
+        return false;
     };
     body.children()
         .filter(|m| m.kind() == "field_declaration")
-        .flat_map(|m| {
+        .any(|m| {
             m.dfs()
                 .filter(|d| d.kind() == "variable_declarator")
-                .collect::<Vec<_>>()
+                .any(|d| {
+                    d.part("name")
+                        .or_else(|| d.children().find(|c| c.kind() == "identifier"))
+                        .is_some_and(|n| n.text() == name)
+                })
         })
-        .filter_map(|d| {
-            d.part("name")
-                .or_else(|| d.children().find(|c| c.kind() == "identifier"))
-                .map(|n| n.text().to_string())
-        })
-        .collect()
 }
 
 /// Does the method declare `name` as a parameter or local?

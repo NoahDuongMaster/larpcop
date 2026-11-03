@@ -52,30 +52,30 @@ type EventsKey = (Key, usize, Seed);
 
 /// What a scope holds whatever the rule, in walk order: `If` stands where the
 /// guard events of an `if` go once a rule's guards are known.
-pub(super) enum Shape<'a, D: Doc> {
+pub(crate) enum Shape<'a, D: Doc> {
     /// As `Event::Assign`; whether the target is a field is worked out once
     /// per file here, it is costly.
     Assign(Node<'a, D>, Node<'a, D>, Option<usize>, bool),
     Call(Node<'a, D>),
     Return(Node<'a, D>),
     Nested(Node<'a, D>),
-    If(Node<'a, D>),
+    If(Node<'a, D>, Option<HashSet<String>>),
     /// Code that never runs (a branch decided by known values): its sinks
     /// are not reached.
     Dead(usize, usize),
 }
 
-pub(super) type Skeleton<'a, D> = Vec<(usize, Shape<'a, D>)>;
+pub(crate) type Skeleton<'a, D> = Vec<(usize, Shape<'a, D>)>;
 
 /// Skeletons of a file's scopes, shared by the rules checking it.
-pub(super) type Skeletons<'a, D> = Rc<RefCell<HashMap<Key, Rc<Skeleton<'a, D>>>>>;
+pub(crate) type Skeletons<'a, D> = Rc<RefCell<HashMap<Key, Rc<Skeleton<'a, D>>>>>;
 
 /// The sink matches of a file, and the events of each scope walked so far.
-pub(super) struct Hits<'a, D: Doc> {
+pub(crate) struct Hits<'a, D: Doc> {
     pub list: Vec<Hit<'a, D>>,
     /// Scope → its sinks (indexes into `list`).
-    by_scope: HashMap<Key, Vec<usize>>,
-    skeletons: Skeletons<'a, D>,
+    pub(super) by_scope: HashMap<Key, Vec<usize>>,
+    pub(super) skeletons: Skeletons<'a, D>,
     /// By scope, number of guard matches (validators add some once known)
     /// and seed.
     events: RefCell<HashMap<EventsKey, Events<'a, D>>>,
@@ -127,7 +127,7 @@ impl<'a, D: Doc> Hits<'a, D> {
         Some((name.clone(), *value))
     }
 
-    pub fn events(&self, scope: &Node<'a, D>, guards: &[Check]) -> Events<'a, D> {
+    pub(super) fn events(&self, scope: &Node<'a, D>, guards: &[Check]) -> Events<'a, D> {
         let at = (key(scope), guards.len(), self.seed_of(scope));
         if let Some(known) = self.events.borrow().get(&at) {
             return known.clone();
@@ -137,7 +137,7 @@ impl<'a, D: Doc> Hits<'a, D> {
         built
     }
 
-    fn skeleton(&self, scope: &Node<'a, D>) -> Rc<Skeleton<'a, D>> {
+    pub(crate) fn skeleton(&self, scope: &Node<'a, D>) -> Rc<Skeleton<'a, D>> {
         // Seeded: built for this summary only, not shared.
         if let Some((name, value)) = self.seed_of(scope) {
             return Rc::new(skeleton(scope, Some((&name, value))));
@@ -165,9 +165,9 @@ impl<'a, D: Doc> Hits<'a, D> {
                 Shape::Call(n) => Event::Call(n.clone()),
                 Shape::Return(n) => Event::Return(n.clone()),
                 Shape::Nested(n) => Event::Nested(n.clone()),
-                Shape::If(n) => {
-                    if let Some(names) = super::joins::both(n) {
-                        events.push((n.range().start, Event::Both(n.range(), names)));
+                Shape::If(n, both) => {
+                    if let Some(names) = both {
+                        events.push((n.range().start, Event::Both(n.range(), names.clone())));
                     }
                     for guard in super::guards::of(n, guards) {
                         match guard {
@@ -198,7 +198,10 @@ impl<'a, D: Doc> Hits<'a, D> {
     }
 }
 
-fn skeleton<'a, D: Doc>(scope: &Node<'a, D>, seed: Option<(&str, bool)>) -> Skeleton<'a, D> {
+pub(super) fn skeleton<'a, D: Doc>(
+    scope: &Node<'a, D>,
+    seed: Option<(&str, bool)>,
+) -> Skeleton<'a, D> {
     let mut out: Skeleton<D> = Vec::new();
     let branches = super::deadcode::Branches::of(scope, seed);
     let lists = super::lists::Lists::of(scope);
@@ -215,7 +218,7 @@ fn skeleton<'a, D: Doc>(scope: &Node<'a, D>, seed: Option<(&str, bool)>) -> Skel
             || super::loops::WHILES.contains(&kind.as_ref())
             || super::switches::SWITCHES.contains(&kind.as_ref())
         {
-            out.push((n.range().start, Shape::If(n.clone())));
+            out.push((n.range().start, Shape::If(n.clone(), super::joins::both(n))));
         }
         if let Some((left, right)) = super::flow::assignment(n) {
             // `x = c ? a : b` with `c` known: only the side taken.

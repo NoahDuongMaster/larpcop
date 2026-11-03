@@ -8,51 +8,94 @@ use crate::rules::{Level, Violation};
 use anyhow::Result;
 use jiff::{SignedDuration, Timestamp};
 use rayon::prelude::*;
-use std::collections::BTreeSet;
+use std::cell::OnceCell;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+
+pub(super) struct ParsedLock {
+    pub rel: String,
+    pub content: Arc<str>,
+    pub pins: Vec<Pinned>,
+    before: OnceCell<BTreeSet<Pinned>>,
+}
 
 /// A lockfile entry that this change adds or moves to another version.
 pub(super) struct Fresh {
     rel: String,
-    line: usize,
+    content: Arc<str>,
     pin: Pinned,
 }
 
+impl View<'_> {
+    pub(super) fn parse_lock(&self, rel: &str, name: &str) -> Option<Result<ParsedLock>> {
+        let is_pin = lockfile::parse(name, "").is_some()
+            || name == "package.json"
+            || (name.starts_with("requirements") && name.ends_with(".txt"));
+        if !is_pin {
+            return None;
+        }
+        let content = self.current(rel)?;
+        let pins = self.pins(rel, name, &content)?;
+        Some(pins.map(|pins| ParsedLock {
+            rel: rel.to_string(),
+            content: content.into(),
+            pins,
+            before: OnceCell::new(),
+        }))
+    }
+}
+
+impl ParsedLock {
+    pub(super) fn before(&self, view: &View) -> &BTreeSet<Pinned> {
+        self.before.get_or_init(|| {
+            let name = super::file_name(&self.rel);
+            view.old(&self.rel)
+                .and_then(|old| view.pins(&self.rel, name, &old)?.ok())
+                .unwrap_or_default()
+                .into_iter()
+                .collect()
+        })
+    }
+}
+
 impl Deps {
-    pub(super) fn fresh_pins(
+    pub(super) fn collect_fresh<'a>(
         &self,
-        rel: &str,
+        rel: &'a str,
         name: &str,
         view: &View,
+        locks: &mut BTreeMap<&'a str, Option<ParsedLock>>,
         out: &mut Vec<Violation>,
     ) -> Vec<Fresh> {
-        let Some(content) = view.current(rel) else {
-            return Vec::new();
-        };
-        let pins = match view.pins(rel, name, &content) {
-            Some(Ok(p)) => p,
+        match view.parse_lock(rel, name) {
+            Some(Ok(lock)) => {
+                let fresh = self.fresh_pins_parsed(&lock, view);
+                locks.insert(rel, Some(lock));
+                fresh
+            }
             Some(Err(e)) => {
                 out.push(unreadable(rel, AGE_ID, &e));
-                return Vec::new();
+                locks.insert(rel, None);
+                Vec::new()
             }
-            None => return Vec::new(),
-        };
-        let before: BTreeSet<Pinned> = view
-            .old(rel)
-            .and_then(|old| view.pins(rel, name, &old)?.ok())
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
+            None => Vec::new(),
+        }
+    }
+
+    pub(super) fn fresh_pins_parsed(&self, lock: &ParsedLock, view: &View) -> Vec<Fresh> {
+        let before = lock.before(view);
         let mut seen = BTreeSet::new();
-        pins.into_iter()
+        lock.pins
+            .iter()
             .filter(|p| {
-                !before.contains(p)
+                !before.contains(*p)
                     && !self.exempt.matches(p.eco, &p.name)
-                    && seen.insert(p.clone())
+                    && seen.insert((*p).clone())
             })
             .map(|pin| Fresh {
-                rel: rel.to_string(),
-                line: lockfile::line_of(name, &content, &pin),
-                pin,
+                rel: lock.rel.clone(),
+                content: Arc::clone(&lock.content),
+                pin: pin.clone(),
             })
             .collect()
     }
@@ -106,12 +149,13 @@ version. If it comes from a private registry, ask the user to add it to `depende
                 .to_string(),
         ),
     };
+    let line = lockfile::line_of(super::file_name(&f.rel), &f.content, p);
     Some(Violation {
         rule: AGE_ID.into(),
         level,
         file: f.rel.clone(),
-        line: f.line,
-        column: usize::from(f.line > 0),
+        line,
+        column: usize::from(line > 0),
         message,
         note: Some(note),
         snippet: None,

@@ -1,44 +1,58 @@
 //! `dependency-vulnerability`: OSV advisories on lockfile entries and on
 //! packages an agent is about to install.
 
+use super::age::ParsedLock;
 use super::ecosystem::{Ecosystem, Pinned};
 use super::install::Request;
 use super::osv::{Osv, Severity};
 use super::{Deps, VULN_ID, View, lockfile};
 use crate::rules::{Level, Violation};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 /// A lockfile entry and whether this change brought it in.
 pub(super) struct Locked {
     rel: String,
-    line: usize,
+    content: Arc<str>,
     pin: Pinned,
     fresh: bool,
 }
 
 impl Deps {
+    pub(super) fn collect_locked(
+        &self,
+        scan: &[String],
+        view: &View,
+        locks: &BTreeMap<&str, Option<ParsedLock>>,
+        audit: bool,
+    ) -> Vec<Locked> {
+        let mut locked = Vec::new();
+        for rel in scan {
+            if self.exclude.is_match(rel) {
+                continue;
+            }
+            if let Some(cached) = locks.get(rel.as_str()) {
+                if let Some(lock) = cached {
+                    locked.extend(self.locked_parsed(lock, view, audit));
+                }
+            } else if let Some(Ok(lock)) = view.parse_lock(rel, super::file_name(rel)) {
+                locked.extend(self.locked_parsed(&lock, view, audit));
+            }
+        }
+        locked
+    }
+
     /// Every entry of a lockfile; `audit` = judge all of them, not just new ones.
-    pub(super) fn locked(&self, rel: &str, name: &str, view: &View, audit: bool) -> Vec<Locked> {
-        let Some(content) = view.current(rel) else {
-            return Vec::new();
-        };
-        let Some(Ok(pins)) = view.pins(rel, name, &content) else {
-            return Vec::new();
-        };
-        let before: BTreeSet<Pinned> = view
-            .old(rel)
-            .and_then(|old| view.pins(rel, name, &old)?.ok())
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
+    pub(super) fn locked_parsed(&self, lock: &ParsedLock, view: &View, audit: bool) -> Vec<Locked> {
         let mut seen = BTreeSet::new();
-        pins.into_iter()
-            .filter(|p| seen.insert(p.clone()))
+        lock.pins
+            .iter()
+            .filter(|p| seen.insert((*p).clone()))
             .map(|pin| Locked {
-                rel: rel.into(),
-                line: lockfile::line_of(name, &content, &pin),
-                fresh: audit || !before.contains(&pin),
-                pin,
+                rel: lock.rel.clone(),
+                content: Arc::clone(&lock.content),
+                fresh: audit || !lock.before(view).contains(pin),
+                pin: pin.clone(),
             })
             .collect()
     }
@@ -64,9 +78,10 @@ impl Deps {
             for a in advisories {
                 let p = &l.pin;
                 if a.malicious {
+                    let line = lockfile::line_of(super::file_name(&l.rel), &l.content, p);
                     out.push(violation(
                         &l.rel,
-                        l.line,
+                        line,
                         format!(
                             "`{p}` ({}) is a known MALICIOUS package ({}): {}",
                             p.eco, a.id, a.summary
@@ -76,6 +91,7 @@ that installed it as compromised: rotate the credentials they held."
                             .into(),
                     ));
                 } else if l.fresh && a.severity >= threshold {
+                    let line = lockfile::line_of(super::file_name(&l.rel), &l.content, p);
                     let fix = match a.fixed.as_slice() {
                         [] => "No fixed version is published: replace the package or ask the user."
                             .to_string(),
@@ -86,7 +102,7 @@ that installed it as compromised: rotate the credentials they held."
                     };
                     out.push(violation(
                         &l.rel,
-                        l.line,
+                        line,
                         format!(
                             "`{p}` ({}) has a known {:?} vulnerability {}: {}",
                             p.eco, a.severity, a.id, a.summary

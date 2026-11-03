@@ -145,10 +145,11 @@ impl Server {
             return Ok(Vec::new());
         };
         let outcome = self.ctx()?.check_buffer(&path, text)?;
+        let lines: Vec<&str> = text.lines().collect();
         Ok(outcome
             .violations
             .iter()
-            .map(|v| diagnostic(v, text))
+            .map(|v| diagnostic(v, &lines))
             .collect())
     }
 
@@ -188,12 +189,11 @@ impl Server {
 }
 
 /// From the reported column to the end of that line.
-fn diagnostic(v: &Violation, text: &str) -> Diagnostic {
+fn diagnostic(v: &Violation, lines: &[&str]) -> Diagnostic {
     let line = v.line.saturating_sub(1);
     let col = v.column.saturating_sub(1) as u32;
-    let width = text
-        .lines()
-        .nth(line)
+    let width = lines
+        .get(line)
         .map_or(0, |l| l.encode_utf16().count() as u32);
     let severity = match v.level {
         Level::Error => DiagnosticSeverity::ERROR,

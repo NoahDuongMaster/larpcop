@@ -37,6 +37,9 @@ pub(super) fn groups<D: Doc>(events: &[(usize, Event<'_, D>)]) -> Vec<HashSet<St
 
 /// Taints every member of a group one member of which is tainted.
 pub(super) fn spread(groups: &[HashSet<String>], names: &mut HashSet<String>) {
+    if groups.is_empty() || names.is_empty() {
+        return;
+    }
     for g in groups {
         if g.iter().any(|n| names.contains(n)) {
             names.extend(g.iter().cloned());

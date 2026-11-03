@@ -82,10 +82,7 @@ impl Engine {
             return Vec::new();
         }
         let index = taint::FileIndex::new(root.clone());
-        self.taint
-            .iter()
-            .flat_map(|t| t.check_indexed(file, lang, &index))
-            .collect()
+        taint::check_indexed_multi(&self.taint, file, lang, &index)
     }
 
     fn secrets(&self, file: &SourceFile) -> Vec<Violation> {

@@ -92,7 +92,7 @@ impl TaintRule {
         out
     }
 
-    fn violation<D: Doc>(
+    pub(super) fn violation<D: Doc>(
         &self,
         file: &SourceFile,
         at: &Node<D>,

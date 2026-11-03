@@ -52,10 +52,11 @@ impl Ctx {
     /// Every violation in scope, before the baseline is applied.
     pub fn raw(&self, cfg: &Config, engine: &Engine, scope: &Scope) -> Result<Outcome> {
         let exclude = files::globset(&cfg.exclude)?;
-        let files = files::collect(&cfg.root, scope, &exclude)?;
+        let listed = files::list(&cfg.root, scope)?;
+        let files = files::collect_listed(&cfg.root, scope, &exclude, &listed);
         let mut violations = engine.check(&cfg.root, &files)?;
         if let Some(deps) = engine.deps() {
-            violations.extend(deps.check(&cfg.root, scope)?);
+            violations.extend(deps.check_listed(&cfg.root, scope, &listed)?);
         }
         crate::rules::sort(&mut violations);
         Ok(Outcome {
@@ -112,20 +113,37 @@ impl Ctx {
     /// a partial fix of a file that is already broken must go through (seen
     /// live: Kiro could not swap `any` for `unknown` on a line that still had `console`).
     pub fn check_content(&self, path: &Path, content: &str) -> Result<Outcome> {
-        let mut outcome = self.check_buffer(path, content)?;
-        let Ok(before) = std::fs::read_to_string(path) else {
-            return Ok(outcome);
+        let Some((cfg, engine, file)) = self.buffer(path, content)? else {
+            return Ok(Outcome::default());
         };
-        let before = self.check_buffer(path, &before)?.violations;
-        let count = |v: &[Violation], rule: &str| v.iter().filter(|x| x.rule == rule).count();
-        let grown: Vec<String> = outcome
-            .violations
-            .iter()
-            .map(|v| v.rule.clone())
-            .filter(|r| count(&outcome.violations, r) > count(&before, r))
-            .collect();
-        outcome.violations.retain(|v| grown.contains(&v.rule));
-        Ok(outcome)
+        let known = Baseline::load(&cfg.root, false)?;
+        let check = |f: &files::SourceFile| {
+            let mut v = engine.check_source(f);
+            let baselined = known.as_ref().map_or(0, |k| k.apply(&mut v));
+            (v, baselined)
+        };
+        let (mut violations, baselined) = check(&file);
+        if !violations.is_empty()
+            && let Ok(before) = std::fs::read_to_string(path)
+        {
+            let (before, _) = check(&files::SourceFile {
+                rel: file.rel,
+                content: before,
+            });
+            let count = |v: &[Violation], rule: &str| v.iter().filter(|x| x.rule == rule).count();
+            let grown: Vec<String> = violations
+                .iter()
+                .map(|v| v.rule.clone())
+                .filter(|r| count(&violations, r) > count(&before, r))
+                .collect();
+            violations.retain(|v| grown.contains(&v.rule));
+        }
+        Ok(Outcome {
+            files: 1,
+            violations,
+            baselined,
+            ..Outcome::default()
+        })
     }
 
     pub fn check(&self, scope: &Scope) -> Result<Outcome> {

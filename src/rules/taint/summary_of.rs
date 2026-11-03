@@ -17,18 +17,17 @@ impl TaintRule {
         &self,
         round: &Ctx,
         params_only: &Ctx,
-        name: &String,
-        f: &Node<'a, D>,
-        params: &[String],
+        def: &super::defs::FnDef<'a, D>,
         lang: SupportLang,
         file: &SourceFile,
         hits: &Hits<'a, D>,
         fields: &HashSet<String>,
     ) -> (Summary, Vec<String>) {
+        let (name, f, params) = (&def.name, &def.node, def.params.as_slice());
         let own = |n: &Node<'a, D>| self.own_names(n);
         let mut s = Summary {
-            method: super::defs::class_of(f).is_some(),
-            supers: super::defs::supers_of(f),
+            method: def.method,
+            supers: def.supers.clone(),
             ..Summary::default()
         };
         for (i, p) in params.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
@@ -70,7 +69,7 @@ impl TaintRule {
                 s.conditions.insert(i, g);
             }
         }
-        for key in super::statics::read(f) {
+        for key in &def.statics_read {
             let start: HashSet<String> = [key.clone()].into();
             params_only.run(f, start, hits, &|_| HashSet::new(), &mut |r| match r {
                 Reached::Sink(arg, typed) if self.typed.holds(lang, file, &typed) => {

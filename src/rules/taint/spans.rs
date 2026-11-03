@@ -40,6 +40,10 @@ impl Spans {
         self.v.is_empty()
     }
 
+    pub fn spans(&self) -> &[Range<usize>] {
+        &self.v
+    }
+
     pub fn with_extra(&self, extra: impl IntoIterator<Item = Range<usize>>) -> Spans {
         Spans::new(self.v.iter().cloned().chain(extra))
     }

@@ -39,8 +39,8 @@ pub(super) fn entry<D: Doc>(n: &Node<D>) -> Option<String> {
         return field(n);
     }
     let (base, key) = if SUBSCRIPTS.contains(&kind.as_ref()) {
-        let named: Vec<Node<D>> = n.children().filter(|c| c.is_named()).collect();
-        (named.first()?.clone(), named.get(1)?.clone())
+        let mut named = n.children().filter(|c| c.is_named());
+        (named.next()?, named.next()?)
     } else if super::flow::CALLS.contains(&kind.as_ref()) {
         let text = n.text();
         if !READS.iter().chain(WRITES.iter()).any(|w| text.contains(w)) {
@@ -69,10 +69,10 @@ pub(super) fn entry<D: Doc>(n: &Node<D>) -> Option<String> {
         }
         // Reads: one key, or two literals (`conf.get('s', 'k')`); writes: the
         // keys before the value (`m.put(k, v)`, `conf.set('s', 'k', v)`).
-        let keyed: Vec<Node<D>> = match (keys, all.len()) {
-            (1, 1) => all,
-            (1, 2) if all.iter().all(|a| literal(a).is_some()) => all,
-            (0, 2 | 3) => all[..all.len() - 1].to_vec(),
+        let keyed: &[Node<D>] = match (keys, all.len()) {
+            (1, 1) => &all,
+            (1, 2) if all.iter().all(|a| literal(a).is_some()) => &all,
+            (0, 2 | 3) => &all[..all.len() - 1],
             _ => return None,
         };
         let key = keyed

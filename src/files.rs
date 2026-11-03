@@ -3,6 +3,7 @@
 use anyhow::{Context, Result, bail};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
+use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, fs};
@@ -38,13 +39,26 @@ pub fn globset(patterns: &[String]) -> Result<GlobSet> {
 }
 
 pub fn collect(root: &Path, scope: &Scope, exclude: &GlobSet) -> Result<Vec<SourceFile>> {
-    let mut rels = list(root, scope)?;
-    rels.retain(|r| !exclude.is_match(r));
+    Ok(collect_listed(root, scope, exclude, &list(root, scope)?))
+}
+
+pub fn collect_listed(
+    root: &Path,
+    scope: &Scope,
+    exclude: &GlobSet,
+    listed: &[String],
+) -> Vec<SourceFile> {
     let staged = matches!(scope, Scope::Staged);
-    Ok(rels
-        .into_iter()
-        .filter_map(|rel| read(root, &rel, staged).map(|content| SourceFile { rel, content }))
-        .collect())
+    listed
+        .par_iter()
+        .filter(|r| !exclude.is_match(r.as_str()))
+        .filter_map(|rel| {
+            read(root, rel, staged).map(|content| SourceFile {
+                rel: rel.clone(),
+                content,
+            })
+        })
+        .collect()
 }
 
 /// Root-relative paths a scope covers, sorted, before any `exclude`.

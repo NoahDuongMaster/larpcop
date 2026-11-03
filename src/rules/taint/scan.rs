@@ -17,7 +17,7 @@ use std::path::Path;
 /// Pattern groups, in this order: sources, sinks, sanitizers, guards, rejects.
 pub(super) const GROUPS: usize = 5;
 
-type Defs<'a, D> = Vec<(String, Node<'a, D>, Vec<String>)>;
+type Defs<'a, D> = Vec<super::defs::FnDef<'a, D>>;
 
 /// A parsed file's nodes by kind, its named functions and its imports:
 /// computed once, whatever the number of taint rules.

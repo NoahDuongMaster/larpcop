@@ -27,9 +27,16 @@ impl Writes {
 
     /// Could `text` call one of the calls that write outside data?
     pub(super) fn reads_input(&self, text: &str) -> bool {
-        self.sources
-            .keys()
-            .any(|name| text.contains(&format!("{name}(")))
+        self.sources.keys().any(|name| {
+            let mut rem = text;
+            while let Some(pos) = rem.find(name) {
+                if rem[pos + name.len()..].starts_with('(') {
+                    return true;
+                }
+                rem = &rem[pos + name.len()..];
+            }
+            false
+        })
     }
 
     /// The copies only: summaries of what a function does with its

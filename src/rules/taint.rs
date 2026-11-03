@@ -162,6 +162,7 @@ mod loops;
 mod mapping;
 mod membership;
 pub(super) mod multi_check;
+pub(super) mod multi_eval;
 pub(super) mod multi_hits;
 pub(super) mod multi_mask;
 pub(super) mod multi_summary;

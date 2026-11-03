@@ -1,12 +1,12 @@
 //! Expression evaluation and call stepping for the unified multi-taint lattice.
 
+use super::NAMES;
 use super::fields::is_field;
 use super::flow::CALLS;
 use super::kotlin::Part;
 use super::multi_mask::{RuleMask, TaintEnv};
 use super::multi_walk::{MultiCtx, MultiReached, MultiSeen};
 use super::summary::args;
-use super::NAMES;
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashMap;

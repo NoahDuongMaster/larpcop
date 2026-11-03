@@ -1,12 +1,12 @@
 //! AST traversal for the multi-taint lattice evaluating all rules simultaneously.
 
+use super::VARIABLES;
 use super::events::Shape;
 use super::fields::is_field;
 use super::guards::Guard;
 use super::multi_hits::MultiHits;
 use super::multi_mask::{RuleId, RuleMask, TaintEnv};
 use super::multi_summary::MultiSummaries;
-use super::VARIABLES;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
 
@@ -208,7 +208,7 @@ impl<'a, 'h, D: Doc> MultiCtx<'a, 'h, D> {
                                     events.push((pos, MultiEvent::Clean(names, *g_mask)))
                                 }
                                 Guard::Settle(r, names) => events
-                                    .push((r.start, MultiEvent::Settle(r.end, names, *g_mask)) vast_empty()),
+                                    .push((r.start, MultiEvent::Settle(r.end, names, *g_mask))),
                                 Guard::Within(r, names) => {
                                     events.push((r.start, MultiEvent::Enter(names, *g_mask)));
                                     events.push((r.end, MultiEvent::Restore));

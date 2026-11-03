@@ -1,10 +1,10 @@
-//! Expression evaluation and call dispatch for the unified multi-taint lattice.
+//! Expression evaluation and call stepping for the unified multi-taint lattice.
 
 use super::fields::is_field;
 use super::flow::CALLS;
 use super::kotlin::Part;
 use super::multi_mask::{RuleMask, TaintEnv};
-use super::multi_walk::{MultiCtx, MultiReached};
+use super::multi_walk::{MultiCtx, MultiReached, MultiSeen};
 use super::summary::args;
 use super::NAMES;
 use crate::rules::complexity::is_function;
@@ -28,7 +28,8 @@ impl<'a, 'h, D: Doc> MultiCtx<'a, 'h, D> {
                 mask |= env.entries_of(text.as_ref());
             }
             if self.bare_calls && kind == "identifier" {
-                if let Some(s) = self.summaries.get(text.as_ref()) {
+                let summary = self.summaries.get(text.as_ref());
+                if let Some(s) = summary {
                     mask |= s.returns_source;
                 }
             }
@@ -40,7 +41,8 @@ impl<'a, 'h, D: Doc> MultiCtx<'a, 'h, D> {
             }
         }
         if env.has_entries {
-            if let Some(entry) = super::entries::entry(node) {
+            let entry = super::entries::entry(node);
+            if let Some(entry) = entry {
                 let base = entry.split('[').next().unwrap_or_default();
                 return ((env.get(&entry) | env.get(base) | src_mask) & !san_mask)
                     & self.active_rules;
@@ -51,11 +53,13 @@ impl<'a, 'h, D: Doc> MultiCtx<'a, 'h, D> {
         {
             return 0;
         }
-        if matches!(
+        let is_cond = matches!(
             kind.as_ref(),
             "ternary_expression" | "conditional_expression" | "conditional"
-        ) {
-            if let Some((cond, a, b)) = super::deadcode::sides(node) {
+        );
+        if is_cond {
+            let sides = super::deadcode::sides(node);
+            if let Some((cond, a, b)) = sides {
                 let (mut holds_map, mut fails_map) = (HashMap::new(), HashMap::new());
                 for (g_mask, check) in &self.hits.guard_checks {
                     let (holds, fails) = super::guards::safe(&cond, std::slice::from_ref(check));
@@ -112,53 +116,72 @@ impl<'a, 'h, D: Doc> MultiCtx<'a, 'h, D> {
         ((mask | src_mask) & !san_mask) & self.active_rules
     }
 
-    pub(super) fn run_call<F: FnMut(MultiReached<'a, D>)>(
+    pub(super) fn step_call(
         &self,
-        node: &Node<'a, D>,
-        env: &TaintEnv,
-        on: &mut F,
+        call: &Node<'a, D>,
+        env: &mut TaintEnv,
+        on: &mut impl FnMut(MultiSeen<'a, D>),
     ) {
-        let cargs = args(node);
-        if let Some(called) = super::summary::called_name(node) {
-            if let Some(s) = self.summaries.get(&called) {
-                for (rule_id, single_s) in s.rules() {
-                    let rule_mask = 1u128 << rule_id;
-                    for (idx, into) in &single_s.calls {
-                        if let Some(arg) = cargs.get(*idx) {
-                            let mask = self.tainted_mask(arg, env) & rule_mask;
-                            if mask != 0 {
-                                on(MultiReached::Call {
-                                    arg: arg.clone(),
-                                    mask,
-                                    into: into.clone(),
-                                    rule_id,
-                                });
-                            }
-                        }
-                    }
-                }
-                for &(src_idx, fill_idx, fill_mask) in &s.fills {
-                    if let (Some(sa), Some(fa)) = (cargs.get(src_idx), cargs.get(fill_idx)) {
-                        let m = self.tainted_mask(sa, env) & fill_mask;
+        if let (Some(val), Some(entry)) =
+            (super::entries::stored(call), super::entries::entry(call))
+        {
+            let m = self.tainted_mask(&val, env);
+            if m != 0 {
+                env.or_mask(entry, m);
+            } else {
+                env.mask_out(&entry, self.active_rules);
+            }
+        } else if let Some(cnt) = super::containers::filled(call)
+            .filter(|_| !(self.numbers && super::containers::writes(call)))
+        {
+            let m = args(call)
+                .iter()
+                .fold(0, |acc, a| acc | self.tainted_mask(a, env));
+            if m != 0 {
+                env.or_mask(cnt, m);
+            }
+        }
+        if let Some(s) = super::summary::called_name(call).and_then(|c| self.summaries.get(&c)) {
+            let cargs = args(call);
+            for &(from, to, fill_mask) in &s.fills {
+                if let (Some(fa), Some(ta)) = (cargs.get(from), cargs.get(to)) {
+                    let is_name = NAMES.contains(&ta.kind().as_ref());
+                    if is_name {
+                        let m = self.tainted_mask(fa, env) & fill_mask;
                         if m != 0 {
-                            let fm = self.tainted_mask(fa, env) & fill_mask;
-                            if fm != 0 {
-                                on(MultiReached::Field(fa.clone(), fm));
-                            }
+                            env.or_mask(ta.text().as_ref(), m);
                         }
                     }
                 }
             }
-        }
-        for arg in cargs {
-            let am = self.tainted_mask(&arg, env);
-            if am != 0 {
-                on(MultiReached::Sink {
-                    arg: arg.clone(),
-                    mask: am,
-                    sink_mask: self.active_rules,
-                    typed: Vec::new(),
-                });
+            for (&i, sinks) in &s.sinks {
+                if let Some(arg) = cargs.get(i) {
+                    let am = self.tainted_mask(arg, env);
+                    for (rule_id, into) in sinks {
+                        let bit = 1u128 << *rule_id;
+                        if (am & bit & self.active_rules) != 0 {
+                            on(MultiSeen::Reached(MultiReached::Call {
+                                arg: arg.clone(),
+                                mask: bit,
+                                into: into.clone(),
+                                rule_id: *rule_id,
+                            }));
+                        }
+                    }
+                }
+            }
+            for (key, into, rule_id) in &s.statics {
+                let bit = 1u128 << *rule_id;
+                if (self.active_rules & bit) != 0
+                    && super::statics::held(call, key, &env.to_hash_set(bit))
+                {
+                    on(MultiSeen::Reached(MultiReached::Call {
+                        arg: call.clone(),
+                        mask: bit,
+                        into: into.clone(),
+                        rule_id: *rule_id,
+                    }));
+                }
             }
         }
     }

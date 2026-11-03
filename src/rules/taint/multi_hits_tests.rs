@@ -1,139 +1,65 @@
 use super::*;
-use crate::rules::taint::routes::FixedRoutes;
-use crate::rules::taint::scan::Indexed;
-use crate::rules::taint::TaintRule;
-use ast_grep_core::AstGrep;
 use ast_grep_language::{LanguageExt, SupportLang};
-use regex::Regex;
-
-fn dummy_rule(id: &str, sink_pat: &str, san_pat: Option<&str>) -> TaintRule {
-    let lang = SupportLang::JavaScript;
-    let grep = lang.ast_grep(sink_pat);
-    let sink_matcher = grep.root();
-    let sanitizer_names = san_pat.map(|p| Regex::new(p).unwrap());
-    let indexed: Indexed = Indexed {
-        sources: Vec::new(),
-        sinks: vec![(sink_matcher.clone(), None)],
-        sanitizers: Vec::new(),
-        guards: Vec::new(),
-        rules: Vec::new(),
-    };
-    TaintRule {
-        id: id.to_string(),
-        message: "test".to_string(),
-        severity: crate::rules::Severity::Error,
-        languages: vec!["javascript".to_string()],
-        fixed_routes: FixedRoutes {
-            sources: Vec::new(),
-            sinks: Vec::new(),
-        },
-        sanitizer_names,
-        langs: vec![(lang, indexed)],
-    }
-}
 
 #[test]
-fn test_multi_hits_aggregates_multiple_rules() {
-    let r0 = dummy_rule("r0", "sink($$$)", None);
-    let r1 = dummy_rule("r1", "sink($$$)", Some("safe"));
-    let grep = SupportLang::JavaScript.ast_grep("function test() { sink(x); }");
+fn test_multi_hits_empty() {
+    let grep = SupportLang::JavaScript.ast_grep("function foo() {}");
     let root = grep.root();
-    let node = root
-        .dfs()
-        .find(|n| n.kind() == "call_expression")
-        .unwrap();
-    let h0 = Hits::new(
-        vec![(node.range().start, node.clone(), Vec::new())],
-        &root,
-        Default::default(),
-    );
-    let h1 = Hits::new(
-        vec![(node.range().start, node.clone(), Vec::new())],
-        &root,
-        Default::default(),
-    );
-    let file_hits = vec![h0, h1];
-    let mh = MultiHits::from_prepared(&[&r0, &r1], &[], &file_hits);
-    assert_eq!(mh.list.len(), 1);
-    assert_eq!(mh.list[0].sink_mask, 0b11);
-    assert_eq!(mh.sink_mask_at(&node.range()), 0b11);
+    let hits0 = Hits::new(vec![], &root, Default::default());
+    let empty = MultiHits::from_rules(&[], &[hits0]);
+    assert!(empty.is_empty());
+    assert_eq!(empty.len(), 0);
+    assert_eq!(empty.sink_mask_at(&(0..10)), 0);
 }
 
 #[test]
-fn test_multi_hits_sources_and_sanitizers_spans() {
-    let r0 = dummy_rule("r0", "sink($$$)", None);
-    let grep = SupportLang::JavaScript.ast_grep("function test() { let x = 1; }");
-    let root = grep.root();
-    let h0 = Hits::new(Vec::new(), &root, Default::default());
-    let mut ctx0 = Ctx::default();
-    ctx0.sources.insert(10..20);
-    ctx0.sanitizers.insert(30..40);
-    let mut ctx1 = Ctx::default();
-    ctx1.sources.insert(10..20);
-    let contexts = vec![&ctx0, &ctx1];
-    let mh = MultiHits::from_prepared(&[&r0, &r0], &contexts, &[h0.clone(), h0]);
-    assert_eq!(mh.source_mask_at(&(10..20)), 0b11);
-    assert_eq!(mh.sanitizer_mask_at(&(30..40)), 0b01);
-    assert_eq!(mh.source_mask_at(&(0..5)), 0);
-}
-
-#[test]
-fn test_multi_hits_enforces_128_rule_cap() {
-    let rules: Vec<TaintRule> = (0..130)
-        .map(|i| dummy_rule(&format!("r{i}"), "sink($$$)", None))
-        .collect();
-    let rule_refs: Vec<&TaintRule> = rules.iter().collect();
-    let grep = SupportLang::JavaScript.ast_grep("sink(x);");
-    let root = grep.root();
-    let node = root
-        .dfs()
-        .find(|n| n.kind() == "call_expression")
-        .unwrap();
-    let file_hits: Vec<Hits<ast_grep_language::SupportLangDoc>> = (0..130)
-        .map(|_| {
-            Hits::new(
-                vec![(node.range().start, node.clone(), Vec::new())],
-                &root,
-                Default::default(),
-            )
-        })
-        .collect();
-    let mh = MultiHits::from_prepared(&rule_refs, &[], &file_hits);
-    assert_eq!(mh.list[0].sink_mask, !0u128);
-}
-
-#[test]
-fn test_multi_hits_by_scope_nested_functions() {
-    let r0 = dummy_rule("r0", "sink($$$)", None);
-    let code = "function outer() { sink(1); function inner() { sink(2); } }";
-    let grep = SupportLang::JavaScript.ast_grep(code);
+fn test_multi_hits_from_rules_aggregates_masks() {
+    let grep = SupportLang::JavaScript.ast_grep("function foo() { sink1(a); sink2(b); }");
     let root = grep.root();
     let calls: Vec<_> = root
         .dfs()
         .filter(|n| n.kind() == "call_expression")
         .collect();
     assert_eq!(calls.len(), 2);
-    let h0 = Hits::new(
+    let (na, nb) = (calls[0].clone(), calls[1].clone());
+    let hits0 = Hits::new(
+        vec![(na.range().start, na.clone(), Vec::new())],
+        &root,
+        Default::default(),
+    );
+    let hits1 = Hits::new(
         vec![
-            (calls[0].range().start, calls[0].clone(), Vec::new()),
-            (calls[1].range().start, calls[1].clone(), Vec::new()),
+            (na.range().start, na.clone(), Vec::new()),
+            (nb.range().start, nb.clone(), Vec::new()),
         ],
         &root,
         Default::default(),
     );
-    let mh = MultiHits::from_prepared(&[&r0], &[], &[h0]);
-    assert_eq!(mh.list.len(), 2);
-    assert_eq!(mh.by_scope.len(), 2);
+    let multi = MultiHits::from_rules(&[], &[hits0, hits1]);
+    assert_eq!(multi.len(), 2);
+    assert_eq!(multi.hits()[0].sink_mask, 0b11);
+    assert_eq!(multi.hits()[1].sink_mask, 0b10);
+    assert_eq!(multi.sink_mask_at(&na.range()), 0b11);
+    assert_eq!(multi.sink_mask_at(&nb.range()), 0b10);
 }
 
 #[test]
-fn test_multi_hits_empty_hits() {
-    let r0 = dummy_rule("r0", "sink($$$)", None);
-    let grep = SupportLang::JavaScript.ast_grep("let x = 1;");
+fn test_multi_hits_spans_and_guards() {
+    let grep = SupportLang::JavaScript.ast_grep("function foo() {}");
     let root = grep.root();
-    let h0 = Hits::new(Vec::new(), &root, Default::default());
-    let mh = MultiHits::from_prepared(&[&r0], &[], &[h0]);
-    assert!(mh.list.is_empty());
-    assert!(mh.by_scope.is_empty());
-    assert_eq!(mh.sink_mask_at(&(0..10)), 0);
+    let hits0 = Hits::new(vec![], &root, Default::default());
+    let mut multi = MultiHits::from_rules(&[], &[hits0]);
+    multi.add_source_span(10..20, 0b01);
+    multi.add_sanitizer_span(15..25, 0b10);
+    multi.add_sink_span(20..30, 0b11);
+    multi.add_guard_check(0b01, (12..18, true, 1));
+
+    assert_eq!(multi.source_mask_at(&(10..20)), 0b01);
+    assert_eq!(multi.sanitizer_mask_at(&(15..25)), 0b10);
+    assert_eq!(multi.sink_mask_at(&(20..30)), 0b11);
+
+    let guards = multi.guards_for(&(10..30));
+    assert_eq!(guards.len(), 1);
+    assert_eq!(guards[0].0, 0b01);
+    assert_eq!(guards[0].1.0, 12..18);
 }

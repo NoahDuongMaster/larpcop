@@ -81,7 +81,7 @@ curl -LsSf https://github.com/NoahDuongMaster/larpcop/releases/latest/download/l
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/NoahDuongMaster/larpcop/releases/latest/download/larpcop-installer.ps1 | iex"
 ```
 
-安装脚本会把二进制文件放进 `~/.local/bin`。想从源码构建，克隆仓库后运行 `cargo build --release`。目前还没有 crates.io 或 npm 包，Homebrew formula 随 release 附带，但尚未发布。
+安装脚本会把二进制文件放进 `~/.local/bin`。想从源码构建，克隆仓库后运行 `cargo build --release`。目前还没有 crates.io、npm 或 Homebrew 包。
 
 ## 快速开始
 

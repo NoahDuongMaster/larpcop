@@ -3,10 +3,12 @@ use super::*;
 #[test]
 fn detects_known_formats_and_respects_allowlists() {
     let s = Secrets::new().unwrap();
-    assert!(
-        s.detectors() >= 200,
-        "only {} gitleaks rules compiled",
-        s.detectors()
+    // A pattern Rust's regex rejects is skipped at run time without a word, so
+    // a gitleaks update that adds one must fail here, not lose a detector.
+    assert_eq!(
+        s.detectors(),
+        s.rules.len(),
+        "gitleaks rules whose regex does not compile"
     );
     // Built at runtime so the repository never contains a scannable token.
     let gh = format!("ghp_{}", "x7Rk2mQ9vTz4LpW8sYb3NcD6fJh1Ga5Ue0Ki");

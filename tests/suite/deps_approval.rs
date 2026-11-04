@@ -137,3 +137,22 @@ fn locked_dependency_rules_can_only_tighten() {
         agents.contains("`dependency-approval`") && agents.contains("`dependency-release-age`")
     );
 }
+
+#[test]
+fn rules_for_a_dependency_file_lists_the_dependency_rules() {
+    let repo = repo(&format!("{APPROVAL}  min_release_age: 14\n"));
+    for file in ["package.json", "package-lock.json", "Cargo.toml"] {
+        let out = repo.run(&["rules", "--for", file]).stdout();
+        for id in ["dependency-approval", "dependency-release-age"] {
+            assert!(out.contains(id), "{file}: {out}");
+        }
+    }
+    // Other files are not what they read; `rules` without a path lists them.
+    let out = repo.run(&["rules", "--for", "src/app.ts"]).stdout();
+    assert!(!out.contains("dependency-"), "{out}");
+    assert!(
+        repo.run(&["rules"])
+            .stdout()
+            .contains("dependency-approval")
+    );
+}

@@ -4,7 +4,7 @@
 //! Shell commands go through tree-sitter-bash (`shell_ast`): `cat cfg 2>/dev/null`
 //! stays allowed while `bash -c 'rm .larpcop.yaml'` or `--no-ver""ify` do not.
 
-use crate::shell_ast::{self, Command};
+use crate::shell_ast::{Command, Script};
 use std::path::{Path, PathBuf};
 
 const NO_VERIFY: &str = "skipping git hooks (`--no-verify` / `git commit -n`) is not allowed.";
@@ -33,6 +33,11 @@ fn protected(path: &str) -> Option<&'static str> {
     if name == crate::baseline::FILE {
         return Some("changing the baseline is reserved for humans: fix the violations instead.");
     }
+    if super::guard_cache::in_cache(&p) {
+        return Some(
+            "larpcop's cache (publish dates, advisories, cloned standards) is trusted by the dependency gates: changing it is reserved for humans.",
+        );
+    }
     is_agent_config(&format!("/{p}"), name)
         .then_some("changing agent hook settings is reserved for humans.")
 }
@@ -50,12 +55,12 @@ fn is_agent_config(path: &str, name: &str) -> bool {
         || (path.contains("/.windsurf/") && name == "hooks.json")
 }
 
-pub fn bash_bypass(command: &str) -> Option<String> {
+/// `script` is `command`, parsed.
+pub fn bash_bypass(command: &str, script: &Script) -> Option<String> {
     // Belt and braces: `$(echo --no-verify)` is opaque to the parser.
     if command.contains("--no-verify") {
         return Some(NO_VERIFY.into());
     }
-    let script = shell_ast::parse(command);
     for (name, value) in script.assignments() {
         let off = matches!(value.as_str(), "0" | "false");
         if (matches!(name.as_str(), "HUSKY" | "LEFTHOOK") && off) || name == "SKIP" {
@@ -184,6 +189,7 @@ fn normalize(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shell_ast::parse;
 
     #[test]
     fn detects_bypasses() {
@@ -215,7 +221,10 @@ mod tests {
             "larpcop baseline",
             "echo '[]' > .larpcop-baseline.json",
         ] {
-            assert!(bash_bypass(cmd).is_some(), "should block: {cmd}");
+            assert!(
+                bash_bypass(cmd, &parse(cmd)).is_some(),
+                "should block: {cmd}"
+            );
         }
     }
 
@@ -239,7 +248,10 @@ mod tests {
             "grep -rn HUSKY=0 docs/",
             "larpcop baseline --prune",
         ] {
-            assert!(bash_bypass(cmd).is_none(), "should allow: {cmd}");
+            assert!(
+                bash_bypass(cmd, &parse(cmd)).is_none(),
+                "should allow: {cmd}"
+            );
         }
     }
 }

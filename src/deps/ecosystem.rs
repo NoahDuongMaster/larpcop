@@ -31,7 +31,8 @@ impl Ecosystem {
         Self::Packagist,
     ];
 
-    /// Prefix in config patterns (`npm:left-pad`) and in messages.
+    /// Prefix in config patterns (`npm:left-pad`) and in messages; also the system
+    /// name in the deps.dev API.
     pub fn label(self) -> &'static str {
         match self {
             Self::Npm => "npm",
@@ -43,11 +44,6 @@ impl Ecosystem {
             Self::Maven => "maven",
             Self::Packagist => "composer",
         }
-    }
-
-    /// System name in the deps.dev API.
-    pub fn deps_dev(self) -> &'static str {
-        self.label()
     }
 
     /// PyPI names are case-insensitive and treat runs of `-`, `_`, `.` alike

@@ -15,17 +15,19 @@ pub fn cache_root() -> Result<PathBuf> {
         .context("no cache directory on this system; set LARPCOP_CACHE_DIR")
 }
 
+/// A directory name for one checkout. Percent-encoding keeps it injective:
+/// mapping every odd character to `_` made `a/b_c` and `a/b/c` share a cache.
 fn cache_key(url: &str, reference: Option<&str>) -> String {
     let raw = format!("{url}#{}", reference.unwrap_or("HEAD"));
-    raw.chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '.' || c == '-' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect()
+    let mut key = String::with_capacity(raw.len());
+    for b in raw.bytes() {
+        if b.is_ascii_alphanumeric() || b == b'.' || b == b'-' {
+            key.push(char::from(b));
+        } else {
+            key.push_str(&format!("%{b:02X}"));
+        }
+    }
+    key
 }
 
 /// Shallow-clones `url` at `reference` (tag or branch) and returns the checkout.
@@ -45,7 +47,18 @@ pub fn git(url: &str, reference: Option<&str>, refresh: bool) -> Result<PathBuf>
     ));
     let _ = fs::remove_dir_all(&tmp);
     let mut cmd = Command::new("git");
-    cmd.args(["clone", "--quiet", "--depth", "1"]);
+    // Runs inside hooks with nobody to answer: never wait for a credential
+    // prompt, and give up on a transfer that has stalled.
+    cmd.env("GIT_TERMINAL_PROMPT", "0").args([
+        "-c",
+        "http.lowSpeedLimit=1000",
+        "-c",
+        "http.lowSpeedTime=30",
+        "clone",
+        "--quiet",
+        "--depth",
+        "1",
+    ]);
     if let Some(r) = reference {
         cmd.args(["--branch", r]);
     }
@@ -69,4 +82,19 @@ pub fn git(url: &str, reference: Option<&str>, refresh: bool) -> Result<PathBuf>
         let _ = fs::remove_dir_all(&tmp);
     }
     Ok(dir)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cache_key;
+
+    #[test]
+    fn different_urls_never_share_a_checkout() {
+        assert_ne!(
+            cache_key("https://h/a/b_c.git", None),
+            cache_key("https://h/a/b/c.git", None)
+        );
+        assert_ne!(cache_key("u", Some("v1")), cache_key("u", None));
+        assert!(!cache_key("https://h/a.git", Some("v1")).contains('/'));
+    }
 }

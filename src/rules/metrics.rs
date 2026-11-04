@@ -1,6 +1,7 @@
 //! `complexity` and `function-length` rules plus the `larpcop metrics` report.
 
 use super::complexity::{self, Function};
+use super::lines::LineIndex;
 use super::{Level, RuleInfo, Violation};
 use crate::config::MetricsConfig;
 use crate::files::{SourceFile, globset};
@@ -8,6 +9,7 @@ use anyhow::Result;
 use ast_grep_core::{Doc, Language, Node};
 use ast_grep_language::SupportLang;
 use globset::GlobSet;
+use rayon::prelude::*;
 use serde::Serialize;
 use std::fmt::Write;
 
@@ -62,11 +64,13 @@ impl Metrics {
         if self.exclude.is_match(&file.rel) {
             return Vec::new();
         }
+        let lines = LineIndex::new(&file.content);
         let mut out = Vec::new();
         for f in complexity::functions_of(root) {
             if let Some(max) = self.max_complexity.filter(|m| f.complexity > *m) {
                 out.push(self.violation(
                     file,
+                    &lines,
                     &f,
                     COMPLEXITY_ID,
                     format!(
@@ -78,6 +82,7 @@ impl Metrics {
             if let Some(max) = self.max_lines.filter(|m| f.lines > *m) {
                 out.push(self.violation(
                     file,
+                    &lines,
                     &f,
                     LENGTH_ID,
                     format!("`{}` is {} lines long (max {max}).", f.name, f.lines),
@@ -87,7 +92,14 @@ impl Metrics {
         out
     }
 
-    fn violation(&self, file: &SourceFile, f: &Function, rule: &str, message: String) -> Violation {
+    fn violation(
+        &self,
+        file: &SourceFile,
+        lines: &LineIndex,
+        f: &Function,
+        rule: &str,
+        message: String,
+    ) -> Violation {
         Violation {
             rule: rule.into(),
             level: Level::Error,
@@ -96,10 +108,8 @@ impl Metrics {
             column: 1,
             message,
             note: Some(SPLIT.into()),
-            snippet: file
-                .content
-                .lines()
-                .nth(f.line - 1)
+            snippet: lines
+                .line(f.line - 1)
                 .map(|l| l.trim().chars().take(120).collect()),
         }
     }
@@ -129,21 +139,18 @@ pub struct Summary {
 
 /// Size and complexity of a set of files; `top` most complex functions listed.
 pub fn summarize(files: &[SourceFile], top: usize) -> Summary {
-    let mut rows = Vec::new();
-    let mut code_lines = 0;
-    let mut measured = 0;
-    for file in files {
-        let Some(lang) = SupportLang::from_path(&file.rel) else {
-            continue;
-        };
-        measured += 1;
-        code_lines += file
-            .content
-            .lines()
-            .filter(|l| !l.trim().is_empty())
-            .count();
-        rows.extend(
-            complexity::functions(lang, &file.content)
+    // In parallel like the check; `collect` keeps the files' order, so ties in
+    // the final sort stay where they were.
+    let per_file: Vec<(usize, Vec<FunctionRow>)> = files
+        .par_iter()
+        .filter_map(|file| {
+            let lang = SupportLang::from_path(&file.rel)?;
+            let code_lines = file
+                .content
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+                .count();
+            let rows = complexity::functions(lang, &file.content)
                 .into_iter()
                 .map(|f| FunctionRow {
                     file: file.rel.clone(),
@@ -151,9 +158,14 @@ pub fn summarize(files: &[SourceFile], top: usize) -> Summary {
                     line: f.line,
                     lines: f.lines,
                     complexity: f.complexity,
-                }),
-        );
-    }
+                })
+                .collect();
+            Some((code_lines, rows))
+        })
+        .collect();
+    let measured = per_file.len();
+    let code_lines = per_file.iter().map(|(n, _)| n).sum();
+    let mut rows: Vec<FunctionRow> = per_file.into_iter().flat_map(|(_, rows)| rows).collect();
     let total: usize = rows.iter().map(|r| r.complexity).sum();
     let mean = if rows.is_empty() {
         0.0

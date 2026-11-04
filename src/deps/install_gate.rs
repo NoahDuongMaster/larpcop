@@ -4,11 +4,14 @@
 //! resolve-only form where installing would run fresh dependency code at once.
 
 use super::Deps;
+use super::clock::ago;
 use super::ecosystem::Pinned;
 use super::install::{Invocation, Request, uv_ok};
+use super::net::{self, CONCURRENCY};
 use super::registry::Registry;
 use crate::shell_ast::Script;
-use jiff::{SignedDuration, Timestamp};
+use anyhow::{Result, bail};
+use jiff::Timestamp;
 
 mod gem;
 
@@ -43,10 +46,10 @@ impl Deps {
     pub(super) fn gate_forms(
         &self,
         days: u32,
+        cutoff: Timestamp,
         script: &Script,
         invocations: &[Invocation],
     ) -> Option<String> {
-        let cutoff = cutoff(days)?;
         for inv in invocations {
             let why = match inv.via {
                 "pip install" if !pip_gated(inv, cutoff) => format!(
@@ -110,13 +113,11 @@ poetry.lock check pass, then `poetry install`."
     pub(super) fn gate_young(
         &self,
         days: u32,
+        cutoff: Timestamp,
         requests: &[Request],
         invocations: &[Invocation],
         cwd: &std::path::Path,
     ) -> Option<String> {
-        let cutoff = cutoff(days)?;
-        let registry = Registry::new();
-        let mut reasons = Vec::new();
         // `gem install` resolves dependencies to their newest versions: ask
         // RubyGems what it would install, and check all of it.
         let mut resolved = Vec::new();
@@ -131,49 +132,23 @@ poetry.lock check pass, then `poetry install`."
             }
         }
         let berry = yarn_berry(cwd);
-        for r in requests.iter().chain(&resolved) {
-            let Some(name) = &r.name else { continue };
-            let gated = NATIVELY_GATED.contains(&r.via) && (r.via != "yarn add" || berry);
-            if r.version.is_none() && gated {
-                continue;
-            }
-            if self.exempt.matches(r.eco, name) {
-                continue;
-            }
-            let found = match &r.version {
-                Some(v) => registry
-                    .published(&Pinned::new(r.eco, name, v))
-                    .map(|t| t.map(|t| (v.clone(), t))),
-                None => registry.releases(r.eco, name).map(|all| {
-                    all.and_then(|all| all.into_iter().find(|(_, _, d)| *d).map(|(v, t, _)| (v, t)))
-                }),
-            };
-            let (version, published) = match found {
-                Ok(Some(x)) => x,
-                Ok(None) => {
-                    reasons.push(format!("`{name}` ({}): no publish date is known for the version this would install; pin an older release.", r.eco));
-                    continue;
-                }
-                Err(e) => {
-                    return Some(format!(
-                        "could not look up when `{name}` was published ({e:#}). This check fails \
-closed: retry once the network is back."
-                    ));
-                }
-            };
-            if published <= cutoff {
-                continue;
-            }
-            let instead = registry
-                .newest_any_before(r.eco, name, cutoff)
-                .map(|(v, _)| format!(" Use `{}` instead.", fix(r.via, name, &v)))
-                .unwrap_or_default();
-            reasons.push(format!(
-                "`{name}@{version}` ({}) was published {} ago, less than {days} days.{instead}",
-                r.eco,
-                ago(Timestamp::now().duration_since(published))
-            ));
-        }
+        let checks: Vec<(&Request, &str)> = requests
+            .iter()
+            .chain(&resolved)
+            .filter_map(|r| {
+                let name = r.name.as_deref()?;
+                let gated = NATIVELY_GATED.contains(&r.via) && (r.via != "yarn add" || berry);
+                let skipped = (r.version.is_none() && gated) || self.exempt.matches(r.eco, name);
+                (!skipped).then_some((r, name))
+            })
+            .collect();
+        let registry = Registry::new();
+        let reasons = match net::par_map(CONCURRENCY, &checks, |(r, name)| {
+            young_reason(&registry, r, name, days, cutoff)
+        }) {
+            Ok(found) => found.into_iter().flatten().collect::<Vec<_>>(),
+            Err(e) => return Some(e.to_string()),
+        };
         (!reasons.is_empty()).then(|| {
             format!(
                 "this would install versions too new to trust yet:\n- {}\nCompromised releases are \
@@ -184,10 +159,53 @@ usually caught and pulled within days. If this exact version is required, stop a
     }
 }
 
-fn cutoff(days: u32) -> Option<Timestamp> {
-    Timestamp::now()
-        .checked_sub(SignedDuration::from_hours(i64::from(days) * 24))
-        .ok()
+/// Why the version `r` would install is too new, if it is. Failing to find out is
+/// an error: the check fails closed.
+fn young_reason(
+    registry: &Registry,
+    r: &Request,
+    name: &str,
+    days: u32,
+    cutoff: Timestamp,
+) -> Result<Option<String>> {
+    let found = match &r.version {
+        Some(v) => registry
+            .published(&Pinned::new(r.eco, name, v))
+            .map(|t| t.map(|t| (v.clone(), t))),
+        None => registry.releases(r.eco, name).map(|all| {
+            all.and_then(|all| {
+                all.iter()
+                    .find(|(_, _, d)| *d)
+                    .map(|(v, t, _)| (v.clone(), *t))
+            })
+        }),
+    };
+    let (version, published) = match found {
+        Ok(Some(x)) => x,
+        Ok(None) => {
+            return Ok(Some(format!(
+                "`{name}` ({}): no publish date is known for the version this would install; pin an older release.",
+                r.eco
+            )));
+        }
+        Err(e) => bail!(
+            "could not look up when `{name}` was published ({e:#}). This check fails closed: \
+retry once the network is back."
+        ),
+    };
+    if published <= cutoff {
+        return Ok(None);
+    }
+    let instead = match registry.newest_any_before(r.eco, name, cutoff) {
+        Ok(Some((v, _))) => format!(" Use `{}` instead.", fix(r.via, name, &v)),
+        Ok(None) => String::new(),
+        Err(e) => format!(" (Older releases could not be listed: {e:#}.)"),
+    };
+    Ok(Some(format!(
+        "`{name}@{version}` ({}) was published {} ago, less than {days} days.{instead}",
+        r.eco,
+        ago(Timestamp::now().duration_since(published))
+    )))
 }
 
 fn pip_gated(inv: &Invocation, cutoff: Timestamp) -> bool {
@@ -244,15 +262,6 @@ fn fix(via: &str, name: &str, version: &str) -> String {
         "pip install" | "uv pip install" => format!("{via} {name}=={version}"),
         "uv add" => format!("uv add {name}=={version}"),
         _ => format!("{via} {name}@{version}"),
-    }
-}
-
-fn ago(d: SignedDuration) -> String {
-    let hours = d.as_hours();
-    if hours < 48 {
-        format!("{hours} hour(s)")
-    } else {
-        format!("{} days", hours / 24)
     }
 }
 

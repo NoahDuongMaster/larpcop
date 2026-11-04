@@ -11,7 +11,11 @@ use ast_grep_language::SupportLang;
 use client::Client;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, LazyLock, Mutex};
+
+#[cfg(test)]
+mod tests;
 
 /// (server key, default command, LSP language id).
 fn server_for(lang: SupportLang) -> Option<(&'static str, &'static [&'static str], &'static str)> {
@@ -28,11 +32,30 @@ fn server_for(lang: SupportLang) -> Option<(&'static str, &'static [&'static str
 }
 
 /// One server per (project, command), started on first use and kept for the
-/// rest of the run; `None` once it failed to start (it is not retried).
+/// rest of the run. The map is locked only to find a server's slot: a question
+/// waits for its own server (starting, or busy with another question), never for
+/// the servers of other projects.
 static SERVERS: LazyLock<Mutex<Servers>> = LazyLock::new(Default::default);
 
-/// (project root, server command) → running server.
-type Servers = HashMap<(PathBuf, Vec<String>), Option<Client>>;
+/// (project root, server command) → its slot.
+type Servers = HashMap<(PathBuf, Vec<String>), Arc<Slot>>;
+
+#[derive(Default)]
+struct Slot {
+    state: Mutex<State>,
+    /// A question the server rejected was already reported.
+    reported: AtomicBool,
+}
+
+#[derive(Default)]
+enum State {
+    /// Not started yet.
+    #[default]
+    Fresh,
+    Running(Client),
+    /// Failed to start, or broke down: not started again, not asked again.
+    Dead,
+}
 
 /// Answers already given: summaries ask about the same sink once per round.
 static ANSWERS: LazyLock<Mutex<HashMap<Question, Option<String>>>> =
@@ -86,15 +109,49 @@ fn ask(
         .get(key)
         .cloned()
         .unwrap_or_else(|| default.iter().map(|s| s.to_string()).collect());
-    let mut servers = SERVERS.lock().ok()?;
-    let client = servers
+    let slot = SERVERS
+        .lock()
+        .ok()?
         .entry((root.to_path_buf(), argv.clone()))
-        .or_insert_with(|| Client::start(&argv, root, key == "rust").ok());
-    let client = client.as_mut()?;
-    client
-        .hover(&root.join(rel), language_id, content, line, character)
-        .ok()
-        .flatten()
+        .or_default()
+        .clone();
+    let mut state = slot.state.lock().ok()?;
+    if matches!(*state, State::Fresh) {
+        *state = match Client::start(&argv, root, key == "rust") {
+            Ok(client) => State::Running(client),
+            Err(e) => {
+                eprintln!(
+                    "larpcop: warning: no type information from `{}`: {e:#}",
+                    argv.join(" ")
+                );
+                State::Dead
+            }
+        };
+    }
+    let State::Running(client) = &mut *state else {
+        return None;
+    };
+    match client.hover(&root.join(rel), language_id, content, line, character) {
+        Ok(answer) => answer,
+        Err(e) if !client.broken() => {
+            // The server rejected this question and can answer the next: say so once.
+            if !slot.reported.swap(true, Ordering::Relaxed) {
+                eprintln!(
+                    "larpcop: warning: `{}` rejected a type question: {e:#}",
+                    argv.join(" ")
+                );
+            }
+            None
+        }
+        Err(e) => {
+            eprintln!(
+                "larpcop: warning: `{}` stopped answering ({e:#}); its types are not used for the rest of this run",
+                argv.join(" ")
+            );
+            *state = State::Dead;
+            None
+        }
+    }
 }
 
 /// Stops every server (on exit they would be killed anyway; this is polite).

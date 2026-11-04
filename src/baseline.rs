@@ -6,13 +6,14 @@
 use crate::rules::Violation;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::Path;
 
 pub const FILE: &str = ".larpcop-baseline.json";
 
-type Key = (String, String, String);
+/// (rule, file, offending text), borrowed from the violation or entry it names.
+type Key<'a> = (&'a str, &'a str, &'a str);
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Baseline {
@@ -29,12 +30,12 @@ struct Entry {
     count: usize,
 }
 
-fn key(v: &Violation) -> Key {
-    let text = v.snippet.clone().unwrap_or_else(|| v.message.clone());
-    (v.rule.clone(), v.file.clone(), text)
+fn key(v: &Violation) -> Key<'_> {
+    let text = v.snippet.as_deref().unwrap_or(&v.message);
+    (&v.rule, &v.file, text)
 }
 
-fn counts(violations: &[Violation]) -> BTreeMap<Key, usize> {
+fn counts(violations: &[Violation]) -> BTreeMap<Key<'_>, usize> {
     let mut out = BTreeMap::new();
     for v in violations {
         *out.entry(key(v)).or_insert(0) += 1;
@@ -49,7 +50,7 @@ impl Baseline {
 
     /// The baseline a check sees: the staged copy for pre-commit, else the worktree.
     pub fn load(root: &Path, staged: bool) -> Result<Option<Self>> {
-        crate::files::read(root, FILE, staged)
+        crate::files::try_read(root, FILE, staged)?
             .map(|t| Self::parse(&t))
             .transpose()
     }
@@ -57,18 +58,12 @@ impl Baseline {
     /// Locked rules are the organization's: a repo may record their legacy
     /// violations once (the rule had no entries at `base`), but never add more.
     pub fn grown(&self, base: &Self, locked: &BTreeMap<String, String>) -> Vec<Violation> {
-        let sum = |b: &Self, rule: &str| -> usize {
-            b.entries
-                .iter()
-                .filter(|e| e.rule == rule)
-                .map(|e| e.count)
-                .sum()
-        };
+        let (now, before) = (self.per_rule(), base.per_rule());
         locked
             .iter()
             .filter(|(rule, _)| {
-                let before = sum(base, rule);
-                before > 0 && sum(self, rule) > before
+                let before = before.get(rule.as_str()).copied().unwrap_or(0);
+                before > 0 && now.get(rule.as_str()).copied().unwrap_or(0) > before
             })
             .map(|(rule, by)| Violation {
                 rule: "baseline".into(),
@@ -89,14 +84,14 @@ impl Baseline {
         Self::from_counts(counts(violations))
     }
 
-    fn from_counts(counts: BTreeMap<Key, usize>) -> Self {
+    fn from_counts(counts: BTreeMap<Key<'_>, usize>) -> Self {
         let entries = counts
             .into_iter()
             .filter(|(_, n)| *n > 0)
             .map(|((rule, file, text), count)| Entry {
-                rule,
-                file,
-                text,
+                rule: rule.to_string(),
+                file: file.to_string(),
+                text: text.to_string(),
                 count,
             })
             .collect();
@@ -106,10 +101,10 @@ impl Baseline {
         }
     }
 
-    fn counts(&self) -> BTreeMap<Key, usize> {
+    fn counts(&self) -> HashMap<Key<'_>, usize> {
         self.entries
             .iter()
-            .map(|e| ((e.rule.clone(), e.file.clone(), e.text.clone()), e.count))
+            .map(|e| ((e.rule.as_str(), e.file.as_str(), e.text.as_str()), e.count))
             .collect()
     }
 
@@ -118,25 +113,37 @@ impl Baseline {
     }
 
     /// Known violations per rule id.
-    pub fn per_rule(&self) -> BTreeMap<String, usize> {
+    pub fn per_rule(&self) -> BTreeMap<&str, usize> {
         let mut out = BTreeMap::new();
         for e in &self.entries {
-            *out.entry(e.rule.clone()).or_insert(0) += e.count;
+            *out.entry(e.rule.as_str()).or_insert(0) += e.count;
         }
         out
     }
 
     /// Removes baselined violations; returns how many were hidden.
     pub fn apply(&self, violations: &mut Vec<Violation>) -> usize {
+        if violations.is_empty() {
+            return 0;
+        }
         let mut left = self.counts();
-        let before = violations.len();
-        violations.retain(|v| match left.get_mut(&key(v)) {
-            Some(n) if *n > 0 => {
-                *n -= 1;
-                false
-            }
-            _ => true,
-        });
+        let all = std::mem::take(violations);
+        let hidden: Vec<bool> = all
+            .iter()
+            .map(|v| match left.get_mut(&key(v)) {
+                Some(n) if *n > 0 => {
+                    *n -= 1;
+                    true
+                }
+                _ => false,
+            })
+            .collect();
+        let before = all.len();
+        *violations = all
+            .into_iter()
+            .zip(&hidden)
+            .filter_map(|(v, hidden)| (!hidden).then_some(v))
+            .collect();
         before - violations.len()
     }
 
@@ -193,5 +200,23 @@ mod tests {
         assert_eq!(now.len(), 2);
         let pruned = base.prune(&[v("no-any", 1, "let x: any")]);
         assert_eq!(pruned.len(), 1);
+    }
+
+    #[test]
+    fn a_locked_rule_may_only_shrink_its_baseline() {
+        let locked = BTreeMap::from([("no-any".to_string(), "acme".to_string())]);
+        let two = Baseline::of(&[v("no-any", 1, "a"), v("no-any", 2, "b")]);
+        let three = Baseline::of(&[
+            v("no-any", 1, "a"),
+            v("no-any", 2, "b"),
+            v("no-any", 3, "c"),
+        ]);
+        let empty = Baseline::default();
+        assert_eq!(three.grown(&two, &locked).len(), 1);
+        assert!(two.grown(&three, &locked).is_empty());
+        // The rule had no entries at the base: recording its legacy violations once is allowed.
+        assert!(three.grown(&empty, &locked).is_empty());
+        // Only locked rules are policed.
+        assert!(three.grown(&two, &BTreeMap::new()).is_empty());
     }
 }

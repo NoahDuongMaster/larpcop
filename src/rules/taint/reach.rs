@@ -20,15 +20,15 @@ pub(super) const IMPORT_DEPTH: usize = 4;
 pub(super) const SHALLOW: usize = 2;
 
 /// A file's text and the files it imports: the same for every rule of a run.
-struct Entry {
-    text: String,
-    imports: Vec<PathBuf>,
+pub(super) struct Entry {
+    pub(super) text: String,
+    pub(super) imports: Vec<PathBuf>,
 }
 
 static GRAPH: LazyLock<Mutex<HashMap<PathBuf, Option<Arc<Entry>>>>> =
     LazyLock::new(Default::default);
 
-fn entry(path: &Path, repo: &Path) -> Option<Arc<Entry>> {
+pub(super) fn entry(path: &Path, repo: &Path) -> Option<Arc<Entry>> {
     if let Some(known) = GRAPH.lock().ok()?.get(path) {
         return known.clone();
     }

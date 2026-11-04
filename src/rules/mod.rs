@@ -5,6 +5,7 @@ mod ast_fix;
 mod ast_walk;
 mod complexity;
 mod file;
+mod lines;
 mod linters;
 pub mod macros;
 mod max_lines;
@@ -121,9 +122,11 @@ impl Engine {
             }
             _ => None,
         };
+        // Compiling each rule's patterns per grammar is most of the start-up
+        // time of every command (~0.55 s for the 99 rules of `recommended`).
         let taint = cfg
             .taint
-            .iter()
+            .par_iter()
             .filter(|t| !cfg.disabled.contains(&t.id))
             .map(|t| {
                 let servers = cfg.language_servers.clone();
@@ -166,13 +169,23 @@ impl Engine {
     }
 
     pub fn check(&self, root: &Path, files: &[SourceFile]) -> Result<Vec<Violation>> {
-        let mut found: Vec<Violation> = files
-            .par_iter()
-            .flat_map_iter(|file| self.check_file(file))
-            .collect();
-        for linter in &self.linters {
-            found.extend(linter.run(root, files)?);
-        }
+        // The external tools run beside the in-process rules and each other:
+        // the slowest one decides the time, not the sum of all of them.
+        let (mut found, linted) = rayon::join(
+            || {
+                files
+                    .par_iter()
+                    .flat_map_iter(|file| self.check_file(file))
+                    .collect::<Vec<Violation>>()
+            },
+            || {
+                self.linters
+                    .par_iter()
+                    .map(|linter| linter.run(root, files))
+                    .collect::<Result<Vec<_>>>()
+            },
+        );
+        found.extend(linted?.into_iter().flatten());
         Ok(found)
     }
 
@@ -192,7 +205,6 @@ impl Engine {
             .collect()
     }
 
-    /// Rules that apply to one root-relative path (language and `files` globs).
     /// The rules that apply to one root-relative path: its language, the
     /// rule's `files:` globs, its `exclude:`.
     pub fn rules_for(&self, rel: &str) -> Vec<RuleInfo> {
@@ -215,6 +227,11 @@ impl Engine {
         );
         out.extend(self.ast.infos_for(rel));
         out.extend(self.linters.iter().map(|l| l.info()));
+        // `rules()` lists them; a lockfile or manifest is what they read.
+        let file_name = rel.rsplit('/').next().unwrap_or(rel);
+        if crate::deps::is_dependency_file(file_name) {
+            out.extend(self.deps.iter().flat_map(|d| d.rules()));
+        }
         out
     }
 

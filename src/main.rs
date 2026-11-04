@@ -13,6 +13,7 @@ mod install;
 mod lsp;
 mod mcp;
 mod org;
+mod panic;
 mod report;
 mod rules;
 mod shell;
@@ -33,7 +34,7 @@ static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 /// Exit 3 on internal failure: distinct from 1 (violations) and from 2, which
 /// agent hook protocols reserve for "block and show the model".
 fn main() -> ExitCode {
-    let result = commands::run(cli::Cli::parse());
+    let result = panic::contain(|| commands::run(cli::Cli::parse()));
     // Language servers started for type queries are child processes: stop them.
     types::shutdown();
     match result {

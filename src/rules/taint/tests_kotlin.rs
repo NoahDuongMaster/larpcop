@@ -3,7 +3,7 @@
 //! other files.
 
 use super::tests_calls::{found, guarded, rule};
-use super::tests_support::guarded_config;
+use super::tests_support::{check_parity, guarded_config};
 use super::*;
 use crate::config::TaintConfig;
 
@@ -131,7 +131,7 @@ class UserController(private val jdbc: JdbcTemplate, private val other: Cache) {
         rel: "UserController.kt".into(),
         content: kt.into(),
     };
-    let got: Vec<usize> = r.check(&file).iter().map(|v| v.line).collect();
+    let got: Vec<usize> = check_parity(&r, &file).iter().map(|v| v.line).collect();
     // `id` is a Long; `other` is not a JdbcTemplate.
     assert_eq!(got, [6]);
 }

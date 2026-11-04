@@ -67,12 +67,28 @@ pub fn upsert(current: Option<&str>, block: &str) -> String {
     let Some(cur) = current else {
         return format!("# AGENTS.md\n\n{wrapped}");
     };
-    if let (Some(b), Some(e)) = (cur.find(BEGIN_PREFIX), cur.find(END))
-        && b < e
+    // The END that closes this BEGIN: one earlier in the file (say, quoted in
+    // prose) must not leave the block unmatched, or every sync would append
+    // another copy.
+    if let Some(b) = cur.find(BEGIN_PREFIX)
+        && let Some(e) = cur[b..].find(END).map(|i| b + i)
     {
         let after = cur[e + END.len()..].trim_start_matches('\n');
         let sep = if after.is_empty() { "" } else { "\n" };
         return format!("{}{wrapped}{sep}{after}", &cur[..b]);
     }
     format!("{}\n\n{wrapped}", cur.trim_end())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_end_marker_before_the_block_does_not_make_every_sync_append_another() {
+        let once = upsert(Some(&format!("quoted: {END}\n")), "rules\n");
+        let twice = upsert(Some(&once), "rules\n");
+        assert_eq!(once, twice);
+        assert_eq!(twice.matches(BEGIN_PREFIX).count(), 1);
+    }
 }

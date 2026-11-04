@@ -4,6 +4,7 @@
 use anyhow::{Context, Result};
 use lsp_server::{Message, Notification, Request, RequestId, Response};
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use std::io::BufReader;
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -11,14 +12,35 @@ use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
 
 /// A language server indexing a whole project can take a while to answer.
-const TIMEOUT: Duration = Duration::from_secs(60);
+const TIMEOUT: Duration = if cfg!(test) {
+    Duration::from_secs(2)
+} else {
+    Duration::from_secs(60)
+};
+/// Asking a server to leave must not wait as long as asking it a question.
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The server answered a request with an error: it is still usable.
+#[derive(Debug)]
+struct Rejected(String);
+
+impl std::fmt::Display for Rejected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Rejected {}
 
 pub(super) struct Client {
     child: Child,
     stdin: ChildStdin,
     inbox: Receiver<Message>,
     next: i32,
-    opened: std::collections::HashSet<String>,
+    /// Documents the server holds: URI → (version, digest of its text).
+    opened: HashMap<String, (i32, u64)>,
+    /// The connection failed (no answer in time, a closed pipe): nothing more can be asked.
+    broken: bool,
     /// rust-analyzer answers hovers with nothing until it has loaded the
     /// workspace; it says when it has (`experimental/serverStatus`).
     wait_for_quiescence: bool,
@@ -53,7 +75,9 @@ impl Client {
             stdin,
             inbox,
             next: 1,
-            opened: Default::default(),
+            opened: HashMap::new(),
+            // Until the handshake succeeded a server that fails to start is not waited for again.
+            broken: true,
             wait_for_quiescence,
             quiescent: false,
         };
@@ -74,11 +98,35 @@ impl Client {
             }),
         )?;
         client.notify("initialized", json!({}))?;
+        client.broken = false;
         Ok(client)
     }
 
     /// Hover text at a 0-based position; the document is sent first (unsaved content counts).
+    /// An error that is not the server's answer to this question marks the client broken.
     pub(super) fn hover(
+        &mut self,
+        path: &Path,
+        language_id: &str,
+        text: &str,
+        line: usize,
+        character: usize,
+    ) -> Result<Option<String>> {
+        let asked = self.ask_hover(path, language_id, text, line, character);
+        if let Err(e) = &asked
+            && e.downcast_ref::<Rejected>().is_none()
+        {
+            self.broken = true;
+        }
+        asked
+    }
+
+    /// Nothing can be asked of this server any more.
+    pub(super) fn broken(&self) -> bool {
+        self.broken
+    }
+
+    fn ask_hover(
         &mut self,
         path: &Path,
         language_id: &str,
@@ -94,9 +142,24 @@ impl Client {
             self.handle(msg)?;
         }
         let uri = url(path);
-        if self.opened.insert(uri.clone()) {
-            let doc = json!({ "uri": uri, "languageId": language_id, "version": 1, "text": text });
-            self.notify("textDocument/didOpen", json!({ "textDocument": doc }))?;
+        let digest = super::digest(text);
+        // The server holds the text it was last sent: a changed document (an editor
+        // buffer, a file edited between two questions) is sent again, or the
+        // answers would be about the old text.
+        match self.opened.get(&uri).copied() {
+            None => {
+                let doc =
+                    json!({ "uri": uri, "languageId": language_id, "version": 1, "text": text });
+                self.notify("textDocument/didOpen", json!({ "textDocument": doc }))?;
+                self.opened.insert(uri.clone(), (1, digest));
+            }
+            Some((version, held)) if held != digest => {
+                let doc = json!({ "uri": uri, "version": version + 1 });
+                let params = json!({ "textDocument": doc, "contentChanges": [{ "text": text }] });
+                self.notify("textDocument/didChange", params)?;
+                self.opened.insert(uri.clone(), (version + 1, digest));
+            }
+            Some(_) => {}
         }
         let pos = json!({ "textDocument": { "uri": uri }, "position": { "line": line, "character": character } });
         let result = self.request("textDocument/hover", pos)?;
@@ -108,22 +171,26 @@ impl Client {
         Ok(())
     }
 
+    fn request(&mut self, method: &str, params: Value) -> Result<Value> {
+        self.request_within(method, params, TIMEOUT)
+    }
+
     /// Sends a request and waits for its response, answering the server's own
     /// requests (configuration, progress) with empty results meanwhile.
-    fn request(&mut self, method: &str, params: Value) -> Result<Value> {
+    fn request_within(&mut self, method: &str, params: Value, timeout: Duration) -> Result<Value> {
         let id = RequestId::from(self.next);
         self.next += 1;
         Message::Request(Request::new(id.clone(), method.into(), params)).write(&mut self.stdin)?;
         loop {
             match self
                 .inbox
-                .recv_timeout(TIMEOUT)
+                .recv_timeout(timeout)
                 .context("language server did not answer")?
             {
                 Message::Response(r) if r.id == id => {
                     return r
                         .response_result
-                        .map_err(|e| anyhow::anyhow!("{method}: {}", e.message));
+                        .map_err(|e| Rejected(format!("{method}: {}", e.message)).into());
                 }
                 other => self.handle(other)?,
             }
@@ -153,9 +220,14 @@ impl Client {
 
 impl Drop for Client {
     fn drop(&mut self) {
-        let _ = self.request("shutdown", Value::Null);
-        let _ = self.notify("exit", Value::Null);
+        // A broken server gets no handshake: it would only be waited for.
+        if !self.broken {
+            let _ = self.request_within("shutdown", Value::Null, SHUTDOWN_TIMEOUT);
+            let _ = self.notify("exit", Value::Null);
+        }
         let _ = self.child.kill();
+        // Reaps the process: a long-lived `lsp`/`mcp` run drops clients that went bad.
+        let _ = self.child.wait();
     }
 }
 

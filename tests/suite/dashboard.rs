@@ -52,3 +52,26 @@ fn dashboard_shows_open_and_baselined_violations_and_the_debt_trend() {
         "the page must work without scripts"
     );
 }
+
+#[test]
+fn a_corrupt_historical_baseline_is_an_error_not_a_zero_on_the_chart() {
+    let repo = Repo::with_standards();
+    repo.write("src/a.ts", "console.log(1);\n");
+    repo.write(".larpcop-baseline.json", "{ not json");
+    repo.commit_all("corrupt");
+    repo.write(".larpcop-baseline.json", "{\"version\":1,\"entries\":[]}\n");
+    repo.commit_all("valid");
+    let run = repo.run(&["dashboard", "--json"]);
+    assert_eq!(run.code(), 3, "{}", run.stdout());
+    assert!(run.stderr().contains("at commit"), "{}", run.stderr());
+}
+
+#[test]
+fn a_repository_without_commits_has_an_empty_trend() {
+    let repo = Repo::with_standards();
+    repo.write("src/a.ts", "console.log(1);\n");
+    let run = repo.run(&["dashboard", "--json"]);
+    assert_eq!(run.code(), 0, "{}", run.stderr());
+    let d: serde_json::Value = serde_json::from_str(&run.stdout()).unwrap();
+    assert_eq!(d["debt"].as_array().map(Vec::len), Some(0));
+}

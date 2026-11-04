@@ -32,7 +32,10 @@ impl Ctx {
         // What each tainted local was built from, for checks made after.
         let mut origins = super::origins::Origins::default();
         // C `p = &data`: `p` and `data` are one place.
-        let pointers = super::pointers::groups(&events);
+        let pointers = super::pointers::groups(events.iter().filter_map(|(_, e)| match e {
+            Event::Assign(left, right, ..) => Some((left, right)),
+            _ => None,
+        }));
         // `if` nodes whose every branch assigns these names, and the names
         // an assignment inside tainted (joins.rs).
         let mut joined: Vec<(std::ops::Range<usize>, HashSet<String>, HashSet<String>)> =
@@ -77,29 +80,33 @@ impl Ctx {
                     joined.push((range.clone(), set.clone(), HashSet::new()))
                 }
                 Event::Assign(left, right, branch, true) => {
+                    let ltext = left.text();
                     if self.tainted(right, &names) {
-                        mark(&mut joined, *at, &left.text());
-                        names.insert(left.text().to_string());
+                        mark(&mut joined, *at, &ltext);
+                        names.insert(ltext.to_string());
                         on(Seen::Reached(Reached::Field(left.clone())));
-                    } else if names.remove(left.text().as_ref())
+                    } else if names.remove(ltext.as_ref())
                         && let Some(end) = branch
                     {
-                        until.push((*end, left.text().to_string()));
+                        until.push((*end, ltext.to_string()));
                     }
                 }
                 Event::Assign(left, right, branch, false) => {
-                    let name = left.text().to_string();
+                    let name = left.text();
                     let appended =
                         branch.is_some_and(|end| end == left.parent().map_or(0, |p| p.range().end));
-                    if appended && prefixed.contains(&name) && !names.contains(&name) {
+                    if appended
+                        && prefixed.contains(name.as_ref())
+                        && !names.contains(name.as_ref())
+                    {
                         continue;
                     }
                     let safe_start = self.starts_safe(right);
                     if !appended {
                         if safe_start {
-                            prefixed.insert(name);
+                            prefixed.insert(name.to_string());
                         } else {
-                            prefixed.remove(&name);
+                            prefixed.remove(name.as_ref());
                         }
                     }
                     // PHP `$t += 0`: a number, whatever `$t` held.
@@ -113,11 +120,10 @@ impl Ctx {
                     let tainted = !numeric && !safe_start && self.tainted(right, &names);
                     // Built from tainted names only, or from a source itself.
                     let from = (tainted && !self.tainted(right, &HashSet::new())).then(|| {
-                        let used = super::guards::names(right);
-                        names
-                            .iter()
-                            .filter(|n| used.contains(*n))
-                            .cloned()
+                        right
+                            .dfs()
+                            .filter(|c| NAMES.contains(&c.kind().as_ref()))
+                            .filter_map(|c| names.get(c.text().as_ref()).cloned())
                             .collect()
                     });
                     if right.kind() == "object_creation_expression" && left.kind() == "identifier" {
@@ -142,20 +148,21 @@ impl Ctx {
                         .dfs()
                         .filter(|n| VARIABLES.contains(&n.kind().as_ref()))
                     {
+                        let vtext = v.text();
                         if tainted {
                             let adds = appended || branch.is_some();
                             origins.record(
-                                &v.text(),
+                                &vtext,
                                 from.clone(),
-                                adds && names.contains(v.text().as_ref()),
+                                adds && names.contains(vtext.as_ref()),
                             );
-                            mark(&mut joined, *at, &v.text());
-                            names.insert(v.text().to_string());
+                            mark(&mut joined, *at, &vtext);
+                            names.insert(vtext.to_string());
                         } else if NAMES.contains(&left.kind().as_ref())
-                            && names.remove(v.text().as_ref())
+                            && names.remove(vtext.as_ref())
                             && let Some(end) = branch
                         {
-                            until.push((*end, v.text().to_string()));
+                            until.push((*end, vtext.to_string()));
                         }
                     }
                     if !tainted && right.kind() == "identifier" {
@@ -172,6 +179,8 @@ impl Ctx {
                     let written = self.captured_writes(scope, f, &names, hits);
                     names.extend(written);
                 }
+                // Nothing in the call is tainted: it changes and reaches nothing.
+                Event::Call(call) if !self.matters(call, &names) => {}
                 Event::Call(call) => {
                     // `fgets(buf, …)`, `strcat(dst, src)`: the written argument.
                     let written = self.writes.written(call, |a| self.tainted(a, &names));
@@ -260,7 +269,7 @@ impl Ctx {
 
     /// Under `safe_prefix`: does the value start with a matching literal, or
     /// with what a sanitizer returns (a URL the app builds, `reverse(…)`)?
-    fn starts_safe<D: Doc>(&self, value: &Node<D>) -> bool {
+    pub(super) fn starts_safe<D: Doc>(&self, value: &Node<D>) -> bool {
         let Some(safe) = &self.safe_prefix else {
             return false;
         };

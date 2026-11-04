@@ -75,7 +75,17 @@ impl Ctx {
             .enumerate()
             .find_map(|(k, a)| {
                 let s = self.summaries.get(&key(name, k))?;
-                let cleans = super::mapping::returns(self, a, true, &HashSet::new()) == Some(false);
+                // What the argument does to what it is given does not depend
+                // on the call it is passed in: worked out once, however many
+                // times the call is looked at.
+                let at = super::events::key(a);
+                let known = self.memo.cleans.borrow().get(&at).copied();
+                let cleans = known.unwrap_or_else(|| {
+                    let cleans =
+                        super::mapping::returns(self, a, true, &HashSet::new()) == Some(false);
+                    self.memo.cleans.borrow_mut().insert(at, cleans);
+                    cleans
+                });
                 cleans.then_some(s)
             })
     }
@@ -93,10 +103,12 @@ impl Ctx {
             safe_prefix: self.safe_prefix.clone(),
             summarized: Default::default(),
             built: Default::default(),
+            memo: Default::default(),
             cleaners: self.cleaners.clone(),
             writes: self.writes.clone(),
             writes_clean: self.writes_clean,
             numbers: self.numbers,
+            scalars: self.scalars.clone(),
         }
     }
 }

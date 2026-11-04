@@ -27,9 +27,20 @@ impl Writes {
 
     /// Could `text` call one of the calls that write outside data?
     pub(super) fn reads_input(&self, text: &str) -> bool {
-        self.sources
-            .keys()
-            .any(|name| text.contains(&format!("{name}(")))
+        self.sources.keys().any(|name| {
+            text.match_indices('(')
+                .any(|(at, _)| text[..at].ends_with(name.as_str()))
+        })
+    }
+
+    /// Does no call write outside data?
+    pub(super) fn is_empty(&self) -> bool {
+        self.sources.is_empty() && self.copies.is_empty()
+    }
+
+    /// Do some calls write outside data, tainting names out of nothing?
+    pub(super) fn has_sources(&self) -> bool {
+        !self.sources.is_empty()
     }
 
     /// The copies only: summaries of what a function does with its
@@ -91,9 +102,35 @@ pub(super) fn parse(entries: &[String]) -> anyhow::Result<HashMap<String, (usize
             let (name, index) = e
                 .split_once(':')
                 .ok_or_else(|| anyhow::anyhow!("`{e}`: expected `name:index` or `name:index..`"))?;
+            let name = name.trim();
+            anyhow::ensure!(!name.is_empty(), "`{e}`: the call's name is empty");
             let rest = index.ends_with("..");
             let at = index.trim_end_matches("..").parse::<usize>()?;
-            Ok((name.trim().to_string(), (at, rest)))
+            Ok((name.to_string(), (at, rest)))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_entry_needs_a_name() {
+        let entry = |e: &str| Writes::new(&[e.to_string()], &[]);
+        let err = entry(":0").err().unwrap();
+        assert!(err.to_string().contains("name is empty"), "{err}");
+        assert!(entry(" :1..").is_err());
+        assert!(entry("fgets:0").is_ok());
+    }
+
+    #[test]
+    fn a_call_is_read_where_a_name_stands_before_a_parenthesis() {
+        let w = Writes::new(&["fgets:0".to_string(), "aa:0".to_string()], &[]).unwrap();
+        assert!(w.reads_input("x = fgets(buf);"));
+        assert!(!w.reads_input("x = fgets;"));
+        assert!(!w.reads_input("READ(buf)"));
+        // `aa` overlaps itself in `aaa`.
+        assert!(w.reads_input("aaa(x)"));
+    }
 }

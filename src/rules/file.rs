@@ -17,15 +17,16 @@ impl Engine {
         use ast_grep_language::{Language, LanguageExt, SupportLang};
         // Nothing to walk the tree for: no parse at all (most of a repository
         // is files no rule is written for).
+        let ast_rules = self.ast.rules_for_path(&file.rel);
         let wanted = SupportLang::from_path(&file.rel).filter(|lang| {
-            self.ast.applies(&file.rel)
+            !ast_rules.is_empty()
                 || self.metrics.iter().any(|m| m.applies(&file.rel))
                 || self.taint.iter().any(|t| t.handles(*lang))
         });
         if let Some(lang) = wanted {
             let grep = lang.ast_grep(macros::expand(lang, &file.content));
             let root = &grep.root();
-            v.extend(self.ast.check_root(file, root));
+            v.extend(self.ast.check_root(&ast_rules, file, root));
             v.extend(self.metrics.iter().flat_map(|m| m.check_root(file, root)));
             v.extend(self.taint_check_root(file, lang, root));
         }
@@ -50,25 +51,23 @@ impl Engine {
             rel: format!("{}{suffix}", file.rel),
             content: view,
         };
-        let mut found = self.ast.check(&page);
-        found.extend(self.taint_check(&page));
+        // The script is JavaScript or TypeScript by its suffix: parsed once for
+        // the rules that walk it.
+        use ast_grep_language::{Language, LanguageExt, SupportLang};
+        let ast_rules = self.ast.rules_for_path(&page.rel);
+        let lang = SupportLang::from_path(&page.rel)
+            .filter(|l| !ast_rules.is_empty() || self.taint.iter().any(|t| t.handles(*l)));
+        let Some(lang) = lang else {
+            return Vec::new();
+        };
+        let grep = lang.ast_grep(macros::expand(lang, &page.content));
+        let root = &grep.root();
+        let mut found = self.ast.check_root(&ast_rules, &page, root);
+        found.extend(self.taint_check_root(&page, lang, root));
         for v in &mut found {
             v.file.clone_from(&file.rel);
         }
         found
-    }
-
-    /// Taint rules on one parse and one walk of the file: each rule only
-    /// matches its patterns against the nodes of the kinds they can match.
-    fn taint_check(&self, file: &SourceFile) -> Vec<Violation> {
-        use ast_grep_language::{Language, LanguageExt, SupportLang};
-        let Some(lang) =
-            SupportLang::from_path(&file.rel).filter(|l| self.taint.iter().any(|t| t.handles(*l)))
-        else {
-            return Vec::new();
-        };
-        let grep = lang.ast_grep(macros::expand(lang, &file.content));
-        self.taint_check_root(file, lang, &grep.root())
     }
 
     /// Taint rules on a tree that has already been parsed.
@@ -82,10 +81,7 @@ impl Engine {
             return Vec::new();
         }
         let index = taint::FileIndex::new(root.clone());
-        self.taint
-            .iter()
-            .flat_map(|t| t.check_indexed(file, lang, &index))
-            .collect()
+        taint::check_indexed_multi(&self.taint, file, lang, &index)
     }
 
     fn secrets(&self, file: &SourceFile) -> Vec<Violation> {

@@ -17,7 +17,7 @@ use std::path::Path;
 /// Pattern groups, in this order: sources, sinks, sanitizers, guards, rejects.
 pub(super) const GROUPS: usize = 5;
 
-type Defs<'a, D> = Vec<(String, Node<'a, D>, Vec<String>)>;
+type Defs<'a, D> = Vec<super::defs::FnDef<'a, D>>;
 
 /// A parsed file's nodes by kind, its named functions and its imports:
 /// computed once, whatever the number of taint rules.
@@ -74,6 +74,18 @@ impl<'a, D: Doc> FileIndex<'a, D> {
         self.nodes
             .iter()
             .filter(move |n| kinds.contains(&n.kind().as_ref()))
+    }
+
+    /// Is there a node of kind `id` (a kind id of the file's grammar)?
+    pub(super) fn has_kind(&self, id: u16) -> bool {
+        self.by_kind.contains_key(&id)
+    }
+
+    /// Every function of the file, named or not.
+    pub(super) fn all_functions(&self) -> impl Iterator<Item = &Node<'a, D>> {
+        self.nodes
+            .iter()
+            .filter(|n| crate::rules::complexity::is_function(n))
     }
 
     /// Every call of the file.
@@ -219,6 +231,14 @@ impl Indexed {
             .flatten()
             .map(|(_, needle, _)| needle.as_deref())
             .collect()
+    }
+
+    /// Could `text` hold a source? Some source pattern's word is in it, or
+    /// some pattern has none.
+    pub(super) fn may_source(&self, text: &str) -> bool {
+        self.groups[0]
+            .iter()
+            .any(|(_, needle, _)| needle.as_deref().is_none_or(|n| text.contains(n)))
     }
 
     /// Matches of every group, each in tree order (as `find_all` gives them).

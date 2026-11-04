@@ -6,6 +6,7 @@ use super::NAMES;
 use super::events::Hits;
 use super::fields::is_field;
 use super::kotlin::Part;
+use super::quiet::Memo;
 use super::spans::Spans;
 use super::summary::{Summaries, args};
 use crate::rules::complexity::is_function;
@@ -64,6 +65,8 @@ pub(super) struct Ctx {
     pub safe_prefix: Option<regex::Regex>,
     /// Last segments of the summaries' names (computed on first use).
     pub summarized: std::cell::OnceCell<HashSet<String>>,
+    /// Results that only depend on the context, kept for its lifetime.
+    pub memo: Memo,
     /// Per function (by start): the classes its locals are built as.
     pub built:
         std::cell::RefCell<std::collections::HashMap<usize, std::rc::Rc<super::resolve::Built>>>,
@@ -75,10 +78,13 @@ pub(super) struct Ctx {
     pub writes_clean: bool,
     /// PHP: `+ - * / % **` make numbers (`.` joins strings).
     pub numbers: bool,
+    /// Which names the file declares with a scalar type, shared by every
+    /// context of the file's text.
+    pub scalars: std::sync::Arc<super::scalars::Scalars>,
 }
 
 impl Ctx {
-    fn any_sourcing(&self) -> bool {
+    pub(super) fn any_sourcing(&self) -> bool {
         *self
             .sourcing
             .get_or_init(|| self.summaries.values().any(|s| s.returns_source))
@@ -86,6 +92,11 @@ impl Ctx {
 
     /// Does `node` carry source data (not passed through a sanitizer)?
     pub fn tainted<D: Doc>(&self, node: &Node<D>, names: &HashSet<String>) -> bool {
+        self.tainted_in(node, names, names.iter().any(|n| n.ends_with(']')))
+    }
+
+    /// As [`Self::tainted`]; `entries`: some of `names` is a map entry.
+    fn tainted_in<D: Doc>(&self, node: &Node<D>, names: &HashSet<String>, entries: bool) -> bool {
         // A function value is code, not data; what it captures is followed when
         // its body is walked.
         if is_function(node) {
@@ -98,10 +109,30 @@ impl Ctx {
         if self.sources.covers(&r) {
             return true;
         }
+        // A bare name token: only these three checks below can decide it, so
+        // the rest (entries, counts, branches, calls, children) is skipped.
+        if node.is_leaf() && NAMES.contains(&node.kind().as_ref()) {
+            let text = node.text();
+            if names.contains(text.as_ref()) {
+                // `int n = rs.getInt(1)`: a number holds no injected text.
+                return !self.scalars.of(node);
+            }
+            // A map read whole holds its tainted entries.
+            if entries && super::entries::holds_tainted(&text, names) {
+                return true;
+            }
+            // Ruby: `custom_fields` alone may be a call of a method returning
+            // request data.
+            return self.bare_calls
+                && node.kind() == "identifier"
+                && self
+                    .summaries
+                    .get(text.as_ref())
+                    .is_some_and(|s| s.returns_source);
+        }
         let text = node.text();
         // `m['k']`, `m.get("k")`: that entry, or the whole map.
         let holds_source = self.sources.overlaps(&r);
-        let entries = names.iter().any(|n| n.ends_with(']'));
         if entries
             && !holds_source
             && let Some(entry) = super::entries::entry(node)
@@ -120,21 +151,13 @@ impl Ctx {
         {
             return true;
         }
-        // Nothing below can be tainted: no source in it, no tainted name
-        // spelled in it, no call that could return source data.
-        if !holds_source
-            // An entry `m[k]` is spelled through its map's name.
-            && !names
-                .iter()
-                .any(|n| text.contains(n.split('[').next().unwrap_or(n)))
-            && !((text.contains('(') || self.bare_calls) && self.any_sourcing())
-        {
+        if self.nothing_below(&text, holds_source, names) {
             return false;
         }
         let kind = node.kind();
         if (NAMES.contains(&kind.as_ref()) || is_field(node)) && names.contains(text.as_ref()) {
             // `int n = rs.getInt(1)`: a number holds no injected text.
-            return !super::declared::scalar(node);
+            return !self.scalars.of(node);
         }
         if self.numbers && kind == "binary_expression" && super::numeric::arithmetic(node) {
             return false;
@@ -155,7 +178,7 @@ impl Ctx {
         }
         // `case x when "a" then "/a"`: a branch's result, not the subject.
         if let Some(results) = super::choices::results(node) {
-            return results.iter().any(|r| self.tainted(r, names));
+            return results.iter().any(|r| self.tainted_in(r, names, entries));
         }
         // Ruby: `custom_fields` alone may be a call of a method returning
         // request data.
@@ -177,7 +200,7 @@ impl Ctx {
                 || args(node)
                     .iter()
                     .enumerate()
-                    .any(|(i, a)| s.returns.contains(&i) && self.tainted(a, names));
+                    .any(|(i, a)| s.returns.contains(&i) && self.tainted_in(a, names, entries));
             // `obj.get(k)` matched to the project's only `get` by name is a
             // guess: request data it is called on (`request.GET.get('q')`)
             // still flows out.
@@ -193,7 +216,8 @@ impl Ctx {
                     m.len() > 3 && m.starts_with("get") && m[3..].starts_with(char::is_uppercase)
                 });
             return passed
-                || ((guessed || getter) && receiver.is_some_and(|r| self.tainted(&r, names)));
+                || ((guessed || getter)
+                    && receiver.is_some_and(|r| self.tainted_in(&r, names, entries)));
         }
         // `sprintf("… id=%d", $t)`: what `%d` writes is a number.
         if CALLS.contains(&kind.as_ref())
@@ -201,9 +225,9 @@ impl Ctx {
         {
             return args(node)
                 .iter()
-                .any(|a| !numbers.contains(&a.range()) && self.tainted(a, names));
+                .any(|a| !numbers.contains(&a.range()) && self.tainted_in(a, names, entries));
         }
-        node.children().any(|c| self.tainted(&c, names))
+        node.children().any(|c| self.tainted_in(&c, names, entries))
     }
 
     /// Walks `scope` from `names`, then each function nested in it (callbacks,
@@ -217,6 +241,9 @@ impl Ctx {
         own: &impl Fn(&Node<'a, D>) -> HashSet<String>,
         on: &mut dyn FnMut(Reached<'a, D>),
     ) {
+        if self.nothing_to_follow(&names) {
+            return;
+        }
         let mut nested = Vec::new();
         self.run_scope(scope, names, hits, &mut |s| match s {
             Seen::Reached(r) => on(r),

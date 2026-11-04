@@ -65,6 +65,9 @@ pub struct TaintRule {
     imported: Mutex<HashMap<(PathBuf, usize), prepare::Slot>>,
     /// Whether a file leads to a source or sink within some import depth.
     reach: Mutex<HashMap<(PathBuf, usize), bool>>,
+    /// Whether request data can enter a file or what it imports within some
+    /// import depth.
+    inputs: Mutex<HashMap<(PathBuf, usize), bool>>,
 }
 
 use names::{NAMES, VARIABLES};
@@ -153,6 +156,7 @@ mod guards;
 mod handlers;
 mod higher;
 mod imports;
+mod inputs;
 mod iteration;
 mod joins;
 mod kotlin;
@@ -161,6 +165,20 @@ mod lists;
 mod loops;
 mod mapping;
 mod membership;
+mod multi_assign;
+mod multi_call;
+mod multi_check;
+mod multi_eval;
+mod multi_events;
+mod multi_hits;
+mod multi_mask;
+mod multi_nested;
+mod multi_resolve;
+mod multi_scope;
+mod multi_spans;
+mod multi_summary;
+mod multi_walk;
+pub use multi_check::check_indexed_multi;
 mod names;
 mod numeric;
 mod origins;
@@ -172,11 +190,13 @@ mod placements;
 mod pointers;
 mod prefix;
 mod prepare;
+mod quiet;
 mod reach;
 mod resolve;
 mod responds;
 mod returns;
 mod routes;
+mod scalars;
 mod scan;
 mod services;
 mod spans;
@@ -215,11 +235,15 @@ mod tests_flags;
 #[cfg(test)]
 mod tests_higher;
 #[cfg(test)]
+mod tests_inputs;
+#[cfg(test)]
 mod tests_kotlin;
 #[cfg(test)]
 mod tests_mapping;
 #[cfg(test)]
 mod tests_methods;
+#[cfg(test)]
+mod tests_multi;
 #[cfg(test)]
 mod tests_pathobj;
 #[cfg(test)]

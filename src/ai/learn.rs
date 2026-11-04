@@ -61,7 +61,7 @@ pub fn learn(
                     write(out, &p)?;
                     dropped.remove(&id);
                     kept.push(Learned {
-                        existing: existing(&p, &sources),
+                        existing: existing(&p, &sources)?,
                         language: languages(&p).join(","),
                         id,
                         cases,
@@ -178,31 +178,28 @@ fn write(dir: &Path, p: &Value) -> Result<()> {
     Ok(())
 }
 
-fn existing(p: &Value, sources: &[SourceFile]) -> usize {
-    let Ok(tmp) = tempfile::tempdir() else {
-        return 0;
-    };
-    write(tmp.path(), p)
-        .ok()
-        .and_then(|_| crate::rules::ast_rules(&[tmp.path().join("rules")]).ok())
-        .map_or(0, |rules| {
-            sources
+/// How many places in `sources` the proposed rule already matches.
+fn existing(p: &Value, sources: &[SourceFile]) -> Result<usize> {
+    use rayon::prelude::*;
+    let tmp = tempfile::tempdir().context("creating a scratch directory for the rule")?;
+    write(tmp.path(), p)?;
+    let rules = crate::rules::ast_rules(&[tmp.path().join("rules")])?;
+    Ok(sources
+        .par_iter()
+        .map(|f| {
+            rules
                 .iter()
-                .map(|f| {
-                    rules
-                        .iter()
-                        .filter(|r| SupportLang::from_path(&f.rel) == Some(r.language))
-                        .map(|r| {
-                            r.language
-                                .ast_grep(&f.content)
-                                .root()
-                                .find_all(&r.matcher)
-                                .count()
-                        })
-                        .sum::<usize>()
+                .filter(|r| SupportLang::from_path(&f.rel) == Some(r.language))
+                .map(|r| {
+                    r.language
+                        .ast_grep(&f.content)
+                        .root()
+                        .find_all(&r.matcher)
+                        .count()
                 })
-                .sum()
+                .sum::<usize>()
         })
+        .sum())
 }
 
 const GUIDE: &str = include_str!("learn_guide.md");

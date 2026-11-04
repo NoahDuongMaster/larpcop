@@ -4,17 +4,15 @@
 //! p2 = &data`: what is written through `p1` is read through `p2`). A member
 //! of such a group tainted taints the group.
 
-use super::events::Event;
-use ast_grep_core::Doc;
+use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
 
 /// The groups of names the scope's `&local` assignments join.
-pub(super) fn groups<D: Doc>(events: &[(usize, Event<'_, D>)]) -> Vec<HashSet<String>> {
+pub(super) fn groups<'a: 'x, 'x, D: Doc>(
+    assigns: impl IntoIterator<Item = (&'x Node<'a, D>, &'x Node<'a, D>)>,
+) -> Vec<HashSet<String>> {
     let mut groups: Vec<HashSet<String>> = Vec::new();
-    for (_, e) in events {
-        let Event::Assign(left, right, ..) = e else {
-            continue;
-        };
+    for (left, right) in assigns {
         if right.kind() != "pointer_expression" || !right.text().starts_with('&') {
             continue;
         }
@@ -37,6 +35,9 @@ pub(super) fn groups<D: Doc>(events: &[(usize, Event<'_, D>)]) -> Vec<HashSet<St
 
 /// Taints every member of a group one member of which is tainted.
 pub(super) fn spread(groups: &[HashSet<String>], names: &mut HashSet<String>) {
+    if groups.is_empty() || names.is_empty() {
+        return;
+    }
     for g in groups {
         if g.iter().any(|n| names.contains(n)) {
             names.extend(g.iter().cloned());

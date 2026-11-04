@@ -50,20 +50,18 @@ clone vulnerable-node https://github.com/cr0hn/vulnerable-node.git d68f2a3
 [ -f "$WORK/p-java.yml" ] || curl -sfL https://semgrep.dev/c/p/java -o "$WORK/p-java.yml"
 [ -f "$WORK/p-python.yml" ] || curl -sfL https://semgrep.dev/c/p/python -o "$WORK/p-python.yml"
 
-# Median wall time of RUNS runs of "$@", in seconds.
+# Median wall time of RUNS runs of "$@", in seconds (bench/time_it.py: the clock
+# wraps the tool only, and a crash fails the benchmark). All three tools exit 1
+# when they find something.
 time_it() {
-  for _ in $(seq $RUNS); do
-    start=$(python3 -c 'import time; print(time.time())')
-    "$@" > /dev/null 2>&1 || true
-    python3 -c "import time; print(round(time.time() - $start, 2))"
-  done | sort -n | sed -n "$(( (RUNS + 1) / 2 ))p"
+  python3 "$HERE/time_it.py" "$RUNS" 0,1 -- "$@"
 }
 
 echo "larpcop $("$LARPCOP" --version | cut -d' ' -f2) | semgrep $(semgrep --version) | gitleaks $(gitleaks version) | $(uname -sm) $(sysctl -n hw.ncpu 2>/dev/null || nproc) cpus" > "$OUT/timing.txt"
 
 for target in juice-shop NodeGoat dvna dvpwa dvws-node govwa railsgoat xvwa WackoPicko; do
   cd "$WORK/$target"
-  printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
+  printf "extends: ['%s/standards/recommended']\ndisable: [dependency-vulnerability]\n" "$REPO" > .larpcop.yaml
   "$LARPCOP" check --format json > "$OUT/$target-larpcop.json" || true
   semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/$target-semgrep.json" --quiet . || true
   gitleaks dir . --report-format json --report-path "$OUT/$target-gitleaks.json" --no-banner --log-level error || true
@@ -252,7 +250,7 @@ python3 "$HERE/semgrep_kotlin.py" . "$OUT/semgrep-kotlin-larpcop.json" > "$OUT/s
 
 # vulnerable-node: only sast/seeds/, scored by the project's own sast/tests/score.js.
 cd "$WORK/vulnerable-node"
-printf "extends: ['%s/standards/recommended']\n" "$REPO" > .larpcop.yaml
+printf "extends: ['%s/standards/recommended']\ndisable: [dependency-vulnerability]\n" "$REPO" > .larpcop.yaml
 "$LARPCOP" check --format json sast/seeds > "$OUT/seeds-larpcop.json" || true
 semgrep scan --config "$WORK/p-default.yml" --metrics off --json -o "$OUT/seeds-semgrep.json" --quiet sast/seeds || true
 python3 "$HERE/seeds.py" "$WORK/vulnerable-node" "$OUT/seeds-larpcop.json" "$OUT/seeds-semgrep.json" > "$OUT/seeds.md"

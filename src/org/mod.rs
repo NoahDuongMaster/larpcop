@@ -6,7 +6,7 @@ mod setup;
 
 pub use setup::{Plan, setup};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use rayon::prelude::*;
 use serde::Serialize;
 use std::fmt::Write;
@@ -35,63 +35,85 @@ impl Status {
     }
 }
 
+/// A repository's status takes several `gh` processes that wait on the network:
+/// more threads than CPUs keep them busy.
+const GH_THREADS: usize = 16;
+
 pub fn status(owner: &str) -> Result<Vec<Status>> {
     let repos = gh::repos(owner)?;
-    Ok(repos.par_iter().map(repo_status).collect())
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(GH_THREADS)
+        .build()
+        .context("starting the threads that read the repositories")?;
+    pool.install(|| {
+        repos
+            .par_iter()
+            .map(|r| repo_status(r).with_context(|| format!("{}: reading its status", r.full)))
+            .collect()
+    })
 }
 
-fn repo_status(repo: &gh::Repo) -> Status {
+fn repo_status(repo: &gh::Repo) -> Result<Status> {
     let (full, branch) = (repo.full.as_str(), repo.default_branch.as_str());
-    let config = gh::file(full, ".larpcop.yaml", branch);
+    let config = gh::file(full, ".larpcop.yaml", branch)?;
     let standards = config
         .as_deref()
         .and_then(|c| serde_saphyr::from_str::<crate::config::RawConfig>(c).ok())
         .map(|c| c.extends.iter().map(spec_label).collect())
         .unwrap_or_default();
-    let gate = gh::dir(full, ".github/workflows", branch)
-        .into_iter()
-        .filter(|n| n.ends_with(".yml") || n.ends_with(".yaml"))
-        .find(|n| {
-            // The caller, not a reusable definition that mentions itself.
-            gh::file(full, &format!(".github/workflows/{n}"), branch).is_some_and(|w| {
+    let mut gate = None;
+    for n in gh::dir(full, ".github/workflows", branch)? {
+        if !(n.ends_with(".yml") || n.ends_with(".yaml")) {
+            continue;
+        }
+        // The caller, not a reusable definition that mentions itself.
+        let calls_gate =
+            gh::file(full, &format!(".github/workflows/{n}"), branch)?.is_some_and(|w| {
                 let calls = w.contains("larpcop/.github/workflows/enforce.yml")
                     || (full.ends_with("/larpcop")
                         && w.contains("./.github/workflows/enforce.yml"))
                     || w.contains("larpcop check");
                 calls && !w.contains("workflow_call:")
+            });
+        if calls_gate {
+            gate = Some(n);
+            break;
+        }
+    }
+    let last_run = match &gate {
+        Some(w) => {
+            let runs = gh::json(&[
+                "run",
+                "list",
+                "--repo",
+                full,
+                "--workflow",
+                w,
+                "--limit",
+                "1",
+                "--json",
+                "conclusion,status",
+            ])?;
+            runs.get(0).and_then(|run| {
+                let state = run["conclusion"].as_str().filter(|c| !c.is_empty());
+                Some(state.or(run["status"].as_str())?.to_string())
             })
-        });
-    let last_run = gate.as_ref().and_then(|w| {
-        let runs = gh::json(&[
-            "run",
-            "list",
-            "--repo",
-            full,
-            "--workflow",
-            w,
-            "--limit",
-            "1",
-            "--json",
-            "conclusion,status",
-        ])
-        .ok()?;
-        let run = runs.get(0)?;
-        let state = run["conclusion"].as_str().filter(|c| !c.is_empty());
-        Some(state.or(run["status"].as_str())?.to_string())
-    });
+        }
+        None => None,
+    };
     let setup_pr = gh::json(&[
         "pr", "list", "--repo", full, "--head", BRANCH, "--state", "open", "--json", "url",
-    ])
-    .ok()
-    .and_then(|v| v.get(0)?["url"].as_str().map(String::from));
-    Status {
+    ])?
+    .get(0)
+    .and_then(|v| v["url"].as_str().map(String::from));
+    Ok(Status {
         repo: repo.full.clone(),
         config: config.is_some(),
         standards,
         gate,
         last_run,
         setup_pr,
-    }
+    })
 }
 
 fn spec_label(spec: &crate::config::ExtendSpec) -> String {

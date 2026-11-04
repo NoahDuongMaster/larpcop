@@ -11,6 +11,38 @@ fn kiro(event: &str, tool: &str, dir: &std::path::Path, input: Value) -> String 
 }
 
 #[test]
+fn kiro_does_not_judge_an_append_by_a_file_it_could_not_read() {
+    let repo = Repo::with_standards();
+    repo.write("src/ok.ts", GOOD_TS);
+    let dir = repo.path();
+    // A directory cannot be read as a file: that is not an empty file to append to.
+    let append = |path: &std::path::Path| {
+        let input = kiro(
+            "PreToolUse",
+            "fs_append",
+            &dir,
+            json!({ "path": path, "text": BAD_TS }),
+        );
+        repo.run_stdin(&["hook", "kiro"], &input)
+    };
+    let unreadable = append(&dir.join("src"));
+    assert_eq!(unreadable.code(), 0, "{}", unreadable.stderr());
+    assert!(
+        unreadable.stderr().contains("cannot read"),
+        "{}",
+        unreadable.stderr()
+    );
+    // A file that does not exist yet is empty: its new content is judged.
+    let created = append(&dir.join("src/new.ts"));
+    assert_eq!(created.code(), 2, "{}", created.stdout());
+    assert!(
+        created.stderr().contains("no-explicit-any"),
+        "{}",
+        created.stderr()
+    );
+}
+
+#[test]
 fn kiro_checks_writes_before_they_land_and_continues_once_on_stop() {
     let repo = Repo::with_standards();
     repo.write("src/ok.ts", GOOD_TS);
@@ -224,4 +256,31 @@ fn files_written_through_the_shell_are_checked_before_the_command_runs() {
         0
     );
     assert_eq!(bash("npm test > log.txt").code(), 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn kiro_does_not_block_a_stop_it_could_not_remember() {
+    use std::os::unix::fs::PermissionsExt;
+    let repo = Repo::with_standards();
+    repo.write("src/bad.ts", BAD_TS);
+    let cache = repo.path().join(".cache-larpcop");
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::set_permissions(&cache, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let writable = std::fs::write(cache.join("probe"), "").is_ok();
+    let stop = json!({ "hook_event_name": "Stop", "cwd": repo.path(), "session_id": "k" });
+    let run = repo.run_stdin(&["hook", "kiro"], &stop.to_string());
+    std::fs::set_permissions(&cache, std::fs::Permissions::from_mode(0o755)).unwrap();
+    if writable {
+        eprintln!("skipped: this user writes anywhere");
+        return;
+    }
+    // Blocking without being able to remember it would block every later stop too.
+    assert_eq!(run.code(), 0, "{}", run.stderr());
+    assert!(run.stdout().trim().is_empty(), "{}", run.stdout());
+    assert!(
+        run.stderr().contains("not blocking this stop"),
+        "{}",
+        run.stderr()
+    );
 }

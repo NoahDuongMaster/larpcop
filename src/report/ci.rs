@@ -4,6 +4,7 @@
 use super::summary;
 use crate::context::Outcome;
 use crate::rules::{Level, Violation};
+use anyhow::{Context, Result};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -29,7 +30,7 @@ fn location(v: &Violation) -> Value {
     json!({ "physicalLocation": physical })
 }
 
-pub fn sarif(outcome: &Outcome) -> String {
+pub fn sarif(outcome: &Outcome) -> Result<String> {
     let mut rules: BTreeMap<&str, &Violation> = BTreeMap::new();
     for v in &outcome.violations {
         rules.entry(&v.rule).or_insert(v);
@@ -75,7 +76,7 @@ pub fn sarif(outcome: &Outcome) -> String {
             "results": results,
         }],
     });
-    serde_json::to_string_pretty(&doc).unwrap_or_default() + "\n"
+    Ok(serde_json::to_string_pretty(&doc).context("serializing the SARIF report")? + "\n")
 }
 
 fn fingerprint(v: &Violation) -> String {
@@ -89,7 +90,7 @@ fn fingerprint(v: &Violation) -> String {
 }
 
 /// https://docs.gitlab.com/ci/testing/code_quality/#code-quality-report-format
-pub fn gitlab(outcome: &Outcome) -> String {
+pub fn gitlab(outcome: &Outcome) -> Result<String> {
     let issues: Vec<Value> = outcome
         .violations
         .iter()
@@ -113,7 +114,7 @@ pub fn gitlab(outcome: &Outcome) -> String {
             })
         })
         .collect();
-    serde_json::to_string_pretty(&issues).unwrap_or_default() + "\n"
+    Ok(serde_json::to_string_pretty(&issues).context("serializing the GitLab report")? + "\n")
 }
 
 /// Sticky PR comment: counts per rule, then each finding with its fix.

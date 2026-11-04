@@ -229,3 +229,32 @@ fn files_committed_despite_gitignore_are_checked() {
         out.stdout()
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn a_file_or_directory_that_cannot_be_read_is_an_error_not_a_clean_file() {
+    use std::os::unix::fs::PermissionsExt;
+    let repo = Repo::with_standards();
+    repo.write("src/a.ts", BAD_TS);
+    repo.write("lib/b.ts", BAD_TS);
+    let (file, dir) = (repo.path().join("src/a.ts"), repo.path().join("lib"));
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read(&file).is_ok() {
+        eprintln!("skipped: this user reads anything");
+        return;
+    }
+    let run = repo.run(&["check"]);
+    assert_eq!(run.code(), 3, "{}", run.stdout());
+    assert!(
+        run.stderr().contains("reading src/a.ts"),
+        "{}",
+        run.stderr()
+    );
+
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let run = repo.run(&["check"]);
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(run.code(), 3, "{}", run.stdout());
+    assert!(run.stderr().contains("walking"), "{}", run.stderr());
+}

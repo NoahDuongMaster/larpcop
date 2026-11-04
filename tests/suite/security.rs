@@ -1,26 +1,30 @@
 //! Security rules: secrets, known vulnerabilities and malware (fake OSV.dev),
 //! intraprocedural taint.
 
-use crate::common::deps::{fake_deps_dev, npm_lock, repo};
+use crate::common::deps::{fake_api, fake_deps_dev, fake_osv as fake_osv_with, npm_lock, repo};
 use crate::common::hook_input;
 use serde_json::json;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn fake_osv() -> String {
-    let batch = json!({ "results": [
-        { "vulns": [{ "id": "MAL-2026-1" }] },
-        { "vulns": [{ "id": "GHSA-hhhh-0000-0000" }] },
-    ]});
     let mal = json!({ "id": "MAL-2026-1", "summary": "Malicious code in aaa-evil (npm)" });
     let high = json!({ "id": "GHSA-hhhh-0000-0000", "summary": "Prototype pollution in bbb-old",
         "database_specific": { "severity": "HIGH" },
         "affected": [{ "package": { "name": "bbb-old", "ecosystem": "npm" },
             "ranges": [{ "events": [{ "introduced": "0" }, { "fixed": "1.0.5" }] }] }] });
-    let api = fake_deps_dev(vec![
-        ("/v1/querybatch".into(), batch.to_string()),
-        ("/v1/vulns/MAL-2026-1".into(), mal.to_string()),
-        ("/v1/vulns/GHSA-hhhh-0000-0000".into(), high.to_string()),
-    ]);
-    api.replace("/v3", "/v1")
+    // `aaa-evil@` is an install without a version.
+    fake_osv_with(
+        vec![
+            ("aaa-evil@1.0.0", vec!["MAL-2026-1"]),
+            ("aaa-evil@", vec!["MAL-2026-1"]),
+            ("bbb-old@1.0.0", vec!["GHSA-hhhh-0000-0000"]),
+        ],
+        vec![
+            ("MAL-2026-1", mal.to_string()),
+            ("GHSA-hhhh-0000-0000", high.to_string()),
+        ],
+    )
 }
 
 #[test]
@@ -90,6 +94,12 @@ fn advisory_details_are_cached_until_osv_reports_an_edit() {
     let repo = repo("dependencies:\n  vulnerabilities: high\n");
     repo.write("package-lock.json", &npm_lock(&[("bbb-old", "1.0.0")]));
     let check = |osv: &str| {
+        // Each run asks OSV afresh: the advisory cache is what is under test, not the
+        // few minutes lockfile scans remember OSV's answers.
+        match std::fs::remove_dir_all(repo.path().join(".cache-larpcop/osv-query")) {
+            Ok(()) => {}
+            Err(e) => assert_eq!(e.kind(), std::io::ErrorKind::NotFound, "{e}"),
+        }
         repo.run_env(&["check"], &[("LARPCOP_OSV_API", osv)])
             .stdout()
     };
@@ -99,6 +109,46 @@ fn advisory_details_are_cached_until_osv_reports_an_edit() {
     assert!(check(&api("2026-01-01T00:00:00Z", "Second text")).contains("First text"));
     // Edited upstream: fetched again.
     assert!(check(&api("2026-02-01T00:00:00Z", "Second text")).contains("Second text"));
+}
+
+#[test]
+fn lockfile_scans_reuse_osv_answers_for_a_few_minutes_but_installs_always_ask() {
+    let asked = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&asked);
+    let osv = fake_api(move |path, body| {
+        if path != "/v1/querybatch" {
+            return None;
+        }
+        counter.fetch_add(1, Ordering::SeqCst);
+        let queries = serde_json::from_str::<serde_json::Value>(body).unwrap();
+        let none = vec![json!({}); queries["queries"].as_array().unwrap().len()];
+        Some(json!({ "results": none }).to_string())
+    })
+    .replace("/v3", "/v1");
+    let env = [("LARPCOP_OSV_API", osv.as_str())];
+    let repo = repo("dependencies:\n  vulnerabilities: high\n");
+    repo.write("package-lock.json", &npm_lock(&[("bbb-old", "1.0.0")]));
+    repo.commit_all("base");
+
+    // Nothing changed between the runs: the second one needs no round trip.
+    for _ in 0..2 {
+        let run = repo.run_env(&["check", "--changed"], &env);
+        assert_eq!(run.code(), 0, "{}", run.stdout());
+    }
+    assert_eq!(asked.load(Ordering::SeqCst), 1);
+
+    // An install is vetted against what OSV says now, every time.
+    let install = hook_input(
+        "PreToolUse",
+        "Bash",
+        &repo.path(),
+        json!({ "command": "npm i zod" }),
+    );
+    for expected in [2, 3] {
+        let run = repo.run_stdin_env(&["hook", "claude-code"], &install, &env);
+        assert_eq!(run.code(), 0, "{}", run.stderr());
+        assert_eq!(asked.load(Ordering::SeqCst), expected);
+    }
 }
 
 #[test]

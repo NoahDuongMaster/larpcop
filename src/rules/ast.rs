@@ -3,14 +3,16 @@
 //! Inline suppression comments are deliberately NOT honoured: exceptions must go
 //! through config, where they are visible in review and blocked for locked rules.
 
+use super::lines::LineIndex;
 use super::values::{Resolve, Settings};
 use super::{Level, RuleInfo, Violation};
 use crate::files::SourceFile;
 use anyhow::{Context, Result, anyhow, bail};
 use ast_grep_config::{GlobalRules, RuleCollection, RuleConfig, Severity, from_yaml_string};
 use ast_grep_core::{Doc, Language, Node};
-use ast_grep_language::{LanguageExt, SupportLang};
-use std::collections::{BTreeMap, BTreeSet};
+use ast_grep_language::SupportLang;
+use std::cell::OnceCell;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -18,8 +20,8 @@ use std::path::{Path, PathBuf};
 pub struct AstRules {
     collection: RuleCollection<SupportLang>,
     infos: Vec<RuleInfo>,
-    /// (id, language) → `metadata.resolve` of the rule.
-    resolve: std::collections::HashMap<(String, String), Resolve>,
+    /// id → (language, `metadata.resolve`) of the rules that have one.
+    resolve: HashMap<String, Vec<(SupportLang, Resolve)>>,
     settings: Settings,
 }
 
@@ -36,7 +38,9 @@ pub fn load_all(dirs: &[PathBuf]) -> Result<Vec<RuleConfig<SupportLang>>> {
         .map(|file| {
             let text =
                 fs::read_to_string(&file).with_context(|| format!("reading {}", file.display()))?;
-            let text = super::pattern_fixes::rewrite_rule_file(&text).unwrap_or(text);
+            let rewritten = super::pattern_fixes::rewrite_rule_file(&text)
+                .map_err(|e| anyhow!("invalid rule file {}: {}", file.display(), chain(&e)))?;
+            let text = rewritten.unwrap_or(text);
             let rules = from_yaml_string::<SupportLang>(&text, &GlobalRules::default())
                 .map_err(|e| anyhow!("invalid rule file {}: {}", file.display(), chain(&e)))?;
             Ok((file, rules))
@@ -74,10 +78,13 @@ impl AstRules {
             .filter(|r| !disabled.contains(&r.id) && !matches!(r.severity, Severity::Off))
             .collect();
         let infos = merge_languages(configs.iter().map(info));
-        let mut resolve = std::collections::HashMap::new();
+        let mut resolve: HashMap<String, Vec<(SupportLang, Resolve)>> = HashMap::new();
         for r in &configs {
             if let Some(spec) = Resolve::of(r)? {
-                resolve.insert((r.id.clone(), r.language.to_string()), spec);
+                resolve
+                    .entry(r.id.clone())
+                    .or_default()
+                    .push((r.language, spec));
             }
         }
         let collection =
@@ -98,9 +105,9 @@ impl AstRules {
         &self.infos
     }
 
-    /// Are there ast-grep rules for this path at all?
-    pub fn applies(&self, rel: &str) -> bool {
-        !self.collection.for_path(rel).is_empty()
+    /// The rules for this path: its language, the rule's `files:` and `ignores:`.
+    pub fn rules_for_path(&self, rel: &str) -> Vec<&RuleConfig<SupportLang>> {
+        self.collection.for_path(rel)
     }
 
     pub fn infos_for(&self, rel: &str) -> Vec<RuleInfo> {
@@ -114,39 +121,26 @@ impl AstRules {
             .collect()
     }
 
-    pub fn check(&self, file: &SourceFile) -> Vec<Violation> {
-        let Some(lang) = SupportLang::from_path(&file.rel) else {
-            return Vec::new();
-        };
-        let grep = lang.ast_grep(super::macros::expand(lang, &file.content));
-        self.check_root(file, &grep.root())
-    }
-
-    /// Rules on a tree that has already been parsed.
-    pub fn check_root<D: Doc>(&self, file: &SourceFile, root: &Node<D>) -> Vec<Violation> {
-        let rules = self.collection.for_path(&file.rel);
+    /// `rules` (those of `file`'s path) on a tree that has already been parsed.
+    pub fn check_root<D: Doc>(
+        &self,
+        rules: &[&RuleConfig<SupportLang>],
+        file: &SourceFile,
+        root: &Node<D>,
+    ) -> Vec<Violation> {
         if rules.is_empty() {
             return Vec::new();
         }
         let buckets = super::ast_walk::Buckets::new(root);
+        let lines = LineIndex::new(&file.content);
         let mut out = Vec::new();
         for rule in rules {
-            let note = match (&rule.note, rule.fixer.is_empty()) {
-                (note, true) => note.clone(),
-                (note, false) => Some(format!(
-                    "{}Auto-fixable: run `larpcop fix {}`.",
-                    note.as_deref()
-                        .map(|n| format!("{n}\n"))
-                        .unwrap_or_default(),
-                    file.rel
-                )),
-            };
-            let resolve = self
-                .resolve
-                .get(&(rule.id.clone(), rule.language.to_string()));
+            let resolve = self.resolve_of(rule);
             let kept = |m: &ast_grep_core::NodeMatch<_>| {
                 resolve.is_none_or(|r| r.keeps(m, &self.settings))
             };
+            // Most rules match nothing in most files: the note waits for a match.
+            let note = OnceCell::new();
             // `any:` branches matching a node and its parent at the same start
             // (a call and its statement) report once.
             let mut seen = std::collections::HashSet::new();
@@ -163,12 +157,21 @@ impl AstRules {
                     line: pos.line() + 1,
                     column: pos.column(m.get_node()) + 1,
                     message: rule.get_message(&m),
-                    note: note.clone(),
-                    snippet: Some(snippet(&file.content, pos.line())),
+                    note: note.get_or_init(|| note_of(rule, &file.rel)).clone(),
+                    snippet: Some(snippet(&lines, pos.line())),
                 });
             }
         }
         out
+    }
+
+    /// The `metadata.resolve` of `rule`, if it has one.
+    fn resolve_of(&self, rule: &RuleConfig<SupportLang>) -> Option<&Resolve> {
+        self.resolve
+            .get(&rule.id)?
+            .iter()
+            .find(|(lang, _)| *lang == rule.language)
+            .map(|(_, spec)| spec)
     }
 
     /// Applies every `fix:` of the rules matching `file`; `None` if nothing changed.
@@ -192,22 +195,33 @@ fn rule_files(dirs: &[PathBuf]) -> Result<Vec<PathBuf>> {
 }
 
 fn collect_yaml(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
-    let mut entries: Vec<PathBuf> = fs::read_dir(dir)?
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .collect();
-    entries.sort();
-    for path in entries {
+    for path in sorted_entries(dir)? {
         if path.is_dir() {
             // Fixtures for `larpcop test`, not rules.
             if path.file_name().is_some_and(|n| n == TESTS_DIR) {
                 continue;
             }
             collect_yaml(&path, out)?;
-        } else if path.extension().is_some_and(|e| e == "yml" || e == "yaml") {
+        } else if is_yaml(&path) {
             out.push(path);
         }
     }
     Ok(())
+}
+
+/// The entries of `dir`, sorted; one that cannot be read is an error.
+pub(super) fn sorted_entries(dir: &Path) -> Result<Vec<PathBuf>> {
+    let reading = || format!("reading directory {}", dir.display());
+    let mut entries = Vec::new();
+    for entry in fs::read_dir(dir).with_context(reading)? {
+        entries.push(entry.with_context(reading)?.path());
+    }
+    entries.sort();
+    Ok(entries)
+}
+
+pub(super) fn is_yaml(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e == "yml" || e == "yaml")
 }
 
 fn level(severity: &Severity) -> Level {
@@ -241,9 +255,23 @@ fn info(rule: &RuleConfig<SupportLang>) -> RuleInfo {
     }
 }
 
+/// The rule's note, and for a fixable one where to run the fix.
+fn note_of(rule: &RuleConfig<SupportLang>, rel: &str) -> Option<String> {
+    if rule.fixer.is_empty() {
+        return rule.note.clone();
+    }
+    Some(format!(
+        "{}Auto-fixable: run `larpcop fix {rel}`.",
+        rule.note
+            .as_deref()
+            .map(|n| format!("{n}\n"))
+            .unwrap_or_default(),
+    ))
+}
+
 /// The source line where the match starts, trimmed and capped for display.
-fn snippet(content: &str, line: usize) -> String {
-    let text = content.lines().nth(line).unwrap_or("").trim();
+fn snippet(lines: &LineIndex, line: usize) -> String {
+    let text = lines.line(line).unwrap_or("").trim();
     match text.char_indices().nth(120) {
         Some((cut, _)) => format!("{}…", &text[..cut]),
         None => text.to_string(),

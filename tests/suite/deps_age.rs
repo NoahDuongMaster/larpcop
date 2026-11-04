@@ -1,4 +1,4 @@
-use crate::common::deps::{AGE, fake_deps_dev, npm_lock, repo};
+use crate::common::deps::{AGE, fake_deps_dev, fake_osv, npm_lock, repo};
 use serde_json::json;
 
 #[test]
@@ -71,15 +71,14 @@ fn pull_requests_are_measured_against_the_merge_base() {
     );
 }
 
-#[test]
-fn security_fixes_may_be_younger_than_the_minimum_age() {
+/// A repo that locks `ureq` 3.5.0 (9 days old, no fix for anything) and
+/// `webpki-roots` 1.0.11 (8 days old) on top of 1.0.9 (100 days old, advisory
+/// RUSTSEC-2026-0381, fixed in `fixed_in`), plus the fakes for deps.dev and OSV.
+fn young_crates(fixed_in: &str) -> (crate::common::Repo, String, String) {
     let at = |days: i64| {
         (jiff::Timestamp::now() - jiff::SignedDuration::from_hours(days * 24)).to_string()
     };
-    let version = |days: i64, advisories: &[&str]| {
-        let keys: Vec<_> = advisories.iter().map(|id| json!({"id": id})).collect();
-        json!({"publishedAt": at(days), "advisoryKeys": keys}).to_string()
-    };
+    let version = |days: i64| json!({"publishedAt": at(days)}).to_string();
     let package = |versions: &[(&str, i64)]| {
         let list: Vec<_> = versions
             .iter()
@@ -89,21 +88,26 @@ fn security_fixes_may_be_younger_than_the_minimum_age() {
     };
     let crate_path = |rest: &str| format!("/v3/systems/cargo/packages/{rest}");
     let api = fake_deps_dev(vec![
-        (crate_path("ureq/versions/3.5.0"), version(9, &[])),
-        (crate_path("ureq/versions/3.4.2"), version(48, &[])),
+        (crate_path("ureq/versions/3.5.0"), version(9)),
+        (crate_path("ureq/versions/3.4.2"), version(48)),
         (crate_path("ureq"), package(&[("3.4.2", 48), ("3.5.0", 9)])),
-        (crate_path("webpki-roots/versions/1.0.11"), version(8, &[])),
-        (
-            crate_path("webpki-roots/versions/1.0.9"),
-            version(100, &["RUSTSEC-2026-0381"]),
-        ),
+        (crate_path("webpki-roots/versions/1.0.11"), version(8)),
+        (crate_path("webpki-roots/versions/1.0.9"), version(100)),
         (
             crate_path("webpki-roots"),
             package(&[("1.0.9", 100), ("1.0.11", 8)]),
         ),
     ]);
+    let advisory = json!({ "id": "RUSTSEC-2026-0381", "summary": "webpki-roots flaw",
+        "database_specific": { "severity": "HIGH" },
+        "affected": [{ "package": { "name": "webpki-roots", "ecosystem": "crates.io" },
+            "ranges": [{ "events": [{ "introduced": "0" }, { "fixed": fixed_in }] }] }] });
+    let osv = fake_osv(
+        vec![("webpki-roots@1.0.9", vec!["RUSTSEC-2026-0381"])],
+        vec![("RUSTSEC-2026-0381", advisory.to_string())],
+    );
     let registry = "source = \"registry+https://github.com/rust-lang/crates.io-index\"";
-    let repo = repo(AGE);
+    let repo = repo(&format!("{AGE}  vulnerabilities: high\n"));
     repo.write(
         "Cargo.lock",
         &format!(
@@ -111,7 +115,17 @@ fn security_fixes_may_be_younger_than_the_minimum_age() {
              [[package]]\nname = \"webpki-roots\"\nversion = \"1.0.11\"\n{registry}\n"
         ),
     );
-    let run = repo.run_env(&["check", "--changed"], &[("LARPCOP_DEPS_API", &api)]);
+    (repo, api, osv)
+}
+
+#[test]
+fn security_fixes_may_be_younger_than_the_minimum_age() {
+    let (repo, api, osv) = young_crates("1.0.11");
+    let env = [
+        ("LARPCOP_DEPS_API", api.as_str()),
+        ("LARPCOP_OSV_API", osv.as_str()),
+    ];
+    let run = repo.run_env(&["check", "--changed"], &env);
     let out = run.stdout();
     assert_eq!(run.code(), 1, "{out}");
     assert!(out.contains("1 error(s), 1 warning(s)"), "{out}");
@@ -128,6 +142,29 @@ fn security_fixes_may_be_younger_than_the_minimum_age() {
         ),
         "{out}"
     );
+}
+
+#[test]
+fn a_young_version_is_only_excused_by_an_advisory_it_fixes_and_a_threshold() {
+    // The advisory is fixed by another release: 1.0.11 is just a young version.
+    let (repo, api, osv) = young_crates("1.0.12");
+    let env = [
+        ("LARPCOP_DEPS_API", api.as_str()),
+        ("LARPCOP_OSV_API", osv.as_str()),
+    ];
+    let out = repo.run_env(&["check", "--changed"], &env).stdout();
+    assert!(out.contains("2 error(s), 0 warning(s)"), "{out}");
+    assert!(!out.contains("security fix"), "{out}");
+
+    // Without a vulnerability threshold no advisory counts, and OSV is not asked.
+    let (repo, api, osv) = young_crates("1.0.11");
+    repo.write(".larpcop.yaml", AGE);
+    let env = [
+        ("LARPCOP_DEPS_API", api.as_str()),
+        ("LARPCOP_OSV_API", osv.as_str()),
+    ];
+    let out = repo.run_env(&["check", "--changed"], &env).stdout();
+    assert!(out.contains("2 error(s), 0 warning(s)"), "{out}");
 }
 
 #[test]

@@ -39,33 +39,46 @@ impl Ctx {
                 return self.summaries.get(&held).map(|s| (s, false));
             }
         }
+        self.resolve_with(call, |key, guessed| {
+            self.pick(key, call).map(|s| (s, guessed))
+        })
+    }
+
+    /// Offers `found` the keys a call's summary may be filed under, most
+    /// precise first, with whether a hit there is a guess by method name
+    /// alone, until it returns something.
+    pub(super) fn resolve_with<D: Doc, R>(
+        &self,
+        call: &Node<D>,
+        mut found: impl FnMut(&str, bool) -> Option<R>,
+    ) -> Option<R> {
         let name = callee(call)?;
-        if let Some(s) = self.pick(&name, call) {
-            return Some((s, false));
+        if let Some(r) = found(&name, false) {
+            return Some(r);
         }
         let (receiver, method) = name.rsplit_once('.')?;
         // `Base b = new Impl(); b.run(x)`: the class the object was built as.
         if let Some(class) = self.built_as(call, receiver)
-            && let Some(s) = self.pick(&format!("{class}.{method}"), call)
+            && let Some(r) = found(&format!("{class}.{method}"), false)
         {
-            return Some((s, false));
+            return Some(r);
         }
         // `Store s; s.save(x)`: every known implementation of its type.
         if let Some(object) = receiver_node(call)
             && let Some(ty) = super::declared::declared_type(&object)
-            && let Some(s) = self.pick(
+            && let Some(r) = found(
                 &format!("{}.{method}", ty.split('<').next().unwrap_or(&ty).trim()),
-                call,
+                false,
             )
         {
-            return Some((s, false));
+            return Some(r);
         }
-        self.pick(&format!("*.{method}"), call).map(|s| (s, true))
+        found(&format!("*.{method}"), true)
     }
 
     /// The summary under `key`; for `render(rows, escape)`, the one with
     /// `escape`'s calls clean (higher.rs).
-    fn pick<D: Doc>(&self, key: &str, call: &Node<D>) -> Option<&Summary> {
+    pub(super) fn pick<D: Doc>(&self, key: &str, call: &Node<D>) -> Option<&Summary> {
         let s = self.summaries.get(key)?;
         Some(
             self.specialized(key, call)
@@ -74,7 +87,7 @@ impl Ctx {
         )
     }
 
-    fn built_as<D: Doc>(&self, call: &Node<D>, name: &str) -> Option<String> {
+    pub(super) fn built_as<D: Doc>(&self, call: &Node<D>, name: &str) -> Option<String> {
         let f = call.ancestors().find(|a| is_function(a))?;
         let start = f.range().start;
         let known = self.built.borrow().get(&start).cloned();

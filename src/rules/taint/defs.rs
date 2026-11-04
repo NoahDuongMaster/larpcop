@@ -6,14 +6,66 @@ use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
 
-/// Named functions defined in `root`: (name, function node, parameter names).
-pub fn functions<'a, D: Doc>(root: &Node<'a, D>) -> Vec<(String, Node<'a, D>, Vec<String>)> {
-    let mut out: Vec<(String, Node<'a, D>, Vec<String>)> = named(root).collect();
-    // Methods are also known as `Class.method`, the way callers outside name them.
-    let qualified: Vec<_> = out
-        .iter()
-        .filter_map(|(name, f, p)| Some((format!("{}.{name}", class_of(f)?), f.clone(), p.clone())))
-        .collect();
+#[derive(Clone)]
+pub struct FnDef<'a, D: Doc> {
+    pub name: String,
+    pub node: Node<'a, D>,
+    pub params: Vec<String>,
+    pub class_range: Option<(usize, usize)>,
+    pub method: bool,
+    pub supers: Vec<String>,
+    pub bodiless: bool,
+    pub flags: Vec<(usize, Option<bool>)>,
+    pub apps: Vec<(usize, Vec<std::ops::Range<usize>>)>,
+    pub statics_read: Vec<String>,
+}
+
+/// Named functions defined in `root`, with their rule-independent AST properties.
+pub fn functions<'a, D: Doc>(root: &Node<'a, D>) -> Vec<FnDef<'a, D>> {
+    let mut out = Vec::new();
+    let mut qualified = Vec::new();
+    for (name, node, params) in named(root) {
+        let cls = class_of(&node);
+        let bodiless = bodiless(&node);
+        let (supers, flags, apps, statics_read) = if bodiless {
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new())
+        } else {
+            let apps = params
+                .iter()
+                .enumerate()
+                .filter(|(_, p)| !p.is_empty())
+                .filter_map(|(k, p)| {
+                    let runs = super::higher::applications(&node, p);
+                    (!runs.is_empty()).then_some((k, runs))
+                })
+                .collect();
+            (
+                supers_of(&node),
+                super::flags::flags(&node, &params),
+                apps,
+                super::statics::read(&node),
+            )
+        };
+        let def = FnDef {
+            name,
+            class_range: super::check::class_of(&node),
+            method: cls.is_some(),
+            supers,
+            bodiless,
+            flags,
+            apps,
+            statics_read,
+            node,
+            params,
+        };
+        // Methods are also known as `Class.method`, the way callers outside name them.
+        if let Some(c) = cls {
+            let mut q = def.clone();
+            q.name = format!("{c}.{}", def.name);
+            qualified.push(q);
+        }
+        out.push(def);
+    }
     out.extend(qualified);
     out
 }

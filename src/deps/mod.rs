@@ -9,27 +9,34 @@
 
 mod age;
 mod approval;
+mod check;
+mod clock;
 mod ecosystem;
+#[cfg(test)]
+mod fake;
 mod gate;
 mod install;
 mod install_gate;
 mod lockfile;
 mod manifest;
+mod net;
 mod osv;
 mod pm_config;
 mod registry;
+mod view;
 mod vulns;
 
+pub use check::Findings;
 pub use osv::Severity;
 
 use crate::config::Config;
-use crate::files::{self, Scope};
+use crate::files;
 use crate::rules::{Level, RuleInfo, Violation};
+use crate::shell_ast::Script;
 use anyhow::Result;
 use ecosystem::Patterns;
 use globset::GlobSet;
-use std::collections::BTreeSet;
-use std::path::Path;
+use view::View;
 
 pub const AGE_ID: &str = "dependency-release-age";
 pub const APPROVAL_ID: &str = "dependency-approval";
@@ -45,64 +52,19 @@ pub struct Deps {
     exclude: GlobSet,
 }
 
-/// Both sides of a change: the scope's content (worktree or index) and the base commit.
-struct View<'a> {
-    root: &'a Path,
-    staged: bool,
-    base: Option<String>,
-}
-
-impl View<'_> {
-    fn current(&self, rel: &str) -> Option<String> {
-        files::read(self.root, rel, self.staged)
-    }
-
-    fn old(&self, rel: &str) -> Option<String> {
-        files::show(self.root, self.base.as_deref()?, rel)
-    }
-
-    /// What a dependency file pins: a lockfile's entries, or a manifest's exact
-    /// pins when no lockfile governs it.
-    fn pins(&self, rel: &str, name: &str, content: &str) -> Option<Result<Vec<ecosystem::Pinned>>> {
-        lockfile::parse(name, content)
-            .or_else(|| lockfile::manifest_pins(name, content, |locks| self.governed(rel, locks)))
-    }
-
-    /// One of `locks` sits next to `rel` or in a directory above it.
-    fn governed(&self, rel: &str, locks: &[&str]) -> bool {
-        let mut dir = dir_of(rel);
-        loop {
-            let at = |l: &str| {
-                if dir.is_empty() {
-                    l.to_string()
-                } else {
-                    format!("{dir}/{l}")
-                }
-            };
-            if locks.iter().any(|l| self.current(&at(l)).is_some()) {
-                return true;
-            }
-            if dir.is_empty() {
-                return false;
-            }
-            dir = dir_of(dir);
-        }
-    }
-}
-
 /// Lockfiles, manifests and package-manager configs: what the dependency rules read.
 pub fn is_dependency_file(file_name: &str) -> bool {
-    lockfile::parse(file_name, "").is_some()
+    lockfile::reads_pins(file_name)
         || manifest::is_manifest(file_name)
         || pm_config::relevant(file_name)
 }
 
 /// Cheap pre-filter: the agent hook loads the config only for commands that matter.
-pub fn concerns(command: &str) -> bool {
-    let script = crate::shell_ast::parse(command);
+/// `script` is `command`, parsed.
+pub fn concerns(command: &str, script: &Script) -> bool {
     let lower = command.to_ascii_lowercase();
-    !install::invocations(&script).is_empty()
-        || install_gate::mentions(&script)
+    !install::invocations(script).is_empty()
+        || install_gate::mentions(script)
         || [
             "release-age",
             "release_age",
@@ -181,68 +143,6 @@ or worse vulnerability (OSV.dev)."
             });
         }
         out
-    }
-
-    pub fn check(&self, root: &Path, scope: &Scope) -> Result<Vec<Violation>> {
-        let view = View {
-            root,
-            staged: matches!(scope, Scope::Staged),
-            base: files::base(root, scope),
-        };
-        let mut out = Vec::new();
-        let mut fresh = Vec::new();
-        let mut gated_dirs = BTreeSet::new();
-        let mut known = None;
-        let mut locked = Vec::new();
-        let audit = matches!(scope, Scope::All | Scope::Paths(_));
-        for rel in files::list(root, scope)? {
-            if self.exclude.is_match(&rel) {
-                continue;
-            }
-            let name = file_name(&rel);
-            if self.approval && manifest::is_manifest(name) {
-                let known = known.get_or_insert_with(|| approval::known(&view));
-                out.extend(self.unapproved(&rel, name, &view, known));
-            }
-            if self.min_days.is_some() {
-                fresh.extend(self.fresh_pins(&rel, name, &view, &mut out));
-                if pm_config::relevant(name) {
-                    gated_dirs.insert(dir_of(&rel).to_string());
-                }
-            }
-        }
-        if let Some(min) = self.vulns {
-            // Every lockfile, not only changed ones: a package reported as malware
-            // today must block even a pull request that does not touch it. Hook
-            // feedback on a few edited files only looks at those (Stop covers all).
-            let all = match scope {
-                Scope::Paths(_) | Scope::Touched(_) => files::list(root, scope)?,
-                _ => files::list(root, &Scope::All)?,
-            };
-            for rel in all {
-                if !self.exclude.is_match(&rel) {
-                    locked.extend(self.locked(&rel, file_name(&rel), &view, audit));
-                }
-            }
-            out.extend(self.vulnerable(min, &locked));
-        }
-        if let Some(days) = self.min_days {
-            out.extend(age::too_new(days, &fresh)?);
-            for dir in &gated_dirs {
-                let gaps = pm_config::check(dir, days, &|rel| view.current(rel));
-                out.extend(gaps.into_iter().map(|g| Violation {
-                    rule: AGE_ID.into(),
-                    level: Level::Error,
-                    file: g.lockfile,
-                    line: 0,
-                    column: 0,
-                    message: g.message,
-                    note: Some(g.note),
-                    snippet: None,
-                }));
-            }
-        }
-        Ok(out)
     }
 }
 

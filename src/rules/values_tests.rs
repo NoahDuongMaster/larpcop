@@ -2,6 +2,7 @@
 
 use super::ast::AstRules;
 use crate::files::SourceFile;
+use ast_grep_language::{Language, LanguageExt, SupportLang};
 use std::collections::BTreeSet;
 
 #[test]
@@ -59,6 +60,9 @@ metadata:
         rel: "C.java".into(),
         content: java.into(),
     };
-    let lines: Vec<usize> = ast.check(&file).iter().map(|v| v.line).collect();
+    let lang = SupportLang::from_path(&file.rel).unwrap();
+    let grep = lang.ast_grep(super::macros::expand(lang, &file.content));
+    let found = ast.check_root(&ast.rules_for_path(&file.rel), &file, &grep.root());
+    let lines: Vec<usize> = found.iter().map(|v| v.line).collect();
     assert_eq!(lines, [6, 8, 10]);
 }

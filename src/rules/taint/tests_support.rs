@@ -88,13 +88,50 @@ pub(super) fn guarded_config(
     }
 }
 
+/// A violation as the tests compare them: (rule, line, column, note).
+type Key = (String, usize, usize, Option<String>);
+
+fn keys(vs: &[Violation]) -> Vec<Key> {
+    let mut keys: Vec<Key> = vs
+        .iter()
+        .map(|v| (v.rule.clone(), v.line, v.column, v.note.clone()))
+        .collect();
+    keys.sort();
+    keys
+}
+
+/// Checks `file` with every rule of `rules` through the multi-rule path (one
+/// batch), the way `larpcop check` does.
+pub(super) fn multi(rules: &[TaintRule], file: &SourceFile) -> Vec<Violation> {
+    let Some(lang) = SupportLang::from_path(&file.rel) else {
+        return Vec::new();
+    };
+    let grep = lang.ast_grep(crate::rules::macros::expand(lang, &file.content));
+    check_indexed_multi(rules, file, lang, &FileIndex::new(grep.root()))
+}
+
+/// The violations of the single-rule path, after asserting that the
+/// multi-rule path finds exactly the same ones for this rule alone: every
+/// taint test is thus also a test of the code `larpcop check` runs.
+pub(super) fn check_parity(r: &TaintRule, file: &SourceFile) -> Vec<Violation> {
+    let single = r.check(file);
+    let both = multi(std::slice::from_ref(r), file);
+    assert_eq!(
+        keys(&single),
+        keys(&both),
+        "single-rule path (left) and multi-rule path (right) disagree on {}",
+        file.rel
+    );
+    single
+}
+
 pub(super) fn found(r: &TaintRule, root: &Path, rel: &str) -> Vec<(usize, String)> {
     let content = std::fs::read_to_string(root.join(rel)).unwrap();
     let file = SourceFile {
         rel: rel.into(),
         content,
     };
-    r.check(&file)
+    check_parity(r, &file)
         .into_iter()
         .map(|v| (v.line, v.note.unwrap_or_default()))
         .collect()

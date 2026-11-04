@@ -58,8 +58,12 @@ pub(super) struct Rule {
     pub(super) path: Option<Regex>,
     pub(super) secret_group: usize,
     pub(super) entropy: Option<f32>,
-    pub(super) keywords: Vec<String>,
+    /// Ids (in `Keywords`) of the keywords of which one must be in the text.
+    pub(super) keywords: Vec<usize>,
     pub(super) allows: Vec<Allow>,
+    /// A broad `generic-*` detector, whose finding yields to a specific one
+    /// on the same line.
+    pub(super) generic: bool,
 }
 
 pub(super) fn compile(pattern: &str) -> Option<Regex> {
@@ -146,11 +150,13 @@ impl Allow {
             "line" => line,
             _ => secret,
         };
-        let lower = secret.to_lowercase();
         let checks = [
             (!self.regexes.is_empty()).then(|| self.regexes.iter().any(|r| r.is_match(target))),
             (!self.paths.is_empty()).then(|| self.paths.iter().any(|r| r.is_match(path))),
-            (!self.stopwords.is_empty()).then(|| self.stopwords.iter().any(|s| lower.contains(s))),
+            (!self.stopwords.is_empty()).then(|| {
+                let lower = secret.to_lowercase();
+                self.stopwords.iter().any(|s| lower.contains(s))
+            }),
         ];
         let mut present = checks.iter().flatten();
         if self.all {

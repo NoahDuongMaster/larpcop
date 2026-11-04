@@ -6,7 +6,7 @@
 //! absolute binary path and forced standards.
 
 use super::hooks::{merge_flat, merge_grouped, parse, render};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde_json::{Value, json};
 
 pub const TIMEOUT_SECS: u64 = 120;
@@ -96,20 +96,20 @@ pub fn gemini_settings(current: Option<&str>, cmd: &str) -> Result<String> {
     merge_grouped(&mut doc, &events, &handler)?;
     let obj = doc.as_object_mut().expect("parse() guarantees an object");
     let servers = obj.entry("mcpServers").or_insert_with(|| json!({}));
-    if servers.is_object() {
-        servers["larpcop"] = json!({ "command": "larpcop", "args": ["mcp"] });
-    }
+    anyhow::ensure!(servers.is_object(), "`mcpServers` must be an object");
+    servers["larpcop"] = json!({ "command": "larpcop", "args": ["mcp"] });
     let context = obj.entry("context").or_insert_with(|| json!({}));
-    if let Some(ctx) = context.as_object_mut() {
-        let names = match ctx.remove("fileName") {
-            Some(Value::Array(list)) => list,
-            Some(Value::String(one)) => vec![json!(one)],
-            _ => vec![json!("GEMINI.md")],
-        };
-        let mut names: Vec<Value> = names.into_iter().filter(|n| n != "AGENTS.md").collect();
-        names.insert(0, json!("AGENTS.md"));
-        ctx.insert("fileName".into(), Value::Array(names));
-    }
+    let ctx = context
+        .as_object_mut()
+        .context("`context` must be an object")?;
+    let names = match ctx.remove("fileName") {
+        Some(Value::Array(list)) => list,
+        Some(Value::String(one)) => vec![json!(one)],
+        _ => vec![json!("GEMINI.md")],
+    };
+    let mut names: Vec<Value> = names.into_iter().filter(|n| n != "AGENTS.md").collect();
+    names.insert(0, json!("AGENTS.md"));
+    ctx.insert("fileName".into(), Value::Array(names));
     render(&doc)
 }
 

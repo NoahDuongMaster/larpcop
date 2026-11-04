@@ -5,10 +5,13 @@
 //! `respond` encodes the verdict the way that agent expects.
 
 mod event;
+mod exec_gate;
 pub mod guard;
+mod guard_cache;
 mod inert;
 mod predict;
 mod respond;
+mod shell_gate;
 mod shell_run;
 
 use crate::context::Ctx;
@@ -17,8 +20,9 @@ use crate::report;
 use anyhow::{Context, Result};
 use event::Event;
 use respond::Verdict;
-use std::io::{self, Read};
-use std::path::Path;
+use serde_json::Value;
+use std::io::{self, ErrorKind, Read};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Agent {
@@ -37,7 +41,7 @@ pub enum Agent {
 pub fn run(agent: Agent, extends: Vec<String>, refresh: bool) -> Result<i32> {
     let mut raw = String::new();
     io::stdin().read_to_string(&mut raw)?;
-    let input: serde_json::Value = serde_json::from_str(&raw).context("invalid hook input JSON")?;
+    let input: Value = serde_json::from_str(&raw).context("invalid hook input JSON")?;
     let cwd = match event::session_dir(&input) {
         Some(dir) => dir,
         None => std::env::current_dir()?,
@@ -47,19 +51,31 @@ pub fn run(agent: Agent, extends: Vec<String>, refresh: bool) -> Result<i32> {
         *since = shell_run::take(&input);
     }
     // Kiro reports no "already continued" flag: remember our own blocks per session.
-    let marker = (agent == Agent::Kiro)
+    let marker = (agent == Agent::Kiro && matches!(event, Event::Stop { .. }))
         .then(|| stop_marker(&input))
-        .flatten();
+        .transpose()?;
     if let (Event::Stop { continued }, Some(m)) = (&mut event, &marker) {
-        *continued = std::fs::remove_file(m).is_ok();
+        *continued = match std::fs::remove_file(m) {
+            Ok(()) => true,
+            Err(e) if e.kind() == ErrorKind::NotFound => false,
+            Err(e) => return Err(e).with_context(|| format!("removing {}", m.display())),
+        };
     }
-    let verdict = decide(&event, &cwd, &extends, refresh)?;
-    if let (Event::Shell(_), Verdict::Allow) = (&event, &verdict) {
-        shell_run::record(&input, &cwd);
-    }
+    let mut verdict = decide(&event, &input, &cwd, &extends, refresh)?;
     if let (Event::Stop { .. }, Verdict::Block(_), Some(m)) = (&event, &verdict, &marker) {
-        let _ = m.parent().map(std::fs::create_dir_all);
-        let _ = std::fs::write(m, b"");
+        let written = m
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| std::fs::write(m, b""));
+        if let Err(e) = written {
+            // Without the flag every later stop would be blocked again, until the
+            // agent runs out of turns: let this one through instead.
+            eprintln!(
+                "larpcop: warning: cannot write {} ({e}); not blocking this stop",
+                m.display()
+            );
+            verdict = Verdict::Allow;
+        }
     }
     let hook_event = input
         .get("hook_event_name")
@@ -68,7 +84,7 @@ pub fn run(agent: Agent, extends: Vec<String>, refresh: bool) -> Result<i32> {
     Ok(respond::emit(agent, &event, hook_event, &verdict))
 }
 
-fn stop_marker(input: &serde_json::Value) -> Option<std::path::PathBuf> {
+fn stop_marker(input: &Value) -> Result<PathBuf> {
     let session = input
         .get("session_id")
         .and_then(|v| v.as_str())
@@ -83,73 +99,40 @@ fn stop_marker(input: &serde_json::Value) -> Option<std::path::PathBuf> {
             }
         })
         .collect();
-    Some(crate::config::cache_root().ok()?.join("stop").join(safe))
+    Ok(crate::config::cache_root()?.join("stop").join(safe))
 }
 
-fn decide(event: &Event, cwd: &Path, extends: &[String], refresh: bool) -> Result<Verdict> {
+fn decide(
+    event: &Event,
+    input: &Value,
+    cwd: &Path,
+    extends: &[String],
+    refresh: bool,
+) -> Result<Verdict> {
     let ctx = |start: &Path| Ctx::new(start, extends.to_vec(), refresh);
     match event {
         Event::Ignore => Ok(Verdict::Allow),
+        // Parsed once: every check of the command reads the same tree.
         Event::Shell(command) => {
-            if let Some(reason) = guard::bash_bypass(command) {
-                return Ok(blocked(Some(reason)));
-            }
-            // Files written by the shell skip the agent's edit hooks: check them here.
             let script = crate::shell_ast::parse(command);
-            let dir = script
-                .cd()
-                .map_or_else(|| cwd.to_path_buf(), |d| cwd.join(d));
-            let mut writes: Vec<(std::path::PathBuf, String)> = script
-                .file_writes
-                .iter()
-                .map(|w| {
-                    let path = dir.join(&w.path);
-                    let content = match (w.append, std::fs::read_to_string(&path)) {
-                        (true, Ok(old)) => old + &w.content,
-                        _ => w.content.clone(),
-                    };
-                    (path, content)
-                })
-                .collect();
-            writes.extend(predict::predicted(&script, &dir));
-            for (path, content) in &writes {
-                if let Some(v) = proposed(&ctx(start_dir(path, cwd))?, path, content)? {
-                    return Ok(v);
-                }
-            }
-            let installs = crate::deps::concerns(command);
-            if !installs && !inert::runs_code(&script) {
-                return Ok(Verdict::Allow);
-            }
-            // A broken config must not wedge the agent: commit and CI still enforce.
-            let Ok((cfg, engine)) = ctx(cwd).and_then(|c| c.load()) else {
-                return Ok(Verdict::Allow);
-            };
-            let reason = engine
-                .deps()
-                .filter(|_| installs)
-                .and_then(|d| d.gate_command(&cfg.root, cwd, command))
-                .or_else(|| shell_run::exec_gate(&cfg, &engine, &script));
-            Ok(blocked(reason))
+            shell_gate::before(command, &script, input, cwd, extends, refresh)
         }
         Event::AfterShell(None) => Ok(Verdict::Allow),
         Event::AfterShell(Some(since)) => {
-            let root = crate::context::find_root(cwd)?;
-            let changed = shell_run::changed_since(&root, since);
+            let ctx = ctx(cwd)?;
+            let changed = shell_run::changed_since(&ctx.root, since)?;
             if changed.is_empty() {
                 return Ok(Verdict::Allow);
             }
             let header = "larpcop: the command you just ran changed files that break enforced \
 rules. Fix them now.";
-            check(&ctx(cwd)?, Scope::Touched(changed), header)
+            check(&ctx, Scope::Touched(changed), header)
         }
         Event::BeforeEdit(paths) => {
+            let mut ctxs = Vec::new();
             for path in paths {
-                let rule_dirs = ctx(start_dir(path, cwd))?
-                    .load()
-                    .map(|(cfg, _)| cfg.rule_dirs)
-                    .unwrap_or_default();
-                if let Some(reason) = guard::protected_path(path, &rule_dirs) {
+                let at = ctx_at(&mut ctxs, start_dir(path, cwd), extends, refresh)?;
+                if let Some(reason) = guard::protected_path(path, &rule_dirs(&ctxs[at])) {
                     return Ok(blocked(Some(reason)));
                 }
             }
@@ -180,10 +163,33 @@ rules. Fix every error below, then finish.";
     }
 }
 
+/// The context of the project `dir` belongs to, as an index into `ctxs`: a hook
+/// call touching several files of one project loads its configuration once.
+fn ctx_at(ctxs: &mut Vec<Ctx>, dir: &Path, extends: &[String], refresh: bool) -> Result<usize> {
+    let fresh = Ctx::new(dir, extends.to_vec(), refresh)?;
+    if let Some(at) = ctxs.iter().position(|c| c.root == fresh.root) {
+        return Ok(at);
+    }
+    ctxs.push(fresh);
+    Ok(ctxs.len() - 1)
+}
+
+/// Rule files are protected from edits. When the configuration cannot be read
+/// they cannot be found: the edit goes on (a broken config must not wedge the
+/// agent; commit and CI still enforce), and the stderr line says so.
+fn rule_dirs(ctx: &Ctx) -> Vec<PathBuf> {
+    match ctx.config() {
+        Ok(cfg) => cfg.rule_dirs.clone(),
+        Err(e) => {
+            eprintln!("larpcop: warning: rule files are not protected from this edit: {e:#}");
+            Vec::new()
+        }
+    }
+}
+
 /// Verdict on content about to be written to `path`, if it must be blocked.
 fn proposed(ctx: &Ctx, path: &Path, content: &str) -> Result<Option<Verdict>> {
-    let rule_dirs = ctx.load().map(|(cfg, _)| cfg.rule_dirs).unwrap_or_default();
-    if let Some(reason) = guard::protected_path(path, &rule_dirs) {
+    if let Some(reason) = guard::protected_path(path, &rule_dirs(ctx)) {
         return Ok(Some(blocked(Some(reason))));
     }
     let outcome = ctx.check_content(path, content)?;

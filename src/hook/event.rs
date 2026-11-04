@@ -163,7 +163,19 @@ fn kiro_proposed(input: &Value, cwd: &Path) -> Event {
         return Event::Ignore;
     }
     let path = cwd.join(rel);
-    let current = || std::fs::read_to_string(&path).unwrap_or_default();
+    // A file that is not there yet is empty; one that cannot be read is not judged
+    // by the part of it we would see.
+    let current = || match std::fs::read_to_string(&path) {
+        Ok(text) => Some(text),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some(String::new()),
+        Err(e) => {
+            eprintln!(
+                "larpcop: warning: cannot read {} to check this write: {e}",
+                path.display()
+            );
+            None
+        }
+    };
     let (old, new) = (field(&["oldStr", "old_str"]), field(&["newStr", "new_str"]));
     let all = ti
         .get("replace_all")
@@ -173,14 +185,13 @@ fn kiro_proposed(input: &Value, cwd: &Path) -> Event {
         ("fs_write" | "write_file", "" | "create") => {
             Some(field(&["text", "file_text", "content"]))
         }
-        ("fs_append", _) | (_, "append") => Some(current() + &field(&["text", "new_str"])),
-        ("str_replace", _) | (_, "str_replace") if !old.is_empty() => {
-            let cur = current();
+        ("fs_append", _) | (_, "append") => current().map(|cur| cur + &field(&["text", "new_str"])),
+        ("str_replace", _) | (_, "str_replace") if !old.is_empty() => current().and_then(|cur| {
             cur.contains(&old).then(|| match all {
                 true => cur.replace(&old, &new),
                 false => cur.replacen(&old, &new, 1),
             })
-        }
+        }),
         _ => None,
     };
     match content {

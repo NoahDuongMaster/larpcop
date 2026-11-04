@@ -200,6 +200,7 @@ impl TaintRule {
             root,
             imported: Mutex::default(),
             reach: Mutex::default(),
+            inputs: Mutex::default(),
         })
     }
 }

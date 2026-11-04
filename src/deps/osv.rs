@@ -5,60 +5,73 @@
 //!
 //! Severity comes from the advisory (GHSA's rating) or its CVSS vector.
 
+mod advisory;
+mod query_cache;
+#[cfg(test)]
+mod tests;
+
 use super::ecosystem::{Ecosystem, Pinned};
-use anyhow::{Context, Result, bail};
-use rayon::prelude::*;
-use serde::{Deserialize, Serialize};
+use super::net;
+use advisory::parse_advisory;
+pub use advisory::{Advisory, Severity, is_malicious};
+use anyhow::{Context, Result, bail, ensure};
+use query_cache::{QUERY_TTL, QueryCache};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
-use std::str::FromStr;
-use std::sync::Arc;
+use std::path::PathBuf;
 use std::time::Duration;
 
 const DEFAULT_API: &str = "https://api.osv.dev/v1";
+/// Queries OSV accepts in one `querybatch`.
+const BATCH: usize = 1000;
+/// Batches of a big lockfile in flight at once.
+const BATCHES_AT_ONCE: usize = 4;
+/// Result pages followed for one package before giving up.
+const MAX_PAGES: usize = 20;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Severity {
-    Low,
-    Moderate,
-    High,
-    Critical,
+/// One package to ask OSV about.
+#[derive(Clone, Copy)]
+pub struct Query<'a> {
+    pub eco: Ecosystem,
+    pub name: &'a str,
+    /// `None` asks about the package as a whole (what an unpinned `npm install x`
+    /// would get, and typosquats).
+    pub version: Option<&'a str>,
+    /// Whether advisories other than malware matter: their details are only
+    /// fetched for queries that want them.
+    pub rated: bool,
 }
 
-impl Severity {
-    pub fn parse(s: &str) -> Option<Self> {
-        match s.to_ascii_lowercase().as_str() {
-            "low" => Some(Self::Low),
-            "moderate" | "medium" => Some(Self::Moderate),
-            "high" => Some(Self::High),
-            "critical" => Some(Self::Critical),
-            _ => None,
+impl<'a> Query<'a> {
+    /// Ask about the exact version a lockfile pins.
+    pub fn pinned(pin: &'a Pinned, rated: bool) -> Self {
+        Self {
+            eco: pin.eco,
+            name: &pin.name,
+            version: Some(&pin.version),
+            rated,
         }
     }
 
-    fn of_score(score: f64) -> Self {
-        match score {
-            s if s >= 9.0 => Self::Critical,
-            s if s >= 7.0 => Self::High,
-            s if s >= 4.0 => Self::Moderate,
-            _ => Self::Low,
+    fn json(&self) -> Value {
+        let mut q = json!({ "package": { "name": self.name, "ecosystem": system(self.eco) } });
+        if let Some(v) = self.version {
+            q["version"] = json!(v);
         }
+        q
     }
 }
 
-pub struct Advisory {
-    pub id: String,
-    pub summary: String,
-    pub severity: Severity,
-    pub malicious: bool,
-    /// Versions that fix it, for this package.
-    pub fixed: Vec<String>,
-}
+/// (advisory id, `modified` timestamp)
+type Hit = (String, String);
 
 pub struct Osv {
     agent: ureq::Agent,
     api: String,
+    /// Advisory details by id, valid while their `modified` time is unchanged.
+    cache: Option<PathBuf>,
+    /// OSV's recent answers to lockfile scans; only `scan_cached` uses them.
+    queries: Option<QueryCache>,
 }
 
 pub fn system(eco: Ecosystem) -> &'static str {
@@ -76,62 +89,74 @@ pub fn system(eco: Ecosystem) -> &'static str {
 
 impl Osv {
     pub fn new() -> Self {
-        let agent = ureq::Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(30)))
-            .http_status_as_error(false)
-            .user_agent(concat!("larpcop/", env!("CARGO_PKG_VERSION")))
-            .build()
-            .into();
         let api = std::env::var("LARPCOP_OSV_API").unwrap_or_else(|_| DEFAULT_API.into());
-        Self { agent, api }
-    }
-
-    /// Advisory ids per package; a missing `version` asks about the package as a
-    /// whole (what an unpinned `npm install x` would get, and typosquats).
-    pub fn ids(&self, queries: &[(Ecosystem, &str, Option<&str>)]) -> Result<Vec<Vec<String>>> {
-        Ok(self
-            .ids_modified(queries)?
-            .into_iter()
-            .map(|l| l.into_iter().map(|(id, _)| id).collect())
-            .collect())
-    }
-
-    /// (id, `modified` timestamp) per package.
-    fn ids_modified(
-        &self,
-        queries: &[(Ecosystem, &str, Option<&str>)],
-    ) -> Result<Vec<Vec<(String, String)>>> {
-        let mut out = Vec::with_capacity(queries.len());
-        for chunk in queries.chunks(1000) {
-            let body: Vec<Value> = chunk
-                .iter()
-                .map(|(eco, name, version)| {
-                    let mut q = json!({ "package": { "name": name, "ecosystem": system(*eco) } });
-                    if let Some(v) = version {
-                        q["version"] = json!(v);
-                    }
-                    q
-                })
-                .collect();
-            let res: Value = self.post("querybatch", &json!({ "queries": body }))?;
-            let results = res["results"].as_array().context("OSV: no `results`")?;
-            out.extend(results.iter().map(|r| {
-                r["vulns"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|v| {
-                        let modified = v["modified"].as_str().unwrap_or_default();
-                        Some((v["id"].as_str()?.to_string(), modified.to_string()))
-                    })
-                    .collect()
-            }));
+        let root = crate::config::cache_root().ok();
+        Self {
+            queries: root
+                .as_ref()
+                .map(|d| QueryCache::new(d.join("osv-query"), QUERY_TTL)),
+            ..Self::at(&api, root.map(|d| d.join("osv")))
         }
-        Ok(out)
     }
 
-    pub fn advisory(&self, id: &str, eco: Ecosystem, name: &str) -> Result<Advisory> {
-        Ok(parse_advisory(id, &self.fetch(id)?, eco, name))
+    pub(super) fn at(api: &str, cache: Option<PathBuf>) -> Self {
+        Self {
+            agent: net::agent(Duration::from_secs(30)),
+            api: api.into(),
+            cache,
+            queries: None,
+        }
+    }
+
+    /// Answers to lockfile scans are reused for `ttl`, kept in `dir`.
+    #[cfg(test)]
+    pub(super) fn remembering(self, dir: PathBuf, ttl: Duration) -> Self {
+        Self {
+            queries: Some(QueryCache::new(dir, ttl)),
+            ..self
+        }
+    }
+
+    /// Advisory ids per query, in query order. OSV must answer every query: a short
+    /// or padded answer cannot be matched to packages, so it is an error rather
+    /// than packages that look clean.
+    fn ids_modified(&self, queries: &[Query]) -> Result<Vec<Vec<Hit>>> {
+        let batches: Vec<&[Query]> = queries.chunks(BATCH).collect();
+        let answers = net::par_map(BATCHES_AT_ONCE, &batches, |batch| self.batch(batch))?;
+        Ok(answers.into_iter().flatten().collect())
+    }
+
+    fn batch(&self, queries: &[Query]) -> Result<Vec<Vec<Hit>>> {
+        let body: Vec<Value> = queries.iter().map(Query::json).collect();
+        let res = self.post("querybatch", &json!({ "queries": body }))?;
+        queries
+            .iter()
+            .zip(results(&res, queries.len())?)
+            .map(|(q, first)| self.pages(q, first))
+            .collect()
+    }
+
+    /// A package with many advisories answers in pages: `next_page_token` asks
+    /// for the rest, and an advisory on a dropped page could be the malware one.
+    fn pages(&self, q: &Query, first: &Value) -> Result<Vec<Hit>> {
+        let mut found = hits(first)?;
+        let mut token = first["next_page_token"].as_str().map(String::from);
+        let mut pages = 1;
+        while let Some(t) = token {
+            pages += 1;
+            ensure!(
+                pages <= MAX_PAGES,
+                "OSV: more than {MAX_PAGES} pages of advisories for `{}`",
+                q.name
+            );
+            let mut next = q.json();
+            next["page_token"] = json!(t);
+            let res = self.post("querybatch", &json!({ "queries": [next] }))?;
+            let page = results(&res, 1)?.pop().context("OSV: empty page")?;
+            found.extend(hits(page)?);
+            token = page["next_page_token"].as_str().map(String::from);
+        }
+        Ok(found)
     }
 
     /// An advisory's JSON, from the disk cache when querybatch reports the same
@@ -139,13 +164,11 @@ impl Osv {
     /// API rounds that time differently from the full record, so the batch's
     /// own value is what gets stored.
     fn cached(&self, id: &str, modified: &str) -> Result<Value> {
-        let file = (!modified.is_empty())
-            .then(|| crate::config::cache_root().ok())
-            .flatten()
-            .map(|d| {
-                d.join("osv")
-                    .join(format!("{}.json", id.replace(['/', '\\', ':'], "_")))
-            });
+        let file = self
+            .cache
+            .as_ref()
+            .filter(|_| !modified.is_empty())
+            .map(|d| d.join(format!("{}.json", id.replace(['/', '\\', ':'], "_"))));
         let hit = file
             .as_ref()
             .and_then(|f| std::fs::read_to_string(f).ok())
@@ -165,130 +188,109 @@ impl Osv {
     }
 
     fn fetch(&self, id: &str) -> Result<Value> {
-        let mut res = self
-            .agent
-            .get(&format!("{}/vulns/{id}", self.api))
-            .call()
+        let url = format!("{}/vulns/{id}", self.api);
+        let (status, body) = net::fetch(|| self.agent.get(&url).call())
             .with_context(|| format!("OSV: fetching {id}"))?;
-        if res.status() != 200 {
-            bail!("OSV: {id}: HTTP {}", res.status());
-        }
-        Ok(serde_json::from_str(&res.body_mut().read_to_string()?)?)
+        ensure!(status == 200, "OSV: {id}: HTTP {status}");
+        Ok(serde_json::from_str(&body)?)
     }
 
     fn post(&self, path: &str, body: &Value) -> Result<Value> {
-        let mut res = self
-            .agent
-            .post(&format!("{}/{path}", self.api))
-            .header("content-type", "application/json")
-            .send(body.to_string())
-            .context("OSV unreachable")?;
-        if res.status() != 200 {
-            bail!("OSV: HTTP {}", res.status());
-        }
-        Ok(serde_json::from_str(&res.body_mut().read_to_string()?)?)
+        let url = format!("{}/{path}", self.api);
+        let payload = body.to_string();
+        let (status, text) = net::fetch(|| {
+            self.agent
+                .post(&url)
+                .header("content-type", "application/json")
+                .send(payload.as_str())
+        })
+        .context("OSV unreachable")?;
+        ensure!(status == 200, "OSV: HTTP {status}");
+        Ok(serde_json::from_str(&text)?)
     }
 
-    /// Advisories that apply to `pins`, details fetched once per id, in parallel.
-    pub fn scan(&self, pins: &[&Pinned]) -> Result<Vec<Vec<Arc<Advisory>>>> {
-        let queries: Vec<_> = pins
-            .iter()
-            .map(|p| (p.eco, p.name.as_str(), Some(p.version.as_str())))
-            .collect();
-        let ids = self.ids_modified(&queries)?;
-        let mut wanted: BTreeMap<&str, (&str, &Pinned)> = BTreeMap::new();
-        for (pin, ids) in pins.iter().zip(&ids) {
-            for (id, modified) in ids {
-                wanted.entry(id).or_insert((modified, pin));
+    /// Advisories per query, in query order. Details are fetched once per id, in
+    /// parallel, and only for the ids that matter: malware always, other
+    /// advisories for `rated` queries. Each advisory is read for the package it
+    /// was found on, since its fixed versions differ per package.
+    pub fn scan(&self, queries: &[Query]) -> Result<Vec<Vec<Advisory>>> {
+        self.advisories(queries, self.ids_modified(queries)?)
+    }
+
+    /// `scan` for lockfile checks only: pins OSV answered for in the last
+    /// `QUERY_TTL` are not asked about again. Installs use `scan`, which always asks.
+    pub fn scan_cached(&self, queries: &[Query]) -> Result<Vec<Vec<Advisory>>> {
+        self.advisories(queries, self.ids_cached(queries)?)
+    }
+
+    fn advisories(&self, queries: &[Query], ids: Vec<Vec<Hit>>) -> Result<Vec<Vec<Advisory>>> {
+        let matters = |q: &Query, id: &str| q.rated || is_malicious(id);
+        let mut wanted: BTreeMap<&str, &str> = BTreeMap::new();
+        for (q, hits) in queries.iter().zip(&ids) {
+            for (id, modified) in hits.iter().filter(|(id, _)| matters(q, id)) {
+                wanted.entry(id).or_insert(modified);
             }
         }
-        let pool = rayon::ThreadPoolBuilder::new().num_threads(16).build()?;
-        let details: BTreeMap<&str, Arc<Advisory>> = pool.install(|| {
-            wanted
-                .par_iter()
-                .map(|(id, (modified, pin))| {
-                    let v = self.cached(id, modified)?;
-                    Ok((*id, Arc::new(parse_advisory(id, &v, pin.eco, &pin.name))))
-                })
-                .collect::<Result<_>>()
-        })?;
-        Ok(ids
+        // The common case: nothing known about any of them.
+        if wanted.is_empty() {
+            return Ok(queries.iter().map(|_| Vec::new()).collect());
+        }
+        let wanted: Vec<_> = wanted.into_iter().collect();
+        let details: BTreeMap<&str, Value> =
+            net::par_map(net::CONCURRENCY, &wanted, |(id, modified)| {
+                Ok((*id, self.cached(id, modified)?))
+            })?
+            .into_iter()
+            .collect();
+        queries
             .iter()
-            .map(|list| {
-                list.iter()
-                    .map(|(id, _)| details[id.as_str()].clone())
+            .zip(&ids)
+            .map(|(q, hits)| {
+                hits.iter()
+                    .filter(|(id, _)| matters(q, id))
+                    .map(|(id, _)| {
+                        let detail = details
+                            .get(id.as_str())
+                            .context("OSV: advisory not fetched")?;
+                        Ok(parse_advisory(id, detail, q.eco, q.name))
+                    })
                     .collect()
             })
-            .collect())
+            .collect()
     }
 }
 
-fn parse_advisory(id: &str, v: &Value, eco: Ecosystem, name: &str) -> Advisory {
-    let rated = v["database_specific"]["severity"]
-        .as_str()
-        .and_then(Severity::parse);
-    let scored = v["severity"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|s| s["score"].as_str())
-        .filter_map(|vector| cvss::Cvss::from_str(vector).ok())
-        .map(|c| Severity::of_score(c.score()))
-        .max();
-    let fixed = v["affected"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|a| a["package"]["name"] == name && a["package"]["ecosystem"] == system(eco))
-        .flat_map(|a| a["ranges"].as_array().into_iter().flatten())
-        .flat_map(|r| r["events"].as_array().into_iter().flatten())
-        .filter_map(|e| e["fixed"].as_str().map(String::from))
-        .collect();
-    let summary = v["summary"]
-        .as_str()
-        .or_else(|| v["details"].as_str())
-        .unwrap_or("")
-        .lines()
-        .next()
-        .unwrap_or("")
-        .to_string();
-    Advisory {
-        id: id.into(),
-        summary,
-        // Unrated advisories count as moderate rather than being ignored.
-        severity: rated.or(scored).unwrap_or(Severity::Moderate),
-        malicious: id.starts_with("MAL-"),
-        fixed,
+/// The `results` of a `querybatch` answer, which must hold exactly `expected`.
+fn results(res: &Value, expected: usize) -> Result<Vec<&Value>> {
+    let list = res["results"].as_array().context("OSV: no `results`")?;
+    if list.len() != expected {
+        bail!(
+            "OSV answered {} result(s) for {expected} queries; cannot tell which packages were checked",
+            list.len()
+        );
     }
+    ensure!(
+        list.iter().all(Value::is_object),
+        "OSV: malformed `results`"
+    );
+    Ok(list.iter().collect())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn severity_from_rating_or_cvss() {
-        let ghsa = json!({ "summary": "Prototype Pollution in lodash",
-            "database_specific": { "severity": "HIGH" },
-            "affected": [{ "package": { "name": "lodash", "ecosystem": "npm" },
-                           "ranges": [{ "events": [{ "introduced": "0" }, { "fixed": "4.17.19" }] }] }] });
-        let a = parse_advisory("GHSA-x", &ghsa, Ecosystem::Npm, "lodash");
-        assert_eq!(
-            (a.severity, a.fixed.as_slice()),
-            (Severity::High, &["4.17.19".to_string()][..])
-        );
-        let rustsec = json!({ "summary": "x", "severity": [{ "type": "CVSS_V3",
-            "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" }] });
-        assert_eq!(
-            parse_advisory("RUSTSEC-1", &rustsec, Ecosystem::Cargo, "x").severity,
-            Severity::Critical
-        );
-        let mal = parse_advisory(
-            "MAL-2026-1",
-            &json!({ "summary": "Malicious code in x" }),
-            Ecosystem::Npm,
-            "x",
-        );
-        assert!(mal.malicious);
-    }
+/// The advisories of one result; OSV omits `vulns` when nothing matches.
+fn hits(result: &Value) -> Result<Vec<Hit>> {
+    let Some(vulns) = result.get("vulns") else {
+        return Ok(Vec::new());
+    };
+    vulns
+        .as_array()
+        .context("OSV: `vulns` is not a list")?
+        .iter()
+        .map(|v| {
+            let id = v["id"]
+                .as_str()
+                .context("OSV: an advisory without an `id`")?;
+            let modified = v["modified"].as_str().unwrap_or_default();
+            Ok((id.to_string(), modified.to_string()))
+        })
+        .collect()
 }

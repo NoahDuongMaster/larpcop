@@ -15,7 +15,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug, Deserialize)]
 struct Fixture {
@@ -68,8 +68,9 @@ pub fn run(defined: &Defined) -> Result<Report> {
     let mut text = String::new();
     let mut failures = 0;
     let mut tested = Vec::new();
-    for path in fixture_files(rule_dirs) {
-        let raw = fs::read_to_string(&path)?;
+    for path in fixture_files(rule_dirs)? {
+        let raw = fs::read_to_string(&path)
+            .with_context(|| format!("reading fixture {}", path.display()))?;
         let fixture: Fixture = serde_saphyr::from_str(&raw)
             .with_context(|| format!("invalid fixture {}", path.display()))?;
         let errors = if let Some(f) = flow.get(&fixture.id) {
@@ -121,7 +122,10 @@ pub fn run(defined: &Defined) -> Result<Report> {
 
 fn check(rule: &RuleConfig<SupportLang>, fixture: &Fixture) -> Vec<String> {
     let lang = rule.language;
-    let resolve = super::values::Resolve::of(rule).ok().flatten();
+    let resolve = match super::values::Resolve::of(rule) {
+        Ok(resolve) => resolve,
+        Err(e) => return vec![format!("invalid `metadata.resolve`: {e:#}")],
+    };
     let settings = super::values::Settings::default();
     let hits = |src: &str| {
         lang.ast_grep(super::macros::expand(lang, src))
@@ -183,15 +187,13 @@ fn check_flow(rule: &FlowRule, fixture: &Fixture) -> Result<Vec<String>> {
 }
 
 /// Valid / invalid snippets of one rule's fixture, for explaining it to an agent.
-pub fn examples(rule_dirs: &[PathBuf], id: &str) -> String {
+pub fn examples(rule_dirs: &[PathBuf], id: &str) -> Result<String> {
     let mut out = String::new();
-    for path in fixture_files(rule_dirs) {
-        let Ok(raw) = fs::read_to_string(&path) else {
-            continue;
-        };
-        let Ok(f) = serde_saphyr::from_str::<Fixture>(&raw) else {
-            continue;
-        };
+    for path in fixture_files(rule_dirs)? {
+        let raw = fs::read_to_string(&path)
+            .with_context(|| format!("reading fixture {}", path.display()))?;
+        let f: Fixture = serde_saphyr::from_str(&raw)
+            .with_context(|| format!("invalid fixture {}", path.display()))?;
         if f.id != id {
             continue;
         }
@@ -201,11 +203,11 @@ pub fn examples(rule_dirs: &[PathBuf], id: &str) -> String {
             }
         }
     }
-    out
+    Ok(out)
 }
 
 /// `rule-tests/` inside each rule dir, or beside it (ast-grep's project layout).
-fn fixture_files(rule_dirs: &[PathBuf]) -> Vec<PathBuf> {
+fn fixture_files(rule_dirs: &[PathBuf]) -> Result<Vec<PathBuf>> {
     let mut dirs: Vec<PathBuf> = rule_dirs
         .iter()
         .flat_map(|d| {
@@ -219,19 +221,17 @@ fn fixture_files(rule_dirs: &[PathBuf]) -> Vec<PathBuf> {
         .collect();
     dirs.sort();
     dirs.dedup();
-    let mut files: Vec<PathBuf> = dirs.iter().flat_map(|d| yaml_in(d)).collect();
+    let mut files = Vec::new();
+    for dir in &dirs {
+        files.extend(
+            ast::sorted_entries(dir)?
+                .into_iter()
+                .filter(|p| ast::is_yaml(p)),
+        );
+    }
     files.sort();
     files.dedup();
-    files
-}
-
-fn yaml_in(dir: &Path) -> Vec<PathBuf> {
-    fs::read_dir(dir)
-        .into_iter()
-        .flatten()
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|e| e == "yml" || e == "yaml"))
-        .collect()
+    Ok(files)
 }
 
 fn one_line(s: &str) -> String {

@@ -2,24 +2,14 @@
 
 use anyhow::{Context, Result, bail};
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 const MARKER: &str = "# managed-by: larpcop";
 
 fn git(root: &Path, args: &[&str]) -> Result<String> {
-    let out = Command::new("git")
-        .args(args)
-        .current_dir(root)
-        .output()
-        .context("running git")?;
-    if !out.status.success() {
-        bail!(
-            "not a git repository ({})",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    let out = crate::files::git(root, args).context("not a git repository")?;
+    Ok(String::from_utf8_lossy(&out).trim().to_string())
 }
 
 fn script(prefix: &str) -> String {
@@ -44,15 +34,20 @@ pub fn install(root: &Path, force: bool) -> Result<PathBuf> {
     let hooks_dir = root.join(git(root, &["rev-parse", "--git-path", "hooks"])?);
     let prefix = git(root, &["rev-parse", "--show-prefix"])?;
     let path = hooks_dir.join("pre-commit");
-    if let Ok(existing) = fs::read_to_string(&path)
-        && !existing.contains(MARKER)
-        && !force
-    {
-        bail!(
+    // A hook that cannot be read (permissions, not UTF-8) is somebody else's
+    // too: it is replaced only when asked for.
+    match fs::read_to_string(&path) {
+        Ok(existing) if !existing.contains(MARKER) && !force => bail!(
             "{} already exists and is not managed by larpcop.\n\
 Add `larpcop check --staged` to it (or to your husky/lefthook config), or re-run with --force.",
             path.display()
-        );
+        ),
+        Err(e) if e.kind() != ErrorKind::NotFound && !force => bail!(
+            "{} exists but cannot be read ({e}), so it is not known to be managed by larpcop; \
+re-run with --force to replace it.",
+            path.display()
+        ),
+        _ => {}
     }
     fs::create_dir_all(&hooks_dir)?;
     fs::write(&path, script(&prefix))?;

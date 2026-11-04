@@ -52,7 +52,10 @@ pub fn known_agent(id: &str) -> bool {
 
 /// Desired content of every managed file. Existing content outside the managed
 /// parts (other AGENTS.md sections, other settings and hooks) is preserved.
-fn plan(cfg: &Config, rules: &[RuleInfo]) -> Result<Vec<(PathBuf, String)>> {
+/// A file to bring up to date: where, what it holds now, what it should hold.
+type Planned = (PathBuf, Option<String>, String);
+
+fn plan(cfg: &Config, rules: &[RuleInfo]) -> Result<Vec<Planned>> {
     if let Some(unknown) = cfg.agents.iter().flatten().find(|a| !known_agent(a)) {
         let ids: Vec<_> = AGENT_FILES.iter().map(|(a, ..)| *a).collect();
         bail!(
@@ -62,10 +65,9 @@ fn plan(cfg: &Config, rules: &[RuleInfo]) -> Result<Vec<(PathBuf, String)>> {
     }
     let agents_path = cfg.root.join("AGENTS.md");
     let block = agents_md::render(cfg, rules);
-    let mut out = vec![(
-        agents_path.clone(),
-        agents_md::upsert(read_opt(&agents_path)?.as_deref(), &block),
-    )];
+    let current = read_opt(&agents_path)?;
+    let desired = agents_md::upsert(current.as_deref(), &block);
+    let mut out = vec![(agents_path, current, desired)];
     let wanted = |id: &str| {
         cfg.agents
             .as_ref()
@@ -74,9 +76,10 @@ fn plan(cfg: &Config, rules: &[RuleInfo]) -> Result<Vec<(PathBuf, String)>> {
     for (agent, rel, render) in AGENT_FILES.iter().filter(|(a, ..)| wanted(a)) {
         let path = cfg.root.join(rel);
         let cmd = format!("larpcop hook {agent}");
-        let content = render(read_opt(&path)?.as_deref(), &cmd)
+        let current = read_opt(&path)?;
+        let content = render(current.as_deref(), &cmd)
             .with_context(|| format!("updating {}", path.display()))?;
-        out.push((path, content));
+        out.push((path, current, content));
     }
     Ok(out)
 }
@@ -84,8 +87,8 @@ fn plan(cfg: &Config, rules: &[RuleInfo]) -> Result<Vec<(PathBuf, String)>> {
 /// Returns the files that were (or, with `check_only`, would be) changed.
 pub fn run(cfg: &Config, rules: &[RuleInfo], check_only: bool) -> Result<Vec<PathBuf>> {
     let mut changed = Vec::new();
-    for (path, desired) in plan(cfg, rules)? {
-        if read_opt(&path)?.as_deref() == Some(desired.as_str()) {
+    for (path, current, desired) in plan(cfg, rules)? {
+        if current.as_deref() == Some(desired.as_str()) {
             continue;
         }
         if !check_only {

@@ -254,29 +254,36 @@ mod tests {
         );
     }
 
-    /// The two ways a program can fail to answer, shown with the POSIX shell
-    /// instead of `sed` itself: sed dialects differ (msys sed on Windows drops
-    /// the backslash of `\(`, so one script is an error on one OS and fine on
-    /// another).
+    fn script(body: &str) -> [String; 2] {
+        ["-c".to_string(), body.to_string()]
+    }
+
+    /// A program that reads everything and then fails: no prediction, no
+    /// error. Shown with the POSIX shell instead of `sed`, whose dialects differ
+    /// (msys sed drops the backslash of `\(`, so one script is an error on one
+    /// OS and fine on another).
     #[test]
-    fn a_rejected_script_predicts_nothing_and_a_hung_sed_is_killed() {
-        let sh = crate::shell::posix_shell();
-        let script = |body: &str| ["-c".to_string(), body.to_string()];
-        // It reads all its input, then fails: no prediction, and no error.
+    fn a_rejected_script_predicts_nothing() {
         let rejected = run(
-            &sh,
+            &crate::shell::posix_shell(),
             &script("cat >/dev/null; exit 3"),
             "text\n".repeat(100_000).as_str(),
             Duration::from_secs(30),
         );
         assert_eq!(rejected.unwrap(), None);
-        // It never reads its stdin or answers: the deadline has to stop it. A
-        // builtin loop, not `sleep`: on Windows a child of the shell would keep
-        // the pipe open after the shell itself is killed.
+    }
+
+    /// A program that never reads its stdin or answers: the deadline has to
+    /// stop it. Unix only: Git for Windows' `bin/sh.exe` is a launcher whose
+    /// real shell is a child, so killing it leaves the pipes open. `sed.exe`,
+    /// which is what the hook runs, is not wrapped.
+    #[cfg(unix)]
+    #[test]
+    fn a_hung_sed_is_killed() {
         let started = Instant::now();
         let hung = run(
-            &sh,
-            &script("while :; do :; done"),
+            &crate::shell::posix_shell(),
+            &script("exec sleep 30"),
             "x",
             Duration::from_millis(300),
         );

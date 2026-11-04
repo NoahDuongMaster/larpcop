@@ -45,15 +45,19 @@ mod tests {
     fn the_trusted_cache_is_protected() {
         let root = crate::config::cache_root().unwrap();
         let root = root.to_string_lossy().replace('\\', "/");
-        for cmd in [
+        let mut blocked = vec![
             format!("echo 1 > {root}/published/npm/left-pad%401.0.0"),
             format!("rm -rf {root}"),
             format!("cp /tmp/x {root}/osv/GHSA-x"),
             // A forged "clean" answer for a pin would pass the lockfile scan.
             format!("echo '{{}}' > {root}/osv-query/0123456789abcdef.json"),
             format!("echo 1 > {root}/../larpcop/./published/y"),
-            format!("echo 1 > /tmp/work/../..{root}/published/y"),
-        ] {
+        ];
+        // `/tmp/work/../..` + a path with a drive letter is not a path.
+        if root.starts_with('/') {
+            blocked.push(format!("echo 1 > /tmp/work/../..{root}/published/y"));
+        }
+        for cmd in blocked {
             assert!(
                 bash_bypass(&cmd, &parse(&cmd)).is_some(),
                 "should block: {cmd}"

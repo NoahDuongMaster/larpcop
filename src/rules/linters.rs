@@ -12,8 +12,11 @@ const OUTPUT_TAIL_LINES: usize = 40;
 
 /// The most bytes of file names in one command. The command is a single
 /// argument of the shell, which Linux caps at 128 KiB (and all arguments at
-/// `ARG_MAX`, 2 MiB or less elsewhere); this leaves room for the rest of it.
-const MAX_FILES_BYTES: usize = 64 * 1024;
+/// `ARG_MAX`, 2 MiB or less elsewhere). On Windows the MSYS2 runtime of Git's
+/// `sh.exe` silently cuts an argument at 8,186 characters, in the middle of a
+/// quoted name, so the budget stays well under that. This leaves room for the
+/// rest of the command.
+const MAX_FILES_BYTES: usize = if cfg!(windows) { 6 * 1024 } else { 64 * 1024 };
 
 pub struct Linter {
     cfg: LinterConfig,
@@ -180,7 +183,8 @@ mod tests {
         let files = many_files();
         let fake =
             linter("echo run >> runs.txt; for f in {files}; do echo \"$f\" >> seen.txt; done");
-        assert!(fake.run(dir.path(), &files).expect("runs").is_none());
+        let found = fake.run(dir.path(), &files).expect("runs");
+        assert!(found.is_none(), "{found:?}");
         let runs = std::fs::read_to_string(dir.path().join("runs.txt")).expect("runs.txt");
         let seen = std::fs::read_to_string(dir.path().join("seen.txt")).expect("seen.txt");
         assert!(runs.lines().count() >= 2, "{runs}");

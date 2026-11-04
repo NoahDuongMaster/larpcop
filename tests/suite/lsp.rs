@@ -7,6 +7,16 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
 
+/// `file:///home/x` on Unix, `file:///C:/Users/x` on Windows.
+fn file_uri(path: &std::path::Path) -> String {
+    let p = path.display().to_string().replace('\\', "/");
+    if p.starts_with('/') {
+        format!("file://{p}")
+    } else {
+        format!("file:///{p}")
+    }
+}
+
 struct Editor {
     child: Child,
     stdin: ChildStdin,
@@ -54,7 +64,7 @@ impl Editor {
             inbox,
             next_id: 0,
         };
-        let uri = format!("file://{}", repo.path().display());
+        let uri = file_uri(&repo.path());
         let init = editor.call("initialize", json!({ "rootUri": uri, "capabilities": {} }));
         assert!(init["result"]["capabilities"].is_object(), "{init}");
         editor.notify("initialized", json!({}));
@@ -156,7 +166,7 @@ fn codes(diagnostics: &[Value]) -> Vec<&str> {
 fn diagnostics_follow_the_text_and_an_unchanged_save_is_not_checked_again() {
     let repo = Repo::with_standards();
     repo.write("src/a.ts", BAD_TS);
-    let uri = format!("file://{}/src/a.ts", repo.path().display());
+    let uri = file_uri(&repo.path().join("src/a.ts"));
     let mut editor = Editor::start(&repo);
 
     editor.open(&uri, BAD_TS);
@@ -167,7 +177,7 @@ fn diagnostics_follow_the_text_and_an_unchanged_save_is_not_checked_again() {
 
     // Saving what was just checked publishes nothing: the next thing published is
     // the document opened after the save (documents are checked in the order they changed).
-    let other = format!("file://{}/src/b.ts", repo.path().display());
+    let other = file_uri(&repo.path().join("src/b.ts"));
     editor.notify(
         "textDocument/didSave",
         json!({ "textDocument": { "uri": uri } }),
@@ -182,7 +192,7 @@ fn a_check_that_cannot_run_says_so_instead_of_looking_clean() {
     let repo = Repo::with_standards();
     repo.write("src/a.ts", BAD_TS);
     let good_config = repo.read(".larpcop.yaml");
-    let uri = format!("file://{}/src/a.ts", repo.path().display());
+    let uri = file_uri(&repo.path().join("src/a.ts"));
     let mut editor = Editor::start(&repo);
     editor.open(&uri, BAD_TS);
     assert!(!editor.diagnostics().0.is_empty());

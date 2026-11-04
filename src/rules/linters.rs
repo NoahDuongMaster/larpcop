@@ -12,9 +12,11 @@ const OUTPUT_TAIL_LINES: usize = 40;
 
 /// The most bytes of file names in one command. The command is a single
 /// argument of the shell, which Linux caps at 128 KiB (and all arguments at
-/// `ARG_MAX`, 2 MiB or less elsewhere); Windows caps the whole command line at
-/// 32,767 characters. This leaves room for the rest of it.
-const MAX_FILES_BYTES: usize = if cfg!(windows) { 16 * 1024 } else { 64 * 1024 };
+/// `ARG_MAX`, 2 MiB or less elsewhere). On Windows the MSYS2 runtime of Git's
+/// `sh.exe` silently cuts an argument at 8,186 characters, in the middle of a
+/// quoted name, so the budget stays well under that. This leaves room for the
+/// rest of the command.
+const MAX_FILES_BYTES: usize = if cfg!(windows) { 6 * 1024 } else { 64 * 1024 };
 
 pub struct Linter {
     cfg: LinterConfig,

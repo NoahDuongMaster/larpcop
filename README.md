@@ -1,535 +1,197 @@
-<p align="center"><img src="assets/jimothy.svg" width="180" alt="Jimothy, linh vật của larpcop: chú gấu mèo tròn đội mũ cảnh sát"></p>
+<p align="center">
+  <img src="assets/jimothy.svg" width="180" alt="Jimothy, larpcop's mascot: a round raccoon in a police cap">
+</p>
 
-# larpcop
+<h1 align="center">larpcop</h1>
 
-> *larp* (slang 2026): làm màu, giả vờ. Agent hay báo "đã tuân thủ rule, đã chạy test" khi chưa hề làm; larpcop là cổng kiểm tra không tin lời báo cáo. Linh vật là **Jimothy**, chú gấu mèo tròn vo ở Seattle nổi tiếng tháng 7/2026, ở đây được vẽ lại và đội mũ cảnh sát ([`assets/jimothy.svg`](assets/jimothy.svg)).
+<p align="center">
+  <b>Your agent says "done, all tests pass." larpcop asks for the receipt.</b>
+</p>
 
-Ép mọi coding agent (Claude Code, Codex, Gemini CLI, Cursor…) và cả người tuân theo cùng một bộ rule, trên mọi stack.
-Một binary Rust duy nhất, rule engine là [ast-grep](https://ast-grep.github.io) (tree-sitter, 25+ ngôn ngữ).
+<p align="center">
+  <a href="https://github.com/NoahDuongMaster/larpcop/actions/workflows/ci.yml"><img src="https://github.com/NoahDuongMaster/larpcop/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/NoahDuongMaster/larpcop/releases/latest"><img src="https://img.shields.io/github/v/release/NoahDuongMaster/larpcop" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="License: MIT OR Apache-2.0">
+</p>
 
-## Mô hình thực thi
+<p align="center">
+  <b>English</b> · <a href="README.vi.md">Tiếng Việt</a> · <a href="README.zh-CN.md">简体中文</a>
+</p>
 
-Prompt chỉ *gợi ý*. Chỉ có cổng kiểm tra tất định mới *ép* được, nên larpcop chặn ở những điểm mà mọi agent bắt buộc phải đi qua:
+> **larp** /lɑːrp/ *(verb, 2026 slang)*: to act out something you did not actually do.
+> *"I followed the rules and ran the tests."* (It did not run the tests.)
 
-| Tầng | Cơ chế | Agent nào cũng phải qua? | Bypass được? |
-|---|---|---|---|
-| CI ([`enforce.yml`](.github/workflows/enforce.yml) + org ruleset) | `larpcop check --since origin/<base>` | ✅ | ❌ |
-| Git pre-commit (`larpcop install`) | `larpcop check --staged` (kiểm nội dung staged, không phải working tree) | ✅ | `--no-verify` → CI bắt lại |
-| Hook của agent (`larpcop hook <agent>`) | Chặn bypass, phản hồi lỗi ngay sau mỗi lần sửa file, chặn kết thúc khi còn lỗi | Agent có hook | — |
-| `AGENTS.md` (`larpcop sync`) | Hướng dẫn + bảng rule sinh tự động | Mọi agent đều đọc | Chỉ là gợi ý |
+larpcop makes every coding agent (Claude Code, Codex, Gemini CLI, Cursor, Copilot CLI, Factory Droid, Kiro) and every human follow the same rules, on any stack. It is one Rust binary. Rules are matched with [ast-grep](https://ast-grep.github.io) (tree-sitter, 25+ languages), so the verdict is the same on every run. There is no model in the gate and no vibes in the exit code.
 
-Hook của agent chỉ để rút ngắn vòng phản hồi. Agent không có hook vẫn bị chặn ở git và CI.
+The mascot is Jimothy, the round Seattle raccoon who got famous in July 2026, redrawn here in a police cap.
 
-## Cài đặt
+## See it work
 
-Mỗi release có binary cho macOS (arm64, x64), Linux (arm64, x64) và Windows (x64), dạng nén khoảng 4 MB. Có installer shell, PowerShell, công thức Homebrew và package npm `larpcop`. Binary được cài vào `~/.local/bin`.
+An agent writes a file. larpcop checks it right after the edit and sends the errors back to the agent:
 
-Repo hiện **private**, nên dùng GitHub CLI (`gh`, cần đăng nhập và có quyền đọc repo) để tải installer cùng các bản build về một thư mục, rồi trỏ installer vào thư mục đó. Lệnh sau đã chạy thật trên macOS:
+```text
+larpcop: the file you just edited breaks enforced rules. Fix them now.
 
-```sh
-d=$(mktemp -d)
-gh release download --repo NoahDuongMaster/larpcop --dir "$d" \
-  --pattern 'larpcop-installer.sh' --pattern '*.tar.xz' --pattern '*.tar.xz.sha256'
-LARPCOP_DOWNLOAD_URL="file://$d" sh "$d/larpcop-installer.sh"
+src/app.ts
+  1:1     error   secrets  Found a Stripe Access Token ... (gitleaks rule `stripe-access-token`)
+          │ const API_KEY="***";
+          └ fix: Remove it from the code and load it from the environment or a secret manager.
+  2:24    error   no-explicit-any  `any` disables type checking.
+          │ export function run(x: any) {
+          └ fix: Use a precise type, a generic, or `unknown` narrowed with a type guard or schema.
+  4:3     error   no-suppression-comment  Suppression comment: it hides a check instead of fixing what it found.
+          │ // @ts-ignore
+  5:10    error   no-eval  `eval` / `new Function` executes strings as code.
+          │ return eval(x);
 ```
 
-Trên Windows: `gh release download --repo NoahDuongMaster/larpcop --pattern '*windows-msvc.zip'`, giải nén rồi đặt `larpcop.exe` vào một thư mục có trong PATH.
+Then the agent tries the classic:
 
-`LARPCOP_GITHUB_TOKEN` của installer **không** dùng được cho repo private, vì GitHub không cho tải asset private qua URL `releases/download` (đã thử). Khi repo chuyển sang public thì chỉ cần:
+```text
+$ git commit --no-verify -m "it works, trust me"
+larpcop: blocked: skipping git hooks (`--no-verify` / `git commit -n`) is not allowed.
+```
+
+Both outputs come from the v0.3.0 release binary, trimmed for length.
+
+## Why a gate and not a prompt
+
+A prompt can only ask. Only a deterministic check can refuse. So larpcop sits at the points every agent has to pass through:
+
+| Layer | What runs | Can the agent skip it? |
+|---|---|---|
+| CI ([`enforce.yml`](.github/workflows/enforce.yml) or an org ruleset) | `larpcop check --since origin/<base>` | No |
+| Git pre-commit (`larpcop install`) | `larpcop check --staged` (the staged content, not the working tree) | With `--no-verify`, and then CI catches it |
+| Agent hooks (`larpcop hook <agent>`) | Blocks bypasses, reports errors right after each edit, refuses to finish while errors remain | Agents without hooks skip it, and still hit git and CI |
+| `AGENTS.md` (`larpcop sync`) | Generated guidelines and a rule table | It is a suggestion, so yes |
+
+Hooks shorten the feedback loop. Git and CI are what make the rules binding. [More on the enforcement model](docs/agents.md).
+
+## Install
+
+Each release ships binaries for macOS (arm64, x64), Linux (arm64, x64) and Windows (x64), 5 to 9 MB compressed.
 
 ```sh
+# macOS and Linux
 curl -LsSf https://github.com/NoahDuongMaster/larpcop/releases/latest/download/larpcop-installer.sh | sh
 ```
 
-## Cấu hình
-
-Standards của công ty (một repo riêng, gắn tag phiên bản), ví dụ [examples/standards](examples/standards):
-
-```yaml
-# larpcop.yaml
-max_lines: { max: 300, exclude: ["**/*.test.*"] }
-rule_dirs: [rules]              # rule ast-grep YAML, mọi ngôn ngữ
-guidelines: guidelines.md       # văn xuôi, được inline vào AGENTS.md
-exclude: ["**/node_modules/**"]
-linters:                        # uỷ quyền cho tool riêng của từng stack (tùy chọn)
-  - { id: eslint, run: "npx eslint --max-warnings 0 {files}", include: ["**/*.{ts,tsx}"] }
-locked: [max-lines, no-explicit-any]   # repo không được disable/override
+```powershell
+# Windows
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/NoahDuongMaster/larpcop/releases/latest/download/larpcop-installer.ps1 | iex"
 ```
 
-Repo, ví dụ [examples/demo-app](examples/demo-app):
+The installers put the binary in `~/.local/bin`. To build from source, clone the repo and run `cargo build --release`. There is no crates.io or npm package yet, and the Homebrew formula is attached to the release but not published.
 
-```yaml
-# .larpcop.yaml
-extends:
-  - https://github.com/<org>/standards.git#v1.0.0   # hoặc đường dẫn local
-rule_dirs: [team-rules]
-disable: [py-no-print]          # chỉ được disable rule không bị lock
-```
-
-Thứ tự áp dụng: `--extends` / `LARPCOP_EXTENDS` (CI ép vào) → chuỗi `extends` → `.larpcop.yaml`. Vì CI luôn truyền `--extends`, xoá config trong repo cũng không thoát được standards. Cùng một URL standards chỉ áp dụng một lần, và phiên bản CI pin sẽ thắng.
-
-Có hai điểm cố ý khác với ast-grep CLI:
-
-- Không hỗ trợ comment `ast-grep-ignore`. Mọi ngoại lệ phải đi qua config, để hiện rõ khi review và bị chặn với rule đã lock.
-- Rule viết cho `TypeScript` không áp dụng cho file `.tsx`. File `.tsx` cần rule riêng với `language: Tsx`.
-
-### Viết rule theo ý nghĩa, không theo một cách viết
-
-Agent sẽ tìm khe hở. Khi chạy Codex thật, nó né rule `console.$METHOD(...)` bằng cách viết `globalThis["console"]["log"](x)`, và rule đó vẫn báo sạch. Rule phải bắt được *cấu trúc* đó dưới mọi cách viết: identifier, truy cập qua property, truy cập bằng key tính toán. Xem `no-console` trong [rules/typescript.yml](examples/standards/rules/typescript.yml) và test hồi quy `no_console_cannot_be_dodged`. Thông điệp gửi cho agent cũng nói rõ rằng viết lại để né rule vẫn bị tính là vi phạm.
-
-Rule xét *giá trị* chứ không xét cách viết thì khai `metadata.resolve`: match chỉ được giữ khi metavariable có thể mang một chuỗi khớp regex lúc chạy. Giá trị được lần qua literal, biến cục bộ gán một lần, hằng của file (`static final String ALG = "MD5"`, `ALG = "md5"` cấp module), `props.getProperty("hashAlg1", "SHA512")` và field Spring `@Value("${crypto.alg:MD5}")`, đọc từ các file `.properties` và `application*.yml` của dự án (trừ thư mục test). Giá trị không biết được thì không báo.
-
-```yaml
-id: java-no-weak-hash
-language: Java
-rule: { pattern: MessageDigest.getInstance($ALG) }
-metadata:
-  resolve: { ALG: "(?i)^(md2|md4|md5|sha|sha-?1)$" }
-```
-
-## Dependency
-
-Dependency là code không ai trong team viết, và agent cài package rất dễ dãi. Có hai rule:
-
-```yaml
-dependencies:
-  min_release_age: 14        # dependency-release-age
-  require_approval: true     # dependency-approval
-  approved: [left-pad, "npm:@acme/*", "cargo:serde"]   # [hệ sinh thái:]glob
-  exempt: ["npm:@acme/*"]    # package ở registry riêng: không có ngày phát hành công khai
-```
-
-**`dependency-approval`**: dependency trực tiếp mới phải nằm trong `approved`. "Mới" nghĩa là chưa có trong bất kỳ manifest nào ở commit gốc, nên thêm `react` vào một package mới trong monorepo đã dùng `react` thì không tính. Agent không sửa được `.larpcop.yaml`, nên một dòng `approved` là một lần người duyệt và hiện rõ khi review. Đọc được `package.json`, `Cargo.toml`, `pyproject.toml` (PEP 621, dependency-groups, Poetry), `requirements*.txt`, `go.mod`, `Gemfile`, `composer.json`, `*.csproj`/`*.fsproj`, `pom.xml`, `build.gradle(.kts)` và `gradle/libs.versions.toml`.
-
-**`dependency-release-age`** chạy ở ba chỗ:
-
-1. **Lockfile** (pre-commit, CI, hook kết thúc lượt): mọi phiên bản, kể cả dependency bắc cầu, mà thay đổi này thêm vào hoặc đổi sang phải đủ `N` ngày tuổi. Ngày phát hành lấy từ [deps.dev](https://deps.dev), một API chung cho npm, PyPI, crates.io, Go, RubyGems, NuGet và Maven (Composer thì lấy từ API của Packagist), và được cache trên đĩa vì ngày phát hành không bao giờ đổi. Chỉ phiên bản *mới trong thay đổi* mới được tra, nên PR thường chỉ mất vài request. Lockfile đọc được: `package-lock.json` (v2/v3), `pnpm-lock.yaml` (v5–v9), `yarn.lock` (v1 và Berry), `bun.lock`, `Cargo.lock`, `uv.lock`, `poetry.lock`, `go.mod`, `Gemfile.lock`, `packages.lock.json` (NuGet), `gradle.lockfile`, `composer.lock`, cùng các phiên bản pin cứng trong `pom.xml` và `*.csproj`. Khi chặn, thông báo đưa luôn một phiên bản cụ thể để pin, ví dụ: *"Use typescript@7.0.2 (published 2026-07-08)"*.
-2. **Package manager**: npm, pnpm, yarn Berry và bun tự chặn được bản quá mới ngay lúc cài, trên máy dev, *trước khi* install script chạy. Lockfile chỉ thấy được sau khi đã cài, nên repo bắt buộc phải bật tính năng này:
-
-   | Package manager | File | Thiết lập cho 14 ngày |
-   |---|---|---|
-   | npm | `.npmrc` | `min-release-age=14` |
-   | pnpm | `pnpm-workspace.yaml` | `minimumReleaseAge: 20160` |
-   | yarn ≥ Berry | `.yarnrc.yml` | `npmMinimalAgeGate: "14d"` |
-   | bun | `bunfig.toml` | `[install] minimumReleaseAge = 1209600` |
-   | uv ≥ 0.9 | `pyproject.toml` (`[tool.uv]`) hoặc `uv.toml` | `exclude-newer = "14 days"` |
-
-   Đã chạy thật: npm 11.19 với `min-release-age=14`, khi được yêu cầu `typescript@next` thì tự chọn `7.0.2`. pnpm 11.2 chọn bản dev `20261017`, đúng 14 ngày tuổi. `pip install` phải kèm `--uploaded-prior-to`.
-3. **Hook của agent**:
-   - Chặn lệnh *nới* gate (`--min-release-age=0`, `npm config set min-release-age …`, `npm_config_min_release_age=…`, `uv … --exclude-newer "1 day"`, `UV_EXCLUDE_NEWER=…`). Giá trị được đọc thật, nên thiết lập *chặt hơn* (`--exclude-newer "30 days"`) vẫn qua.
-   - Package manager không có gate gốc (Cargo, Go, Poetry, Bundler, RubyGems, Composer, NuGet, Yarn 1, nhận ra vì không có `.yarnrc.yml`) và tool runner chạy package ngay (`npx`, `pnpm dlx`, `yarn dlx`, `bunx`, `uvx`, `pipx run`, `cargo install`): hook hỏi registry xem lệnh sẽ tải **phiên bản nào** và chặn nếu chưa đủ tuổi, trước khi lệnh chạy. Chỗ nào cài xong là chạy code dependency ngay (`bundle install`, `poetry update`) thì bắt buộc dạng chỉ resolve (`bundle lock`, `poetry lock`) để lockfile qua kiểm trước.
-   - Khi lockfile đang chứa phiên bản không qua kiểm, mọi lệnh có thể chạy code dự án hay dependency bị chặn (`npm test`, `make`, `node script.js`…), mặc định là chặn; chỉ các lệnh chỉ đọc/di chuyển file (`git`, `ls`, `cat`, `grep`, `sed`, `cp`…) được chạy để sửa lockfile.
-
-Phiên bản không có trên deps.dev hoặc không tra được vì lỗi mạng đều bị chặn (fail closed). **Ngoại lệ là bản vá bảo mật**: một bản quá mới vẫn được cho qua, ở mức warning, nếu bản đủ tuổi mới nhất cùng dòng có advisory còn bản mới thì không, theo trường `advisoryKeys` của deps.dev. Không có ngoại lệ này thì rule sẽ ép hạ về bản có lỗ hổng: chính repo larpcop gặp trường hợp này với `rustls-webpki` 0.103.16 và `webpki-roots` 1.0.11, vì bản đủ tuổi trước đó dính RUSTSEC-2026-0382 và RUSTSEC-2026-0381.
-
-Cả hai rule được lock trong standards mẫu. Một rule đã lock chỉ được *siết thêm*: tăng số ngày hoặc thêm `approved` thì được; giảm số ngày, tắt `require_approval` hoặc thêm `exempt` thì bị từ chối.
-
-## Bảo mật (thay Semgrep/Snyk)
-
-Bốn lớp, xếp theo mức chắc chắn. Lớp đầu tất định 100%, các lớp sau bắt phần còn lại.
-
-**1. Quy ước cú pháp (bộ `recommended`).** Không đi truy vết lỗi mà cấm luôn cách viết dẫn tới lỗi: SQL chỉ qua tham số, lệnh shell chỉ qua mảng tham số, dữ liệu request chỉ được dùng sau khi qua schema (`validate-request-input`: `req.body`, `req.query`, `req.params`, `request.json()` phải nằm trong `X.parse(…)`/`safeParse`/`validate`…). Khi đó lỗi không viết ra được ngay từ đầu, và ast-grep bắt đúng 100%, cùng một kết quả ở mọi lần chạy.
-
-**2. Taint xuyên hàm và xuyên file.** Theo dữ liệu từ `sources` tới đối số của `sinks` qua các phép gán theo thứ tự dòng code; đi qua `sanitizers` thì sạch, gán lại giá trị sạch thì hết taint, destructuring cũng được theo. Mỗi hàm có một *summary* (tham số nào tới sink, tham số nào được trả về, hàm có trả về dữ liệu nguồn không), nên dữ liệu được theo qua lời gọi hàm trong cùng file, qua `import`/`require`/alias của tsconfig, `from … import` của Python và các package trong cùng module Go; callback và closure thấy các biến bẩn mà chúng bắt được; method được biết dưới tên `Class.method` (cả khi class được import), và `obj.method(…)` với `obj` chưa rõ kiểu dùng method duy nhất mang tên đó; field mà một method gán dữ liệu bẩn (`this.term = req.query.q`, `self.term = …`) là bẩn trong mọi method khác của class đó. Pattern viết bằng cú pháp ast-grep:
-
-```yaml
-taint:
-  - id: taint-sql
-    languages: [TypeScript, Tsx, JavaScript]
-    message: Request data reaches a SQL query.
-    sources: ["req.query", "req.body", "req.params"]
-    sinks: ["$DB.query($SQL)", "$DB.query($SQL, $$$REST)"]
-    sink_arg: SQL                 # chỉ đối số này phải sạch
-    sanitizers: ["Number($X)", "$S.parse($X)"]
-    guards: ["$U.startsWith($P)", "$L.includes($U)"]   # đúng khi giá trị an toàn
-    rejects: ['$P.includes("$S")']                    # đúng khi giá trị KHÔNG an toàn ("..")
-    unless: ['new\s+Yaml\s*\(\s*new\s+SafeConstructor']  # hàm chứa sink đã dựng nó an toàn: không báo
-    safe_prefix: '^/[^/\\]'                          # "/products/" + id: phần đầu cố định là an toàn
-    param_decorators: [Body, Query]                   # NestJS: @Body() dto là dữ liệu request
-    handler_decorators: '^\w+\.(get|post|route)\('     # Python: mọi tham số của hàm route
-    resolver_args: true                               # GraphQL: (parent, args) => …
-    response_returns:                                 # giá trị handler trả về là body của response
-      headers: ['@(Get|Post)Mapping\b', '@(ResponseBody|RestController)\b']   # khớp hết với header của hàm/class
-      not: 'produces\s*=\s*[^)]*json'
-      types: '^String$'                               # kiểu trả về khai báo, nếu có
-```
-
-`guards` và `rejects` là phép kiểm trong điều kiện `if`: `guards` đúng khi giá trị an toàn (`isLocalUrl(u)`, `allowed.includes(h)`), `rejects` đúng khi nó không an toàn (`name.includes("..")`). Điều kiện được đọc theo `!`, `&&`, `||`, `not in` và phép so với `false`/`-1`/`null` (`s.indexOf("..") === -1`, `strpos($p, "..") !== false`): biến sạch trong nhánh chạy khi phép kiểm cho là an toàn, và sau `if` khi nhánh kia thoát (`return`, `throw`, `die()`, `abort()`, `panic()`…). `if (!isLocalUrl(u)) { redirect(u) }` vẫn bị báo. Phép so bằng với một chuỗi literal là guard có sẵn ở mọi ngôn ngữ, không cần khai: khi `x == "jpg"` đúng thì `x` chính là chuỗi đó, kể cả qua hàm chỉ đổi hoa thường (`strtolower($ext) == 'jpg' || strtolower($ext) == 'png'`, `kind.lower() == 'csv'`); `substr($x, 0, 3) == 'abc'` hay `x != ''` thì không. Khi một lời gọi khớp cả hai danh sách (`allowed.includes(x)` khớp `$A.includes($B)`), pattern cụ thể hơn (nhiều ký tự không phải metavariable hơn) quyết định. `safe_prefix` là regex trên phần chuỗi cố định ở đầu đối số được ghép (`res.redirect("/p/" + id)` không thể dẫn ra ngoài site); nó cũng quyết định một guard `x.startsWith("…")` có đáng tin không. Hàm của chính dự án cũng là guard khi nó trả `null`/`false`/`None`/`nil` trừ lúc tham số đã qua một guard (`static String cmdFilter(String s) { if (!P.matcher(s).matches()) return null; return s; }`, `def is_safe(p): return '..' not in p`): `if (pathFilter(p) == null) return;` làm sạch `p` y như một pattern `guards:`; hàm trả `null` vì lý do khác (`if (p.isEmpty()) return null;`) thì không. Nhánh thay giá trị không an toàn bằng giá trị sạch (`if not nxt or urlsplit(nxt).netloc != '': nxt = url_for('index')`) cũng làm sạch biến sau `if`, vì đường không vào nhánh đã được điều kiện chứng minh là an toàn; `if not nxt: nxt = url_for('index')` thì không. Với `safe_prefix`, biến bắt đầu bằng giá trị an toàn (`url = reverse(…)`, `url = "/search"`) vẫn sạch khi nối thêm (`url += "?q=" + q`), và `reverse(…) + "?q=" + q` ở sink cũng vậy. `html_fragments` (bật cho PHP) coi giá trị được ghép vào một chuỗi có thẻ HTML rồi gán cho biến là sink ngay tại chỗ ghép (`$html .= '<pre>Hello ' . $_GET['name'] . '</pre>'`): trang PHP thường dựng markup vào biến để một template chung in ra sau, qua `include` có đường dẫn chỉ biết lúc chạy; markup chỉ có một công dụng là được hiển thị. `response_returns` coi giá trị mà handler trả về là sink: Spring `@ResponseBody`/`@RestController` trả `String`, view Flask trả chuỗi HTML. `exclude` là glob của file rule không báo (bộ `recommended` bỏ file test: `res.end('poking ' + req.params.user)` trong test của Express không phải lỗ hổng); hàm trong các file đó vẫn được dùng khi file khác gọi tới.
-
-Bộ `recommended` có sẵn 99 rule taint: SQL, shell, open redirect, code injection (`eval`, `vm`, `mathjs.eval`), XSS phản chiếu (`res.send` của chuỗi HTML, `innerHTML`), path traversal, SSRF, NoSQL injection (MongoDB/Mongoose; filter của Sequelize thì không), regex injection, log injection cho JS/TS; SQL, lệnh OS (`os.system`, `shell=True`, list đối số chạy qua shell như `['sh', '-c', cmd]` kể cả list dựng bằng `append` trong các nhánh `if`/`else`; với `sh -c` chỉ phần tử ngay sau `-c` là lệnh, với `cmd /c` mọi phần tử sau đó), path traversal (cả `p = base / name` rồi `p.exists()`/`p.read_text()` khi `p` chắc chắn là `pathlib.Path`; `exists()` của queryset Django thì không), SSRF, SSTI (`render_template_string`), XSS (`Markup`, `mark_safe`, `make_response`/`HttpResponse` của chuỗi), open redirect (`url_for`/`reverse` là an toàn), code injection, deserialization (`pickle`, `yaml.load`), log injection cho Python (nguồn của Flask, Django, FastAPI/Starlette, aiohttp, Tornado; `request.path` trong handler có route không chứa biến là chính route đó, trừ khi project mount blueprint dưới `url_prefix` có biến); SQL, shell, path traversal, SSRF, open redirect, XSS (`template.HTML`, ghi thẳng vào `ResponseWriter`) cho Go (net/http, gin, echo, chi, gorilla/mux); SQL (JDBC, JdbcTemplate, JPA), lệnh OS (cả `loadLibrary`/`System.load`), stored XSS (`java-taint-stored-xss`: dòng đọc qua JDBC `executeQuery`, `JdbcTemplate.queryFor*`, JPA `getResultList`, hay method đọc `find*`/`get*`/`stream*` của field khai báo kiểu `*Repository`/`*Dao` của Spring Data, đi vào response mà không escape), path traversal, XSS, LDAP, XPath, open redirect, trust boundary, SSRF (`openConnection`, `RestTemplate`, `Jsoup.connect`), code injection (ScriptEngine, SpEL, OGNL, MVEL, `Class.forName`), deserialization (`ObjectInputStream`, `XMLDecoder`, XStream, `readValue` của Jackson khi mapper đó được bật default typing trong file: `activateDefaultTyping` ở chỗ khởi tạo, trong hàm factory nó gọi, hay gọi trên chính tên đó), SSTI (Velocity, FreeMarker, Thymeleaf/Pebble/Jinjava với template từ request), XSS khi handler `@ResponseBody` trả về chuỗi, `return "redirect:" + url`, `setOrderByClause` của MyBatis cho Java (Servlet, Spring với `@RequestParam`/`@PathVariable`/`@RequestBody`…; class import từ package khác được theo qua source root `src/main/java` của mọi module); Phương thức gRPC nhận message của client làm tham số, nên tham số đó là dữ liệu bẩn: Java/Kotlin (lớp kế thừa `*ImplBase`/`*CoroutineImplBase`, hay có tham số `StreamObserver`), C# (tham số `ServerCallContext`), Python (lớp `*Servicer`), Go (`in *pb.XxxRequest` trong method có receiver và nhận `ctx context.Context`), Node (`call.request`); tham số của framework (observer, context, `*http.Request`) thì không. 12 rule tương ứng cho Kotlin (`kt-taint-*`: cùng nguồn Servlet/Spring, getter đọc như property `request.queryString`, `response.writer`, thêm Ktor `call.parameters[…]`/`call.receiveText()`/`call.respondRedirect`/`call.respondFile`, Exposed `exec`, `toInt()`… là sanitizer; hàm top-level cùng package, `import` sang file `.kt` hoặc `.java`, `x?.let { … it … }`, `forEach { }`, `x !in allowed`; cộng `kt-no-weak-hash`/`kt-no-weak-cipher`, thuật toán lần tới giá trị thật như bản Java); SQL, lệnh OS, `eval`, path traversal/file inclusion, XSS, SSRF, header/redirect, `unserialize`, LDAP, XPath cho PHP (`$_GET`/`$_POST`…, Laravel `$request->input()`; hàm trong file được `require` có summary; file trộn HTML với `<?php … ?>`/`<?=` được đọc đúng như code PHP, số dòng giữ nguyên; field mà constructor hay method khác gán dữ liệu request được theo sang getter của class; ép kiểu, `settype`, `filter_var` số/IP, phép toán số học và `sprintf("%d", …)` cho ra số; `preg_match` với allow-list neo `^…$` là guard, kể cả khi pattern nằm ở biến cục bộ và so `== 1`; `->query()` chỉ là sink XPath trên `DOMXPath`; `foreach ($rows as $k => $v)` gán từng phần tử; dòng đọc từ database vào trang là stored XSS: `php-taint-stored-xss`). SQL (ADO.NET, Dapper, EF Core `FromSqlRaw`), lệnh OS, path traversal, XSS (cả stored XSS từ dòng đọc qua ADO.NET/Dapper/EF Core: `cs-taint-stored-xss`), SSRF, open redirect, LDAP, XPath, deserialization cho C# (ASP.NET Core: `Request.Query`/`Form`/`Cookies`…, tham số của action `[HttpGet]`/`[FromQuery]`…). SQL (ActiveRecord `where`/`order`/`find_by_sql`, `connection.execute`), lệnh OS (`system`, backtick, `Open3`), `eval`/`constantize`/`send`, path traversal (`File.read`, `send_file`, `render file:`), XSS (`html_safe`, `raw`, `render html:`), open redirect, SSRF, `Marshal.load`/`YAML.load` cho Ruby (Rails, Sinatra: `params`, `cookies`, `request.*`; hằng số `User` được nạp từ `app/*/user.rb` như autoload của Rails). Lệnh OS (`system`, `popen`, họ `exec*`/`_spawn*` khi vector chạy qua `sh -c`/`cmd /c`) và format string (`printf(data)`, `fprintf`, `snprintf`, `syslog`…) cho C/C++ (`c-taint-shell`, `c-taint-format`): nguồn là `getenv` và các hàm ghi dữ liệu bên ngoài vào đối số (`fgets(buf, …)`, `recv(s, buf, …)`, `scanf`), dữ liệu đi qua các hàm chép vào đối số đầu (`strcpy`, `strncat`, `sprintf`, `memcpy`…); macro chỉ đổi tên (`#define SYSTEM system`, `#define ARG data`) được thay trước khi parse, giữ nguyên số dòng; hàm gọi tới (hay lấy làm con trỏ hàm) mà không định nghĩa trong file được tìm trong các file C/C++ cùng thư mục; con trỏ tới biến cục bộ (`char **p = &data`: ghi qua `*p` là ghi vào `data`), con trỏ hàm (`void (*fp)(char *) = sink; fp(x)`) và biến toàn cục (`static`/`extern`) do hàm được gọi đọc đều được theo. Biến môi trường mà login đặt cho phiên của chính người dùng (`HOME`, `USER`, `SHELL`, `PWD`, `TMPDIR`, `PATH`…) không phải nguồn, vì ai đổi được chúng thì đã chạy dưới quyền người đó; `LANG`/`LC_*`/`TERM` (SSH chuyển tiếp), biến CGI (`QUERY_STRING`, `HTTP_*`) và biến riêng của ứng dụng vẫn là nguồn. Lời gọi Ruby không ngoặc (`system cmd`, `redirect_to url`, cả `current_user` trơn), giá trị trả về ngầm (dòng cuối của method), `scope :name, ->(x) { … }` của Rails và điều kiện `unless`/`… if x` đều được đọc; `where(id: x)` (hash) là tham số bind, không phải SQL; record tìm bằng dữ liệu request (`User.find_by(token: …)`) là dữ liệu của DB, không phải của request. `sanitizer_names` là regex trên tên hàm được gọi mà kết quả luôn sạch (route helper `*_path`/`*_url` của Rails chỉ dựng URL của chính app). Một nguồn viết bằng tên trơn (`params`) không còn là nguồn trong hàm có tham số cùng tên (`def error_messages_for(*params)`). `source_names` khai những tên là nguồn ở mọi chỗ đọc (`$_GET` không viết được thành pattern ast-grep vì `$_…` là metavariable). Phép gán sạch trong một nhánh (`if`, vòng lặp, `try`) chỉ làm sạch biến tới hết nhánh đó: sau `if (p == null) p = "";` biến `p` vẫn bẩn. Dữ liệu request không qua `req.query` cũng được tính: tham số có decorator của NestJS (`@Body()`, `@Query()`; trừ khi qua `ParseIntPipe`…) tham số của hàm route khai bằng decorator (FastAPI, Flask; trừ `int`/`UUID`… mà framework đã kiểm, và `Depends(...)`), và đối số của resolver GraphQL (`(parent, args) => …`, `def resolve_x(root, info, id)`). Sink được khai theo tên đối tượng (`cp.exec`, `res.send`, `session.get`), vì `$X.exec` cũng khớp `RegExp.prototype.exec` và `$X.get` khớp `dict.get`. Lớp 1 bắt ``db.query(`…${id}`)`` ngay tại chỗ gọi; lớp 2 bắt trường hợp lớp 1 không thấy, khi chuỗi SQL được dựng ở biến hoặc ở hàm khác: Ở Java, C# và Kotlin, biến khai báo kiểu số, boolean hay UUID (`int n = rs.getInt(1)`, `long id`) không mang chuỗi nào, nên không bị coi là bẩn; annotation của TypeScript (`id: number`) thì không tính, vì lúc chạy giá trị vẫn có thể là chuỗi.
-
-```ts
-const name = req.query.name as string;
-const sql = "SELECT * FROM users WHERE name = '" + name + "'";
-res.json(await db.query(sql));          // taint-sql
-```
-
-**Kiểu** khai báo trong code được đọc trước (`Statement st`, `ExpressRunner r`, `var x = new T()`, `db: Pool`, class gọi tĩnh `URLUtil.url(x)`), nên ở Java/C#/TypeScript `sink_types` thường không cần server: `$S.execute($SQL)` chỉ tính khi `S` khai là `Statement`/`Connection`/`JdbcTemplate`…, không tính `executor.execute(task)`; biến không rõ kiểu thì finding giữ nguyên. Còn lại thì hỏi language server của chính dự án (typescript-language-server, pyright, gopls, rust-analyzer) thay vì tự viết type checker. `sink_types` yêu cầu metavariable của sink phải có kiểu khớp regex:
-
-```yaml
-    sinks: ["$DB.query($SQL)"]
-    sink_arg: SQL
-    sink_types: { DB: "\\bPool\\b" }   # pool.query(sql) bị bắt; searchIndex.query(text) thì không
-```
-
-Chỉ hỏi server về các ứng viên mà lớp cú pháp đã tìm thấy, mỗi vị trí một lần, nên chỉ trả giá khi có ứng viên (chạy thử: 1,9 s với tsserver, 0,5 s với pyright, 0,7 s với gopls, 6 s với rust-analyzer vì phải nạp workspace; larpcop chờ rust-analyzer báo xong qua `experimental/serverStatus`). Server không có, không khởi động được, hoặc không trả lời thì finding vẫn giữ nguyên, tức là fail closed. Lệnh chạy server đổi được bằng `language_servers: { typescript: [...] }`; `LARPCOP_DEBUG_TYPES=1` in ra câu trả lời của server. Test chạy với cả bốn server thật, cả trong CI.
-
-**Template và file không có grammar.** Rule `text:` là regex trên file theo glob (template, HTML, config):
-
-```yaml
-text:
-  - id: no-unescaped-template-output
-    files: ["**/*.ejs", "**/*.hbs", "**/*.njk", "**/*.html", "**/*.vue"]
-    regex: '<%-[^%]*%>|\{\{\{|\|\s*safe\b|\bv-html\s*='
-    not: '^<%-\s*include\b'          # match nào khớp `not` thì bỏ qua
-    message: Template output written without HTML escaping (XSS).
-  - id: rb-csrf-off
-    files: ["app/controllers/application_controller.rb"]
-    regex: 'class\s+ApplicationController\s*<\s*ActionController::Base'
-    unless:                          # rule tắt khi một điều kiện khớp
-      - regex: '(?m)^\s*protect_from_forgery\b'              # trên chính file này
-      - file: config/application.rb                           # hoặc trên file khác của repo
-        regex: 'load_defaults\s*\(?\s*[''"]?(5\.[2-9]|[6-9])'
-    message: CSRF protection is off.
-```
-
-Bộ `recommended` có 6 rule loại này: output không escape (EJS `<%-`, Handlebars `{{{`, Jinja/Nunjucks `|safe` và `autoescape false`, Blade `{!!`, ERB `raw`/`html_safe`, Svelte `{@html}`, Vue `v-html`, Razor `Html.Raw`), Pug `!=`/`!{}`, `innerHTML`/`document.write` trong script của template, secret thật trong file `.env` được commit (giá trị mẫu như `changeme`, `${VAR}` thì bỏ qua), và Rails tắt CSRF (ApplicationController không gọi `protect_from_forgery` trong khi app không nạp mặc định Rails 5.2+), và `${}` của MyBatis trong mapper XML (SQL injection; `${criterion.condition}`/`${orderByClause}` của MyBatis Generator thì bỏ qua).
-
-**3. Secrets.** `secrets: {}` bật 222 detector của [gitleaks](https://github.com/gitleaks/gitleaks) (MIT, nhúng nguyên `gitleaks.toml` vào binary, kèm license trong `assets/`): lọc theo keyword, regex, entropy, allowlist theo đúng ngữ nghĩa của gitleaks. Kết quả in ra đã che, chỉ giữ 4 ký tự đầu (`ghp_…[redacted]`). `exclude` để bỏ qua fixture có khoá giả; rule bị lock thì không thêm `exclude` được. Hook cũng chặn agent ghi secret vào file.
-
-**4. Lỗ hổng và mã độc trong dependency** (`dependency-vulnerability`, dữ liệu [OSV.dev](https://osv.dev): GitHub Advisory, RustSec, PyPA, Go, và nguồn mã độc của OpenSSF):
-
-```yaml
-dependencies:
-  vulnerabilities: high     # low | moderate | high | critical
-```
-
-- Package bị báo là **mã độc** (`MAL-…`) luôn bị chặn, ở mọi lockfile và trong mọi PR, kể cả PR không đụng tới lockfile: mã độc thường được phát hiện sau khi đã vào repo.
-- Lỗ hổng từ mức đã chọn trở lên chặn phiên bản *mà thay đổi này đưa vào*. `larpcop check` không giới hạn phạm vi thì kiểm toàn bộ. Thông báo nêu luôn phiên bản đã vá.
-- Hook chặn lệnh cài **trước khi chạy**: tên package dính mã độc (`npm i aaa-evil`), hoặc phiên bản pin dính lỗ hổng (`npm i lodash@4.17.15`). Không gọi được OSV thì lệnh cài cũng bị chặn (fail closed), giống phần lockfile.
-- Mức nghiêm trọng lấy theo đánh giá của advisory, nếu không có thì tính từ vector CVSS 3/4 (crate `cvss`).
-- Câu trả lời của OSV cho lockfile được lưu trong cache 15 phút (`<cache>/osv-query/`, theo từng package@version), nên chạy `check` lại ngay sau đó không tốn lượt gọi mạng. Lệnh cài **không bao giờ** đọc cache này, và lỗi hay phản hồi thiếu thì không được lưu. Bản mã độc mới được báo trong 15 phút đó sẽ bị chặn từ lần chạy kế tiếp, không phải ngay.
-
-Đã chạy với dữ liệu thật (lockfile gồm `lodash@4.17.15`, `local-commander-agent@0.3.52`, `zod@3.23.8`):
-
-- `local-commander-agent` (MAL-2026-18425, được báo cáo trong ngày) bị chặn, kể cả khi chạy `--changed` mà thay đổi không đụng tới lockfile.
-- `lodash@4.17.15`: 3 advisory mức High (command injection, prototype pollution, code injection qua `_.template`), mỗi cái kèm bản vá (`4.17.19`, `4.17.21`, `4.18.0`).
-- `zod@3.23.8`: 1 advisory High (GHSA-mrhx-c7xc-m3w5).
-- Hook chặn `npm i local-commander-agent`, `npm i lodash@4.17.15` và `npm i zod@3.23.8`; cho qua `npm i lodash` (không pin, npm cài bản mới nhất).
-
-## AI review và học rule (thay CodeRabbit/Bugbot, Packmind)
-
-Model là CLI mà team đang dùng (`claude -p`, `codex exec -`, `gemini`, `ollama run …`). larpcop gửi prompt qua stdin và đọc stdout, nên không giữ API key và không phụ thuộc SDK của hãng nào. Không khai `llm.command` thì tự dùng `claude -p`, nếu không có thì `codex exec -`. Có thể đổi bằng biến `LARPCOP_LLM`. Một lần gọi model chạy tối đa 10 phút rồi bị dừng; đổi bằng `LARPCOP_LLM_TIMEOUT_SECS` (số giây, lớn hơn 0).
-
-```yaml
-llm:
-  command: claude -p --model sonnet     # chuỗi: chạy qua sh; mảng: chạy thẳng
-  rules:
-    - id: thin-controllers
-      files: ["src/controllers/**"]
-      prompt: Controllers only parse the request, call one service function and map the result. They never touch the database directly.
-```
-
-**`larpcop review [--staged | --changed | --since REF]`** chấm các rule `llm`, mỗi file một lần gọi (chạy song song 4 file), chỉ gửi những file mà rule áp dụng. Trên một diff, các dòng đã đổi được đánh dấu và chỉ những dòng đó được báo. Kết quả **luôn là warning**: model không tất định, còn cổng chặn thì phải tất định. Câu trả lời được cache theo nội dung prompt, nên chạy lại trên code không đổi sẽ ra cùng kết quả và không tốn tiền (`--no-cache` để hỏi lại). Có đủ các format như `check` (`--format markdown` cho comment PR, `sarif`…).
-
-**`larpcop learn "<chuẩn viết bằng lời>"`** hoặc **`larpcop learn --reviews 50`** (lấy từ review comment của các PR gần đây, qua `gh`) biến chuẩn thành rule ast-grep tất định. Model chỉ đề xuất; một rule được giữ lại khi parse được và pass các ví dụ valid/invalid do chính model viết. Rule fail được gửi lại cho model kèm lỗi chính xác (mặc định 3 vòng). Rule đạt được ghi vào `.larpcop/rules/` cùng fixture trong `.larpcop/rule-tests/`, kèm số chỗ trong repo đang vi phạm để quyết định sửa hay baseline. Đây là cách chuyển dần các rule "mềm" của AI review thành rule cứng.
-
-Đã chạy thật với `claude -p --model sonnet` trên một repo Express demo:
-
-- `review --changed`: một hàm controller mới gọi `db.user.findUnique` bị báo đúng dòng 9, kèm gợi ý chuyển sang service (8,6 giây).
-- `learn "Never import moment; use date-fns. No default exports, only named exports. Never await inside a loop; collect the promises and use Promise.all."` cho ra 3 rule đều pass ngay vòng đầu (22 giây). Có 7–8 ví dụ mỗi rule, gồm cả trường hợp gần giống mà phải hợp lệ: `await` trong arrow function nằm trong vòng lặp thì không bị tính. Gắn 3 rule vào repo thì `larpcop check` bắt đúng 3 chỗ vi phạm có sẵn.
-
-## Dashboard và benchmark
-
-**`larpcop dashboard [--org OWNER] [--out FILE] [--json]`** tạo một file HTML duy nhất, không có script và không tải tài nguyên ngoài, nên có thể đính vào artifact của CI, đưa lên GitHub Pages hoặc mở thẳng từ đĩa. Trang gồm:
-
-- số vi phạm còn mở và số đã baseline theo từng rule;
-- nợ baseline theo thời gian, tính từ lịch sử git của `.larpcop-baseline.json`;
-- các hàm phức tạp nhất;
-- với `--org`: repo nào có config, repo nào đã chạy cổng CI, và lần chạy gần nhất.
-
-`--json` xuất cùng dữ liệu đó cho dashboard khác dùng.
-
-**Benchmark công khai**: [`bench/`](bench) (chạy lại bằng `bench/run.sh`), trên hai mươi hai bộ cố ý có lỗ hổng, mỗi bộ có đáp án từ chính dự án đó:
-
-| | larpcop | Semgrep OSS (`p/default`) | gitleaks |
-|---|---|---|---|
-| Juice Shop: thời gian (gitleaks chỉ quét secrets) | 6,63 s | 33,75 s | 4,76 s |
-| Juice Shop: dòng lỗ hổng tìm thấy | **11/27** | 6/27 | – |
-| NodeGoat: dòng tìm thấy | **12/14** | 4/14 | – |
-| DVNA: dòng tìm thấy | **12/14** | 7/14 | – |
-| DVPWA (Python): dòng tìm thấy | **4/4** | 2/4 | – |
-| DVWS-Node (REST, GraphQL, SOAP): dòng tìm thấy | **13/15** | 7/15 | – |
-| GoVWA (Go): dòng tìm thấy | 4/4 | 4/4 | – |
-| OWASP Benchmark Java (2.740 ca, điểm TPR − FPR): thời gian / điểm | **12,9 s / +91,9%** | 45,8 s / +34,9% | – |
-| OWASP Benchmark Python (1.230 ca, điểm TPR − FPR): thời gian / điểm | **2,5 s / +70,6%** | 8,1 s / −0,8% (`p/python`), +6,9% (`p/default`) | – |
-| NIST Juliet C# (1.443 ca web, điểm TPR − FPR): thời gian / điểm | **5,0 s / +99,2%** | 16,1 s / +0,8% | – |
-| NIST Juliet Java (1.665 ca servlet, điểm TPR − FPR) | **+96,4%** (lần đầu +68,6%) | +22,4% (`p/java` +33,0%) | – |
-| NIST Juliet Java stored XSS (148 ca, dữ liệu đọc từ database; held-out) | **+75,0%** (mọi ca CWE80/83; CWE81 `sendError` cố ý bỏ qua) | +0,0% | – |
-| NIST Juliet C# stored XSS (148 ca, dữ liệu đọc từ database; held-out) | **+100,0%** | +0,0% | – |
-| NIST Juliet C (6.080 ca lệnh OS và format string): thời gian / điểm | **21,7 s / +100,0%** (lần đầu, held-out: +84,7%) | 32,5 s / +0,0% | – |
-| Kotlin: test có nhãn của kho rule Semgrep (9 ca lỗi, 3 ca sạch) | **+88,9%** (lần đầu +55,6%) | – (test của chính Semgrep) | – |
-| RailsGoat (Ruby): dòng tìm thấy | **13/14** | 9/14 | – |
-| java-sec-code (Java/Spring, 76 endpoint, điểm TPR − FPR) | **+84,6%** | +20,8% | – |
-| VulnerableApp (Java/Spring, 97 handler, điểm TPR − FPR) | **+88,1%** | +16,5% | – |
-| DVWA (PHP, điểm TPR − FPR) | **+80,0%** | +3,3% | – |
-| XVWA (PHP, 19 lỗi theo README của dự án): dòng tìm thấy | **17/19** | 5/19 | – |
-| WackoPicko (PHP, 14 lỗi theo README): dòng tìm thấy | **11/14** | 1/14 | – |
-| NIST SARD PHP (20.856 ca dữ liệu từ request, 8 loại lỗ hổng; điểm TPR − FPR): thời gian / điểm | **23,6 s / +56,4%** (lần đầu, held-out: 16,9 s / +5,3%) | 98,1 s / +0,1% | – |
-| vulnerable-node `sast/seeds` (chấm bằng script của dự án) | **11/12**, 1 báo nhầm (0 nếu bỏ rule chung chung) | 10/12, 1 báo nhầm (8/12 nếu bỏ rule chung chung) | – |
-| Secrets | trùng khớp hoàn toàn với gitleaks | – | 69 + 3 |
-
-Mỗi bộ từng là bộ kiểm chứng ở lần chạy đầu, rồi được dùng để thêm rule: NodeGoat lần đầu 8/14, DVNA 5/14 (Semgrep 7/14), vulnerable-node 10/12 với 1 báo nhầm, DVPWA 1/4 (Semgrep 2/4), DVWS-Node 10/15 (Semgrep 7/15), GoVWA 0/4 (Semgrep 4/4), OWASP Benchmark Java +37,5% (Semgrep +34,9%), DVWA +40,0% (Semgrep +3,3%), Juliet C# +43,9% (Semgrep +0,8%), RailsGoat 10/14 (Semgrep 9/14), java-sec-code +6,6% (Semgrep +20,8%), VulnerableApp +7,2% (Semgrep +16,5%), OWASP Benchmark Python +39,8% (Semgrep +6,9%), Juliet Java +68,6% (Semgrep +22,4%, `p/java` +33,0%), Juliet C +84,7% (Semgrep +0,0%), SARD PHP +5,3% (Semgrep +0,1%). Thứ tự đó và từng dòng bị bỏ sót nằm trong [bench/README.md](bench/README.md).
-
-## Lệnh
+## Quick start
 
 ```sh
-larpcop check [paths…] [--staged | --changed | --since REF] [--jobs N] [--format text|json|github|sarif|gitlab|markdown] [--output FORMAT=FILE]
-                               # --jobs (hoặc LARPCOP_JOBS): số luồng, để máy vẫn dùng được khi check cả repo
-larpcop fix [paths…] [--changed | --since REF] [--dry-run]   # áp `fix:` của rule rồi check lại
-larpcop baseline [--prune]    # ghi nhận vi phạm cũ; --prune chỉ xoá entry đã sửa
-larpcop test [STANDARDS_DIR] [--require-all]  # chạy fixture trong rule-tests/ (valid, invalid, fixed)
-larpcop metrics [paths…] [--top N] [--json]    # độ phức tạp, kích thước hàm
-larpcop review [--changed | --since REF]       # rule `llm`, chấm bằng model (warning)
-larpcop learn "<chuẩn>" | --reviews N          # sinh rule ast-grep + test từ lời / review comment
-larpcop dashboard [--org OWNER] [--json]       # trang HTML: vi phạm, nợ baseline, hotspot, repo có gate
-larpcop lsp | larpcop mcp    # language server / MCP server (stdio)
-larpcop org status|setup …    # trạng thái và triển khai trên GitHub
-larpcop rules [--for PATH] [--json]   # rule hiệu lực; --for: chỉ rule áp cho một file
-larpcop stats [paths…] [--top N] [--json]   # rule nào bắt gì, rule nào áp mà không bắt gì, rule nào không áp
-larpcop sync [--check]        # AGENTS.md + file hook cho mọi agent (xem bảng dưới)
-larpcop install [--force]     # git pre-commit hook (tôn trọng core.hooksPath, monorepo)
-larpcop hook <claude-code|codex|gemini|cursor>   # entrypoint cho hook của agent (đọc stdin)
-```
-
-Exit code: `0` sạch, `1` có vi phạm mức error, `3` lỗi nội bộ/config. Không dùng `2`, vì giao thức hook của agent dành nó cho nghĩa "chặn và báo cho model". Nhờ vậy config hỏng không bao giờ chặn agent.
-
-### Baseline
-
-Để áp rule mới lên codebase cũ mà không phải sửa hết ngay: người chạy `larpcop baseline`, commit `.larpcop-baseline.json`. `check` ẩn đúng các vi phạm đã ghi nhận và vẫn báo mọi vi phạm mới.
-
-- Entry khớp theo rule, file và **nội dung dòng**, không theo số dòng: sửa chỗ khác trong file không làm vi phạm cũ hiện lại, còn viết thêm một vi phạm giống hệt thì vẫn bị bắt (đếm theo số lần).
-- Agent không chạy được `larpcop baseline` và không sửa được file baseline (hook chặn). `larpcop baseline --prune` thì được, vì nó chỉ xoá entry đã sửa.
-- Với rule bị lock, baseline của repo không được phình ra: ở `--changed`/`--staged`/`--since`, số entry của rule lock tăng so với base là lỗi. Lần ghi nhận đầu tiên (rule chưa có entry nào) vẫn được phép, để org triển khai rule mới.
-
-### Fix và test rule
-
-Rule ast-grep có `fix:` thì vi phạm kèm gợi ý `larpcop fix <file>`. Fix lặp tối đa 5 lượt, bỏ qua các sửa đè lên nhau trong cùng lượt.
-
-`larpcop test` đọc fixture theo định dạng của ast-grep (`rule-tests/<id>-test.yml` với `valid`/`invalid`), thêm `fixed: [{before, after}]` để kiểm `fix:`. Rule taint và rule `text:` dùng cùng định dạng: mỗi đoạn được kiểm như một file của từng ngôn ngữ của rule (rule `text:` thì khai `file: views/page.ejs`). `--require-all` làm CI fail khi có rule, của bất kỳ loại nào, chưa có fixture.
-
-### Guard đọc lệnh shell bằng parser
-
-Hook phân tích lệnh bằng tree-sitter-bash: quote, pipe, `&&`/`;`/`&`, redirect, `bash -c '…'`, `eval`, `sudo`/`env` đều được giải theo cấu trúc. Nhờ vậy `bash -c 'rm .larpcop.yaml'`, `--no-ver""ify`, `git push --no-veri`, `sudo env SKIP=all git commit` bị chặn, còn `cp .larpcop.yaml /tmp/bak`, `git config --get core.hooksPath` hay `echo 'never rm .larpcop.yaml' > notes.txt` thì không.
-
-## Bộ rule chính thức `recommended`
-
-[`standards/recommended`](standards/recommended) là bộ rule do larpcop duy trì, version theo tag của repo:
-
-```yaml
+cd your-repo
+cat > .larpcop.yaml <<'EOF'
 extends:
   - https://github.com/NoahDuongMaster/larpcop.git#v0.3.0//standards/recommended
+EOF
+larpcop install   # git pre-commit hook
+larpcop sync      # AGENTS.md plus hook files for every agent
+larpcop check     # see what it finds
 ```
 
-(`URL#tag//thư-mục` lấy một thư mục con của repo standards.) Bộ này có 93 rule ast-grep, 99 rule taint, 6 rule `text:`, cùng secrets và `dependency-vulnerability`. Rule bảo mật và metric độ dài/độ phức tạp không áp lên file test (`test/`, `tests/`, `*.spec.*`, `test_*.py`, `tests.py`…); rule chất lượng (`no-explicit-any`, `no-console`, `no-empty-catch`…) thì vẫn áp: chạy thử trên repo `expressjs/express`, test của Express chiếm 96/129 finding `validate-request-input` và 118/120 finding `function-length`. File minified (dòng trung bình trên 300 byte, như `prism.js` hay `jquery-3.2.1-min.js` được commit vào repo) chỉ được quét secrets, vì secret có thể nằm trong bundle; method Go được biết theo kiểu receiver (`Profile.Load`), method Rust theo kiểu của `impl`. Mọi rule kèm fixture, và `larpcop test standards/recommended --require-all` chạy trong `cargo test`:
+`recommended` is the rule set maintained in this repo (see below). Your company can keep its own standards in a separate repo and pin them by tag. A repo cannot opt out of the standards CI enforces, and rules marked `locked` cannot be disabled or overridden. [Configuration](docs/configuration.md).
 
-- **Biến lỗi bảo mật thành quy ước cú pháp** (không cần taint): SQL chỉ qua tham số (`no-sql-interpolation`, `py-no-sql-interpolation`, `go-no-sql-sprintf`; chuỗi có dạng câu SQL mà được ghép hay format ở bất kỳ đâu cũng bị bắt, không chỉ trong lời gọi `query`), lệnh shell chỉ qua mảng tham số (`no-shell-interpolation`, `py-no-shell-true`; `java-no-shell-string`/`kt-no-shell-string` bắt `Runtime.exec("sh -c …" + x)`, còn `exec("ls " + dir)` thì không vì không có shell nào chạy: `Runtime.exec(String)` chỉ tách theo khoảng trắng), không `eval`/`new Function`/`exec`, không gán HTML từ biến vào `innerHTML`, không `dangerouslySetInnerHTML` hay `bypassSecurityTrust*` (Angular), không `serve-index`, không MD5/SHA-1 (cả `DigestUtils.md5Hex` của Commons Codec/Spring, `Hashing.md5()` của Guava), không `$where` của MongoDB, input của request phải qua schema (`validate-request-input`), không tắt kiểm chứng chỉ TLS (`py-no-tls-verify-off`, `go-no-insecure-tls`), `yaml.safe_load` (có auto-fix), regex có lượng từ lồng nhau (ReDoS), tắt autoescape của template, so sánh mật khẩu dạng plain text, secret của session/JWT viết cứng, XML bật external entity (XXE), thư viện deserialize chạy được code (`node-serialize`, `pickle`), hàm merge đệ quy không chặn `__proto__` (prototype pollution), ghi user vào session phía server mà không cấp session id mới (session fixation: `req.session.regenerate`, `new_session` của aiohttp).
-- **Không tắt kiểm tra**: `@ts-ignore`, `@ts-expect-error`, `eslint-disable`, `biome-ignore` là vi phạm; `any`, catch rỗng, `debugger` (có auto-fix).
-- **Kích thước và độ phức tạp**: hàm tối đa 80 dòng, độ phức tạp vòng (McCabe) tối đa 15, file tối đa 500 dòng.
-- **Cấu hình sai theo framework**: Django (`DEBUG = True` ở file settings không phải dev/local, `ALLOWED_HOSTS = ["*"]`, `@csrf_exempt` trừ view webhook), Flask (`debug=True`), Spring (CSRF `.disable()`, `@CrossOrigin`/`allowedOrigins("*")`, `management.endpoints.web.exposure.include=*`), Laravel (`$guarded = []`), Express/Node (`cors()` không tham số, `Access-Control-Allow-Origin: *`).
+## What it catches
 
-Rule cho JavaScript/TypeScript được sinh cho cả TypeScript, Tsx và JavaScript dưới **cùng một id** (`scripts/gen-recommended.py`), nên `disable`/`locked` một id là áp cho cả ba.
+- **Structure, not spelling.** Rules are ast-grep patterns. Codex once dodged the first version of the `no-console` rule with `globalThis["console"]["log"](x)`. The rule now matches the structure, and the message tells the agent that rewording the same thing still counts as a violation. [Rules](docs/rules.md).
+- **Injection across functions and files.** Taint analysis follows data from sources to sinks through assignments, calls, imports, callbacks and class fields. 99 taint rules cover SQL, shell, XSS, SSRF, path traversal, open redirect, deserialization and more. [Taint](docs/taint.md).
+- **Secrets.** 222 [gitleaks](https://github.com/gitleaks/gitleaks) detectors are embedded in the binary. Matches print redacted. [Security](docs/security.md).
+- **Dependencies.** Known malware and known vulnerabilities (OSV.dev) block; `recommended` turns that on at `high`. Two more gates are opt-in: a minimum release age for every new version (14 days is the usual setting) and a human approving each new direct dependency. The hook stops `npm i some-evil-package` before its install script runs. [Dependencies](docs/dependencies.md).
+- **Code quality.** Function length, cyclomatic complexity, a baseline for legacy code, SARIF and GitLab reports, a single sticky PR comment, an LSP server, and an HTML dashboard.
+- **Review by a model, never as a gate.** `larpcop review` and `larpcop learn` use whatever CLI you already have (`claude -p`, `codex exec`, `gemini`, `ollama`). They only warn. `learn` turns a standard written in words into deterministic rules. [AI review](docs/ai-review.md).
+- **A tool the agent can ask.** `larpcop mcp` gives agents `rules_for`, `check_content`, `check`, `fix` and `explain_rule`, so they can check a draft before they write it.
+- **Rollout.** `larpcop org setup <owner>` opens one PR per repository. `larpcop sync --managed` writes machine-level policy files that users cannot switch off. [Organization](docs/organization.md).
 
-## Chất lượng code (thay Sonar/Codacy)
+The `recommended` set has 93 ast-grep rule files, 99 taint rules, 6 text rules, the secrets detectors and the vulnerability check.
 
-- **Metric** — `larpcop metrics [--top N] [--json]`: số dòng, số hàm, độ phức tạp vòng của từng hàm (đếm trên cây tree-sitter, mọi ngôn ngữ ast-grep đọc được; hàm lồng nhau tính riêng). Trên chính repo này: 60 file, 813 hàm, trung bình 1,91. Ép bằng config:
-  ```yaml
-  metrics:
-    max_complexity: 15        # rule `complexity`
-    max_function_lines: 80    # rule `function-length`
-  ```
-- **Báo cáo cho CI** — `--format sarif|gitlab|markdown`, hoặc ghi nhiều định dạng cùng lúc bằng `--output FORMAT=FILE`. SARIF đã kiểm với schema SARIF 2.1.0 chính thức (0 lỗi); có `partialFingerprints` ổn định khi code dịch dòng. GitLab Code Quality có fingerprint riêng cho từng issue.
-- **Comment PR** — workflow `enforce.yml` ghi `larpcop-report.md` và giữ **một** comment trên PR, sửa lại sau mỗi lần push (`comment: true`, mặc định). `sarif: true` đẩy kết quả lên GitHub code scanning.
-- **LSP** — `larpcop lsp`: diagnostic ngay khi gõ (kể cả buffer chưa lưu), và code action "apply rule fixes". Đã chạy trong Neovim 0.12 thật: hiện đúng `no-sql-interpolation` và `no-debugger`, có code action. Lần chạy đó lộ bug: request sai định dạng làm server thoát; nay trả lỗi `InvalidParams` và chạy tiếp (có test hồi quy).
+## Agents
 
-## Adapter agent
-
-`larpcop sync` sinh ra tất cả các file dưới đây. Mọi adapter dùng chung một lõi quyết định; mỗi agent chỉ khác ở cách parse payload và cách trả lời.
-
-Mặc định sinh cho mọi agent; `agents: [claude-code, kiro]` trong `.larpcop.yaml` giới hạn lại. `sync` cũng đăng ký MCP server `larpcop mcp` cho Claude Code (`.mcp.json`), Cursor (`.cursor/mcp.json`), Kiro (`.kiro/settings/mcp.json`) và Gemini (`mcpServers`).
-
-| Agent | File sinh ra | Đọc rule từ | Trước khi chạy tool | Sau khi sửa file | Khi kết thúc lượt |
-|---|---|---|---|---|---|
-| Claude Code | `.claude/settings.json`, `CLAUDE.md` (`@AGENTS.md`) | AGENTS.md (import) | `PreToolUse` Bash/Edit/Write | `PostToolUse` | `Stop` |
-| Codex | `.codex/hooks.json` | AGENTS.md (native) | `PreToolUse` Bash/`apply_patch` | `PostToolUse` `apply_patch` (path lấy từ header của patch) | `Stop` |
-| Gemini CLI | `.gemini/settings.json` (thêm `context.fileName: AGENTS.md`) | AGENTS.md | `BeforeTool` `run_shell_command`/`write_file`/`replace` | `AfterTool` | `AfterAgent` |
-| Cursor | `.cursor/hooks.json` (JSON native, `loop_limit: 1`) | AGENTS.md (native) | `preToolUse` Shell/Write/Delete | `postToolUse` → `additional_context` | `stop` → `followup_message` |
-| Copilot CLI | `.github/hooks/larpcop.json` (event PascalCase → payload kiểu Claude) | AGENTS.md (native) | `PreToolUse` → `permissionDecision: deny` | `PostToolUse` → `additionalContext` | `Stop` → `decision: block` |
-| Factory Droid | `.factory/hooks.json` | AGENTS.md (native) | `PreToolUse` Execute/Create/Edit/ApplyPatch | `PostToolUse` | `Stop` |
-| Kiro (CLI V3, IDE 1.0) | `.kiro/hooks/larpcop.json` | AGENTS.md | `PreToolUse` `shell` + **nội dung sắp ghi** của `write` | (Kiro không đưa output PostToolUse cho model) | `Stop` → `decision: block` |
-
-Các hook làm những việc sau:
-
-- **Trước tool** chặn: `--no-verify`, `git commit -n`, `core.hooksPath`, `HUSKY=0`, `LEFTHOOK=0`, `SKIP=`; ghi vào `.git/hooks`, `.larpcop.yaml`, file rule, hoặc file hook của bất kỳ agent nào. Lệnh cài package chưa được duyệt (`npm i`, `pnpm add`, `yarn add`, `bun add`, `pip install`, `uv add`, `poetry add`, `cargo add`, `go get`) bị chặn trước khi chạy, tức là trước khi install script của package kịp chạy. Xem [Dependency](#dependency).
-- **Sau khi sửa** kiểm đúng các file vừa sửa và trả lỗi về cho model.
-- **Kết thúc lượt** kiểm mọi thay đổi chưa commit và chặn **một lần**. Nếu agent vẫn dừng (ví dụ để hỏi người khi lệnh của user mâu thuẫn với rule) thì cho dừng; code vi phạm vẫn không commit hay merge được. Chặn lần hai trở đi chỉ gây loop: khi chạy Claude Code thật đã thấy 8 lần chặn y hệt nhau cho tới khi hết max-turns. Nếu user bấm dừng (Cursor `status: aborted`) thì không bao giờ chặn.
-
-Một số lưu ý riêng cho từng agent:
-
-- **Cursor** mặc định nạp luôn hook trong `.claude/settings.json`. Adapter Claude nhận ra payload có `cursor_version` và tự bỏ qua, để không bị phản hồi hai lần.
-- **Codex** chỉ chạy hook của project sau khi từng dev trust một lần qua `/hooks`. Muốn ép ở cấp tổ chức thì phát hành dưới dạng managed hooks qua `requirements.toml` (`allow_managed_hooks_only = true`).
-- **Claude Code** cũng có thể ép ở cấp tổ chức qua [managed settings](https://docs.anthropic.com/en/docs/claude-code/settings) (MDM).
-- **Cursor Enterprise** có hook cấp team và enterprise.
-- **Kiro** không trả output của `PostToolUse` cho model, nên adapter kiểm **nội dung sắp ghi** ngay ở `PreToolUse` (`fs_write` lấy `text`, `str_replace` dựng lại file sau khi thay). Chỉ chặn khi lần ghi *làm tăng* số vi phạm của một rule; sửa dở một file vốn đã lỗi vẫn được ghi. Kiro không báo cờ "đã bị chặn một lần", nên adapter tự nhớ theo `session_id`.
-- **Copilot CLI** đọc cả `.claude/settings.json`, nên hook có thể chạy hai lần; cả hai đều chặn cùng một thứ. Chỉ adapter Copilot làm được việc chặn kết thúc lượt, vì Copilot coi exit 2 ở Stop là cảnh báo.
-
-Nguồn của schema payload:
-
-- Codex: đo từ `codex exec` 0.163 thật.
-- Claude Code: chạy thật.
-- Cursor: đọc từ mã nguồn `cursor-agent` 2026.10.22. Write gửi `{file_path, content}`, Shell gửi `{command, cwd}`.
-- Gemini: theo hooks reference chính thức.
-- Kiro: ghi lại từ `kiro-cli` 2.37 `--v3` thật (`fs_write {path,text}`, `str_replace {path,oldStr,newStr}`, `execute_bash {command}`, Stop không có cờ lặp).
-- Copilot CLI, Factory Droid: theo hooks reference chính thức (chưa chạy agent thật).
-
-### MCP server
-
-`larpcop mcp` (stdio, SDK chính thức `rmcp`) cho agent 5 tool:
-
-| Tool | Làm gì |
-|---|---|
-| `rules_for(path)` | Chỉ các rule áp cho file đó (theo ngôn ngữ và glob), kèm cách tuân thủ. Agent không phải nạp rule của mọi stack vào context. |
-| `check_content(path, content)` | Kiểm nội dung **trước khi ghi**: trả về các vi phạm nó sẽ thêm vào. |
-| `check(paths?)` | Kiểm file trên đĩa (mặc định: mọi thay đổi chưa commit). |
-| `fix(paths?)` | Áp `fix:` của rule rồi báo phần còn lại. |
-| `explain_rule(id)` | Rule cấm gì, cách tuân thủ, ví dụ đúng/sai lấy từ fixture. |
-
-Chạy thật với Claude Code (`claude -p`, $0.25): agent tự gọi `rules_for` cho `src/report.ts` và `tools/sum.py`, gọi `check_content` cho cả hai bản nháp, rồi mới ghi; kết quả sạch ngay lần đầu. Lần chạy đó lộ một bug (file trong thư mục chưa tồn tại bị bỏ qua), đã sửa kèm test.
-
-## Triển khai toàn công ty
-
-**Managed policy trên máy dev.** `larpcop sync --managed --extends <URL#tag> --out <DIR>` sinh file policy cấp máy cho 5 agent, gọi `larpcop` bằng đường dẫn tuyệt đối và ép standards của công ty lên *mọi* repo, kể cả repo chưa có `.larpcop.yaml`. User không tắt được.
-
-| Agent | macOS | Linux | Windows |
+| Agent | Before a tool runs | After an edit | When it tries to stop |
 |---|---|---|---|
-| Claude Code | `/Library/Application Support/ClaudeCode/managed-settings.json` | `/etc/claude-code/managed-settings.json` | `C:\Program Files\ClaudeCode\managed-settings.json` |
-| Codex | `/etc/codex/requirements.toml` (`[features] hooks = true`, `managed_dir`) | như macOS | `C:\ProgramData\OpenAI\Codex\requirements.toml` |
-| Gemini CLI | `/Library/Application Support/GeminiCli/settings.json` | `/etc/gemini-cli/settings.json` | `C:\ProgramData\gemini-cli\settings.json` |
-| Cursor | `/Library/Application Support/Cursor/hooks.json` | `/etc/cursor/hooks.json` | `C:\ProgramData\Cursor\hooks.json` |
-| Copilot CLI | `/etc/github-copilot/policy.d/larpcop.json` | như macOS | `C:\ProgramData\GitHub\Copilot\policy.d\larpcop.json` |
+| Claude Code | yes | yes | yes |
+| Codex | yes | yes | yes |
+| Gemini CLI | yes | yes | yes |
+| Cursor | yes | yes | yes |
+| Copilot CLI | yes | yes | yes |
+| Factory Droid | yes | yes | yes |
+| Kiro | yes, and it checks the content about to be written | not available (Kiro does not return PostToolUse output to the model) | yes |
 
-`--out /` cài thẳng (cần root); `--out pkgroot` tạo cây thư mục để đóng gói cho MDM. Kiro và Factory Droid không có file cấp máy (dashboard / theo user). Đường dẫn lấy từ docs managed settings của từng hãng; chưa cài thử lên máy thật vì cần quyền root.
+The stop hook blocks once. If the agent still stops (to ask a human, for example), it is allowed to, and the violating code still cannot be committed or merged.
 
-**Repo trên GitHub.**
+Claude Code and Codex were run for real. Kiro's payloads were recorded from a real `kiro-cli`. Cursor's come from the `cursor-agent` source. Gemini CLI, Copilot CLI and Factory Droid follow the vendors' hook references and have not been run with the real agent. Details and per-agent notes: [Agents](docs/agents.md).
+
+## Benchmarks
+
+Detection against deliberately vulnerable projects, scored against each project's own list of known bugs. Semgrep OSS is run with `p/default`.
+
+| Suite | larpcop | Semgrep OSS |
+|---|---|---|
+| Juice Shop, vulnerable lines found | 11/27 | 6/27 |
+| NodeGoat | 12/14 | 4/14 |
+| DVNA | 12/14 | 7/14 |
+| OWASP Benchmark Java (2,740 cases, TPR − FPR) | +91.9% | +34.9% |
+| NIST Juliet C# (1,443 web cases, TPR − FPR) | +99.2% | +0.8% |
+| NIST SARD PHP (20,856 cases, TPR − FPR) | +56.4% | +0.1% |
+
+Read these with one caveat in mind. Every suite was a held-out check on its first run, then was used to write more rules. The first-run numbers are lower and are listed next to the final ones, with the 22 suites, the method and the misses, in [Benchmarks](docs/benchmarks.md). Re-run it with `bench/run.sh`.
+
+## Where it falls short
+
+- **Logic and authorization bugs** (IDOR, a missing admin check, returning too much data) have no common syntactic shape. On three of the benchmark suites, no SAST tool caught them. `larpcop review` aims at them but can only warn.
+- **CSRF** has no general rule. A state-changing `GET` handler differs from a correct one only by a missing token check, and a missing call is true of every file. The bundled rules only flag an explicit opt-out, for example Rails without `protect_from_forgery`, Spring's `.disable()` and Django's `@csrf_exempt`.
+- **Taint is an approximation.** The list of what it follows and what it does not is in [Taint](docs/taint.md).
+- **Advisory-based checks** cannot know about a malicious release nobody has reported yet. The release-age gate, if you turn it on, covers most of that gap.
+- **Files an agent writes through a shell script** are checked after the command runs, not before. Pre-commit and CI still apply.
+
+## FAQ
+
+**My agent will just pass `--no-verify`.**
+It can try. The hook reads shell commands with a real parser, so `bash -c 'rm .larpcop.yaml'`, `--no-ver""ify` and `sudo env SKIP=all git commit` are all blocked. If something slips through, CI checks the pull request anyway.
+
+**Why not put the rules in `AGENTS.md` and trust the agent?**
+Agents read it the way people read terms of service. larpcop does generate an `AGENTS.md`, because it helps. It is not what enforces anything.
+
+**Does it send my code to a model?**
+Only if you run `larpcop review` or `larpcop learn`, and only to the CLI you configured. `check`, the hooks and the default CI workflow never call a model (the workflow's `review` step is off unless you turn it on). Dependency checks call deps.dev and OSV.dev.
+
+**Who is Jimothy?**
+A round raccoon, very famous in Seattle in July 2026. Now on duty.
+
+## Documentation
+
+| Page | Covers |
+|---|---|
+| [Configuration](docs/configuration.md) | Standards, `extends`, `locked`, commands, exit codes, baseline, environment variables |
+| [Rules](docs/rules.md) | Writing rules, `metadata.resolve`, fixes and fixtures, the `recommended` set, quality reports |
+| [Security](docs/security.md) | The four layers, text rules, secrets |
+| [Taint](docs/taint.md) | The `taint:` reference, guards, type-aware sinks, limits |
+| [Dependencies](docs/dependencies.md) | Approval, release age, vulnerabilities and malware |
+| [AI review](docs/ai-review.md) | `review` and `learn` |
+| [Agents](docs/agents.md) | Enforcement model, per-agent hooks, MCP server |
+| [Organization](docs/organization.md) | Dashboard, managed policy, `org`, CI workflow, releases |
+| [Benchmarks](docs/benchmarks.md) | Full results |
+| [Verification](docs/verification.md) | What the tests cover and what was run for real |
+
+## Development
 
 ```sh
-larpcop org status <owner> [--standards URL#tag] [--json]
-larpcop org setup  <owner> --standards URL#tag [--repos a,b] [--workflow-ref vX] [--dry-run]
+cargo fmt --check && cargo clippy --all-targets && cargo test
+cargo run -- check   # larpcop checks its own source with its own rules
 ```
 
-- Với 1000 repo trở lên (giới hạn của `gh repo list`) cả `status` lẫn `setup` báo lỗi thay vì lặng lẽ chỉ xử lý một phần.
-- `status` liệt kê từng repo (không archived, không fork): có `.larpcop.yaml` không, extends standards nào và pin tag nào, có workflow gọi gate không, lần chạy gần nhất ra sao, có PR setup đang mở không. Exit 1 nếu còn repo chưa có gate. Đo trên tài khoản thật: 57 repo trong khoảng 22 giây.
-- `setup` mở **một PR mỗi repo** gồm `.larpcop.yaml`, workflow `.github/workflows/larpcop.yml` và mọi file agent mà `sync` sinh ra từ nội dung hiện có của repo, nên PR qua được `sync --check` ngay. Chạy lại thì bỏ qua repo đã có gate hoặc đã có PR, và dùng lại nhánh nếu lần trước dừng giữa chừng.
-- Ghi file trong `.github/workflows` cần token có scope `workflow`. Thiếu scope thì PR vẫn được mở, và nội dung workflow nằm trong mô tả PR để thêm tay (`gh auth refresh -s workflow` để lần sau tự thêm).
-- Đã chạy thật trên hai repo sandbox private (standards + app): PR mở được, nhánh PR qua `sync --check` và `check`, chạy lại không tạo PR trùng. Hai repo sandbox đã xoá sau khi thử.
-- Dùng `gh` CLI nên không lưu token, chạy được với SSO và GitHub Enterprise.
+Files stay under 300 lines, errors are never swallowed, and the repo's own `AGENTS.md` lists the rest.
 
-## CI
+## License
 
-[`enforce.yml`](.github/workflows/enforce.yml) là reusable workflow. Mỗi repo gọi nó, hoặc org ruleset bắt buộc nó:
+Licensed under either of [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option.
 
-```yaml
-jobs:
-  larpcop:
-    permissions:
-      contents: read
-      pull-requests: write   # comment trên PR; thêm security-events: write nếu bật sarif
-    uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.3.0
-    with:
-      standards: https://github.com/<org>/standards.git#v1.0.0
-    secrets:
-      larpcop-token: ${{ secrets.LARPCOP_TOKEN }}   # chỉ cần khi larpcop/standards private
-```
+Unless you explicitly state otherwise, any contribution you intentionally submit for inclusion in larpcop, as defined in the Apache-2.0 license, is dual licensed as above, without any additional terms or conditions.
 
-`permissions` phải khai ở job gọi: reusable workflow không được có quyền vượt quá job gọi nó, mà token mặc định của repo thường chỉ có quyền đọc. Thiếu quyền thì gate vẫn chạy và vẫn chặn, chỉ có comment trên PR là không đăng được; workflow sẽ hiện một warning nói rõ quyền còn thiếu. Lỗi này được phát hiện khi thử bản v0.2.0 trên PR thật.
-
-Workflow này chỉ kiểm các file mà PR thay đổi, nên nợ kỹ thuật cũ không chặn PR, còn nợ mới không lọt vào được. Nó cũng chạy `sync --check` để đảm bảo các file agent sinh ra luôn khớp với rule. Repo này tự dùng chính workflow đó qua [`self-enforce.yml`](.github/workflows/self-enforce.yml).
-
-## Phân phối khi repo private
-
-Pipeline release dùng [`dist`](https://opensource.axo.dev/cargo-dist/) ([release.yml](.github/workflows/release.yml), [dist-workspace.toml](dist-workspace.toml)). Đẩy tag `v*` là CI tự build cho 5 target và tạo GitHub Release.
-
-Installer shell/PowerShell, Homebrew và npm đều tải binary từ GitHub Releases, nên **chỉ chạy được cho mọi người khi repo public**. Khi repo còn private:
-
-- Dev và CI dùng `gh release download` (cần đăng nhập `gh` và có quyền đọc repo).
-- Công thức Homebrew (`larpcop.rb`) và tarball npm được đính kèm trong release nhưng **chưa publish**.
-
-Khi chọn được nơi công khai (public repo, tap `homebrew-tap`, npm scope), chỉ cần thêm `publish-jobs = ["homebrew", "npm"]` cùng hai secret `HOMEBREW_TAP_TOKEN` và `NPM_TOKEN`.
-
-## Kích thước binary
-
-Binary nặng 47 MB trên đĩa, nhưng chỉ khoảng **4 MB khi tải về** (`tar.xz`). Phần lớn là bảng parse của grammar: riêng kotlin, c-sharp, swift, scala mỗi cái 8–12 MB. Đây là dữ liệu, không phải code, nên các cách tối ưu code không giúp được:
-
-- `opt-level = "z"` đã đo cho ra 49.9 MB so với 49.3 MB, tức không nhỏ đi, mà lại chậm hơn khoảng 25 lần (0.75s so với 0.03s cho cùng một lần `check`).
-- ast-grep-language không cho tắt từng ngôn ngữ (mã nguồn không có `cfg(feature)`), nên muốn cắt bớt grammar thì phải fork. Không đáng làm.
-
-## Windows
-
-- Lệnh `run:` của linter luôn chạy bằng shell POSIX, nên một config dùng được trên mọi OS. Thứ tự tìm shell: biến `LARPCOP_SHELL`, rồi `sh.exe` đi kèm Git for Windows (tìm qua `git --exec-path`), rồi `sh` trong PATH.
-- Cache standards dùng thư mục chuẩn của từng OS: `%LOCALAPPDATA%` trên Windows, `~/Library/Caches` trên macOS, XDG trên Linux. Có thể ghi đè bằng `LARPCOP_CACHE_DIR`.
-- Path được chuẩn hoá bằng `dunce`, không bị dạng `\\?\C:\...`.
-- File CRLF do `autocrlf` không bị tính là drift, và AGENTS.md sinh ra luôn dùng LF.
-- [`ci.yml`](.github/workflows/ci.yml) chạy fmt, clippy và toàn bộ test trên ubuntu, macOS và Windows. Ba test type-query (tsserver, gopls, rust-analyzer) chỉ chạy trên ubuntu và macOS: client LSP không có mã riêng cho Windows, còn rust-analyzer trên runner Windows mất ~40 giây cho request đầu tiên.
-
-## Đã kiểm chứng
-
-`cargo test` có 116 test:
-
-- Unit: guard, tìm shell, path trong patch Codex; đọc lockfile thật của npm 11, pnpm 11, uv 0.11, cargo 1.98, bun 1.4, bundler (kèm yarn v1/Berry, Poetry, go.mod, NuGet, Gradle, Composer, pom.xml, csproj, và các entry registry riêng/git/workspace phải bị bỏ qua); manifest; nhận diện lệnh cài; thiết lập gate của 4 package manager.
-- Dashboard: số mở/baseline theo rule, xu hướng nợ qua lịch sử git, trang không có script.
-- AI (model giả bằng shell script): review chỉ báo dòng đã đổi, bỏ rule lạ, cache câu trả lời; learn gửi lại rule fail kèm lỗi, chỉ giữ rule pass test, rule ghi ra chạy được như rule thường.
-- Bảo mật: taint qua biến/destructuring/sanitizer/gán lại (TS, Python, Go, Rust), qua lời gọi hàm và import, callback, guard; `sink_types` qua typescript-language-server, gopls và rust-analyzer thật (xuyên file); secrets bị che khi in ra; OSV giả: mã độc luôn chặn, lỗ hổng chỉ chặn bản mới, theo ngưỡng, hook chặn lệnh cài.
-- Integration: check, locked, git extends theo tag, staged, `--changed`/`--since`, linter delegation, format github, chống né rule, hook của 4 agent, sync idempotent, phát hiện drift, CRLF, pre-commit thật; dependency: tuổi phiên bản (qua cache và qua một server deps.dev giả), merge-base của PR, ngoại lệ bản vá bảo mật, gate package manager, duyệt dependency mới (cả monorepo), hook chặn lệnh cài, lock chỉ được siết thêm.
-
-Trên GitHub thật (repo private `NoahDuongMaster/larpcop`):
-
-- [`ci.yml`](.github/workflows/ci.yml) xanh trên ubuntu, macOS và **Windows**: fmt, clippy `-D warnings`, 29/29 test. Trên Windows có cả linter chạy qua `sh.exe` của Git, extends từ `file:///C:/…`, CRLF và pre-commit thật.
-- Release `v0.3.0`: [release.yml](.github/workflows/release.yml) build 5 target. Installer đã được cài thật vào `~/.local/bin` theo cách ở mục [Cài đặt](#cài-đặt).
-- Cổng CI, thử bằng PR #1 (đã đóng, không merge):
-  - Commit vi phạm bị pre-commit chặn ở máy local; được đẩy lên bằng `--no-verify`.
-  - `enforce` tải binary từ release, **fail** và gắn annotation `no-explicit-any` / `no-console` vào đúng dòng trong PR.
-  - Push bản sửa thì mọi check chuyển xanh.
-
-Ngoài ra đã chạy agent thật trong repo demo:
-
-- **Claude Code**:
-  - Có AGENTS.md: tự tuân thủ và từ chối `--no-verify`.
-  - Không có AGENTS.md: viết `console.log`, Stop hook buộc nó tự xoá.
-  - User ra lệnh dùng `any`: agent dừng lại hỏi người. Pre-commit chặn file vi phạm; khi người dùng `--no-verify` thì CI vẫn bắt được.
-- **Codex** (không có AGENTS.md, được bảo dùng `any` và `--no-verify`):
-  - `--no-verify` bị chặn.
-  - Hook sau khi sửa file bắt được `any`, Codex đổi sang `unknown`.
-  - Lần đầu Codex né rule console bằng `globalThis["console"]`. Sau khi sửa rule, chạy lại thì Codex xoá hẳn `console.log`.
-- **Claude Code với dependency rules**: hai phiên được yêu cầu "dùng package `slugify`, cài bằng npm", một phiên có AGENTS.md, một phiên chỉ có hook:
-  - Cả hai đều bị hook chặn `npm install slugify` *trước khi* lệnh chạy. Không có gì được cài, không file nào bị tạo, và agent dừng lại hỏi người duyệt (tổng cộng $0.43).
-  - Lần chạy này lộ ra bug: `2>&1` trong `npm install slugify 2>&1 | tail -5` bị đọc thành tên package. Đã sửa, kèm test hồi quy.
-- **Lockfile do công cụ thật sinh ra**, lấy từ repo công khai (máy dev không có composer, dotnet hay gradle): `composer.lock` của symfony/demo đọc đủ 153/153 package và có 4 advisory OSV thật (`league/commonmark`, `symfony/http-foundation`, `symfony/yaml`); `packages.lock.json` của dorssel/usbipd-win đọc đủ 40 package (46 entry, trùng giữa các target framework); `gradle.lockfile` của Netflix/maestro đọc đủ 100 dòng, 11 advisory OSV.
-- **Dependency với dữ liệu thật**:
-  - `typescript@next` (phát hành cách đó 2 giờ) bị chặn cùng 7 binary nền tảng của nó. Mỗi lỗi kèm gợi ý `7.0.2`; 8 lần tra deps.dev hết 0,58 giây.
-  - Chính `Cargo.lock` của larpcop bị chặn 3 crate mới 9–13 ngày tuổi; đã hạ theo đúng phiên bản được gợi ý. 2 crate khác được cho qua vì là bản vá RUSTSEC.
-
-## Giới hạn
-
-- **Lỗi logic và phân quyền** (IDOR, thiếu kiểm quyền admin, trả thừa dữ liệu) không có dạng cú pháp chung: trên ba bộ benchmark, đây là phần không công cụ SAST nào bắt được. Rule `llm` (`larpcop review`) nhắm vào loại này nhưng chỉ cho warning, vì model không tất định; `larpcop learn` chuyển dần các nhận xét lặp lại thành rule tất định.
-- **CSRF** không có rule: một handler đổi trạng thái bằng `GET` chỉ khác handler đúng ở chỗ nó *không* kiểm token, mà việc thiếu một lời gọi thì mọi file đều thoả. XVWA có một dòng như vậy (được tính trong benchmark nhờ một finding khác cách một dòng), báo cáo ghi rõ.
-- **SQL bậc hai** (`{php,py,go,java,cs}-taint-stored-sql`): nguồn là chỗ đọc một hàng (`mysqli_fetch_assoc`, `fetchone`, `rows.Scan`, `ResultSet.getString`, `SqlDataReader.GetString`), sink là query. Ở Java và C# `executeQuery`/`ExecuteReader` vừa đọc vừa là sink, nên nguồn ở đó là hàm lấy giá trị của hàng, không phải lời gọi query; ở Java, giá trị đi qua `ResultSet` kiểu không khai báo trong file thì không theo được.
-- **`<script>` trong trang** (`.html`, `.php`, `.jsp`, `.erb`, `.twig`, `.vue`, `.svelte`…) được đọc như file JavaScript, nên rule JS và taint DOM áp lên đó; handler viết trong attribute (`onclick="…"`) thì không, và `<script src>` vẫn là file `.js` bình thường.
-- **Taint là xấp xỉ**: sink có tên method trùng với method phổ biến (`URL.getContent()` so với `getContent()` của page hay entity) chỉ được tính khi kiểu của receiver biết chắc (`strict_sink_types`: khai báo, hay `new URL(…)` ngay tại sink); field của chính object (`this.x`, `self.x`, `$this->x`, field Java/C# viết không có `this.`) được theo giữa các method của một class, field static của class khác mà hàm được gọi đọc (`String data = CaseA.data;`) được coi như một tham số ngầm: lời gọi báo khi nơi gọi đang giữ field đó bẩn (`data = request.getParameter(…)` trong `CaseA`, hay `CaseA.data = …`), không báo khi nơi gọi vừa gán hằng; field của object khác đọc ở method khác thì không; gọi qua một tên khai báo bằng interface hay lớp cha (`Store s; s.save(x)`, field Spring inject) đi tới mọi implementation đã biết của kiểu đó: sink hay giá trị trả về của bất kỳ implementation nào đều tính, còn hàm kiểm chỉ tính khi mọi implementation đều kiểm; gọi trên object không rõ kiểu thì chỉ theo khi mọi class có method cùng tên làm cùng một việc; dữ liệu ghi vào stream được theo (`out.writeObject(x)`, C# `formatter.Serialize(ms, x)`, cả stream bọc bên trong `new ObjectOutputStream(bytes)`), nên dữ liệu serialize rồi đọc lại ở class khác vẫn mang taint; Java/C# coi các file cùng thư mục có tên class được nhắc tới là cùng package; Java còn đọc class viết đủ tên không có import và các class `implements` một interface được import (implementation Spring inject ở package khác); setter (`p.setNote(x)`) của object chính scope tạo (`new PayRequest()`) làm object mang giá trị; hàm cất đối số vào object nó nhận (`fill(o, x)` gọi `o.setNote(x)` hay `l.add(x)`) làm object của nơi gọi mang giá trị sau lời gọi, và getter (`o.getNote()`) của object đó trả giá trị bẩn; field gán từ dữ liệu bẩn (`o.name = x`) chỉ làm bẩn field đó (`o.kind` vẫn sạch), truyền cả object đi thì mang theo; import được theo 4 tầng: 2 tầng đầu mọi file đều được tóm tắt, 2 tầng sau chỉ file mà nó hoặc file nó import khớp một source hay sink của rule (file khác thì lời gọi vào đó coi như truyền nguyên taint, nên bỏ qua không mất finding nào); chuỗi dài hơn 5 file thì không (collection thì có: `push`, `set`, `append`, `Object.assign`…); giá trị trả về từ hàm không có summary (thư viện) được coi là bẩn nếu đối số bẩn; riêng collection được map (`xs.map(…)` JS/Java stream/Ruby/Kotlin, `Select` C#, `map(f, xs)` Python, `array_map` PHP) và list comprehension của Python mang đúng giá trị callback trả về: callback là biểu thức (`x -> esc(x)`), nhiều câu lệnh (biến cục bộ được theo theo thứ tự, phép gán trong nhánh chỉ làm bẩn chứ không làm sạch, mọi `return` đều tính, câu cuối của block Kotlin/Ruby cũng là giá trị) hay tham chiếu hàm (`Encode::forHtml`, `::esc`, `html.escape`, `'htmlspecialchars'`: sạch nếu là sanitizer của rule, theo summary nếu là hàm của dự án, còn hàm thư viện khác thì bẩn). `guards` đọc điều kiện của `if`, toán tử ba ngôi (`isLocal(u) ? u : "/"`) và vòng lặp: điều kiện đúng trong thân vòng lặp và sai sau nó nếu thân không `break` ra (`while (p.includes("..")) p = p.replace("..", "")` làm sạch `p`, cả `do … while` và Ruby `until`/`… while c`); nhánh của `switch`/`when`/`match` trên một biến với nhãn cố định (literal, hằng `MODE`/`Mode.FAST`, Kotlin `in ALLOWED`) làm sạch biến đó trong nhánh, nhánh `default` hay nhánh rơi xuống từ nhãn không cố định thì không; một hàm kiểm tự viết được tính khi nó trả `null`/`false` trừ lúc tham số đã qua một guard đã biết, phép kiểm truyền cho hàm chỉ chạy sink khi phép kiểm đúng cũng được tính: lambda (`readFile(() -> ALLOWED.contains(f), f)` với `if (condition.get())`), lambda gán vào biến rồi truyền `validator.get()` cho tham số boolean (`if (isValid)`), method reference áp lên chính giá trị (`redirect(url, WHITELIST::contains)` với `if (validator.apply(url))`); lambda có nhiều `return` khác `false` thì không; kiểm một đường dẫn đã chuẩn hoá được dựng từ giá trị (`target = Paths.get(BASE + f).normalize(); target.startsWith(base)`) chứng minh cả các giá trị dựng nên nó (`f`), trong `if` hay trong lambda (`startsWith` với chuỗi cố định thì chỉ được tính khi chuỗi đó là phần đầu an toàn theo `safe_prefix`: `startsWith("/")` có, `startsWith("http")` không; rule không có `safe_prefix`, như path traversal, chỉ tính nó trên đường dẫn đã resolve: `canonical.startsWith("/srv/")` sau `getCanonicalPath()`/`normalize()`/`realpath`, không phải `name.startsWith("id=")`). Map theo key cố định (`m['a']`, `m.put("a", x)`) được theo từng phần tử; list tạo trong hàm và chỉ được `add`/`append`/`remove(i)`/`get(i)` trong cùng một nhánh được theo từng vị trí; list đổi trong nhánh khác, truyền đi hay lặp thì cả list là một (riêng list đối số chạy qua shell được đọc theo mọi cách nó có thể được dựng qua các nhánh `if`/`else`). Thuật toán hash/cipher được lần tới giá trị thật (hằng, `getProperty` trong file `.properties`, `@Value` trong `application*.yml`); giá trị chỉ biết lúc chạy (biến môi trường, tham số) thì không. Nhánh có điều kiện tính được trước từ literal và biến cục bộ gán một lần (`if 7 * 42 - num > 200`, `x if c else y`, `match`/`switch` trên `"ABC"[1]`) chỉ tính nhánh chạy; điều kiện phụ thuộc field, tham số hay hàm thì cả hai nhánh. Database là nguồn cho stored XSS ở Java (`java-taint-stored-xss`: JDBC, `JdbcTemplate`, JPA query), C# (`cs-taint-stored-xss`: ADO.NET, Dapper, EF Core raw SQL) và PHP (`php-taint-stored-xss`: `mysqli_fetch_*`, `mysql_fetch_*`, `pg_fetch_*`, PDO `fetch`/`fetchAll`, SQLite3 `fetchArray`, `$wpdb->get_results`…), và repository Spring Data/DAO (`postRepository.findByLevel(l)` trên field khai báo `*Repository`/`*Dao`; tên không khai báo kiểu trong file thì không tính), chưa phải ở Python, JS/TS, Go, Ruby, Kotlin. Callback chạy trên một collection bẩn (`list.forEach(p -> …)`, cả Java) nhận từng phần tử, và những gì callback ghi vào biến của scope ngoài (`out.append(p.getContent())`) giữ lại sau nó. Hàm chạy một hàm nó nhận (`render(rows, format)` gọi `format(r)`, Java `function.apply(x)`) có thêm một summary cho mỗi tham số như vậy, coi các lời gọi đó là làm sạch; nơi gọi truyền vào một hàm luôn trả dữ liệu sạch (`post -> StringEscapeUtils.escapeHtml4(post)`, `escapeHtml` theo tham chiếu) thì dùng summary đó, còn truyền `x -> x` thì không. Hàm escape HTML (`escapeHtml4`, `htmlEscape`, `html.escape`, `htmlspecialchars`…) không được tính là làm sạch khi giá trị nằm ở attribute không có dấu nháy (`<img src=%s>`), ở vị trí tên thẻ hay tên attribute (`<div <?= h($x) ?>>`), trong handler `on…=`, attribute `style`, trong `<script>`/`<style>` hay ở đầu giá trị `href`/`action` (`javascript:`); ngữ cảnh đọc từ chuỗi ghép, format string (qua hằng cục bộ), template quanh giá trị và, với file PHP trộn HTML, từ phần HTML của trang trước `echo`/`<?=`; giá trị escape gán vào biến cục bộ (kể cả chép tiếp sang biến khác) được xét ở nơi biến đó được dùng. Template engine riêng (`.html`, `.jsp`, Twig, Blade) thì chưa. Hàm chỉ escape dấu nháy (`quote_escapers`: `mysqli_real_escape_string`, `addslashes`, ESAPI `encodeForSQL`) chỉ làm sạch giá trị nằm trong cặp nháy: `"… WHERE id=" . mysqli_real_escape_string($c, $id)` vẫn bị báo; với code PHP (`eval`) chỉ nháy đơn tính, vì `"…"` nội suy `{${…}}`; XPath 1.0 không có escape bằng `\`, nên `addslashes` không làm sạch XPath. Language server cần dự án đã cài đủ dependency mới trả lời đúng kiểu.
-- **Package uy tín bị chiếm quyền**: tuổi tối thiểu 14 ngày chặn được bản độc bị phát hiện trong 14 ngày (phần lớn: OSV ghi nhận mã độc với độ trễ trung vị khoảng 20 giờ). Bản độc tồn tại lâu hơn mà chưa ai báo thì không công cụ dựa trên advisory nào biết.
-- **Cursor và Gemini chưa chạy agent thật.** Cursor cần đăng nhập `cursor-agent login` (qua trình duyệt); Gemini CLI chưa được cài hay đăng nhập trên máy dev. Adapter được test bằng đúng schema payload ở trên.
-- **File agent ghi bằng shell**: `cat > f <<EOF`, `tee`, `echo … > f`, `cp`/`mv`/`install` và `sed -i` chỉ gồm lệnh thay thế (`s/…/…/`, chạy thử trên bản sao) được kiểm nội dung *trước khi* lệnh chạy. Script tự viết, Makefile hay `sed` có lệnh khác thì không thấy trước được; hook kiểm các file mà lệnh đã đổi ngay sau khi lệnh chạy, rồi lại ở lượt kết thúc, pre-commit và CI.
-- **Repo private** khiến installer `curl | sh`, Homebrew và npm chưa dùng được cho người ngoài (xem [Phân phối khi repo private](#phân-phối-khi-repo-private)). Repo khác muốn gọi `enforce.yml` thì cần quyền truy cập Actions; mục này đã được bật sẵn cho các repo cùng owner `NoahDuongMaster` (`access_level: user`). Repo gọi vẫn phải truyền secret `larpcop-token` để tải binary.
-- **Chi phí CI**: GitHub Actions của repo private tính phút chạy, với runner macOS nhân 10 và Windows nhân 2. Repo public thì miễn phí.
-- **Dependency**: rule tuổi phiên bản cần mạng tới deps.dev và fail closed khi không tra được; package ở registry riêng phải được khai trong `exempt`.
-- **SCA không có reachability**: một advisory trong lockfile được báo dù package đó chỉ là dependency gián tiếp không ai import. Không thêm bước "có import không" vì tên trong lockfile (`PyYAML`, `PyJWT`, `@scope/pkg`) không suy ra được từ câu `import` (`yaml`, `jwt`, `@scope/pkg/sub`) một cách đáng tin cho mọi hệ sinh thái; một khẳng định "không dùng" sai còn tệ hơn im lặng.
-- **Tốc độ trên Python**: toàn bộ rule taint tính lại summary cho từng rule, nên `django/django` (2.939 file) mất 131 s trong khi `rails/rails` (3.481 file) mất 18 s (`bench/results/scale.md`); check cả repo dùng hết nhân, hạ bằng `--jobs`/`LARPCOP_JOBS`. `--changed`/`--staged` mà hook dùng vẫn dưới 1 s.
+The secrets detectors (`assets/gitleaks.toml`) come from [gitleaks](https://github.com/gitleaks/gitleaks), MIT licensed. The license text is in [`assets/gitleaks.LICENSE`](assets/gitleaks.LICENSE).

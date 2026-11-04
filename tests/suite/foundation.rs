@@ -153,3 +153,19 @@ fn agents_cannot_rebaseline_or_edit_the_baseline() {
     );
     assert_eq!(repo.run_stdin(&["hook", "claude"], &input).code(), 2);
 }
+
+#[test]
+fn a_corrupt_baseline_at_the_base_commit_is_an_error_not_an_empty_one() {
+    let repo = Repo::with_standards();
+    repo.write("src/old.ts", "export const a: any = 1;\n");
+    repo.write(".larpcop-baseline.json", "{ not json");
+    repo.commit_all("corrupt baseline");
+    repo.write(".larpcop-baseline.json", "{\"version\":1,\"entries\":[]}\n");
+    let out = repo.run(&["check", "--changed"]);
+    assert_eq!(out.code(), 3, "{}{}", out.stdout(), out.stderr());
+    assert!(
+        out.stderr().contains("at the base commit"),
+        "{}",
+        out.stderr()
+    );
+}

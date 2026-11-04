@@ -4,9 +4,15 @@
 //! `sed`). Anything else is judged right after it runs (`shell_run`).
 
 use crate::shell_ast::{Command, Script};
-use std::io::Write;
+use anyhow::{Context, Result, bail};
+use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command as Process, Stdio};
+use std::sync::mpsc;
+use std::time::Duration;
+
+/// Longest a prediction may take: the hook runs before every tool call.
+const SED_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// (file, content it will have) for every write this script's commands predict.
 pub fn predicted(script: &Script, dir: &Path) -> Vec<(PathBuf, String)> {
@@ -96,26 +102,72 @@ fn sed_in_place(c: &Command, dir: &Path) -> Vec<(PathBuf, String)> {
     files
         .into_iter()
         .filter_map(|f| {
+            // A file that cannot be read as text (missing, binary) has nothing to predict;
+            // the real `sed` will say what is wrong with it.
             let old = std::fs::read_to_string(&f).ok()?;
-            Some((f, run(&sed, &args, &old)?))
+            match run(&sed, &args, &old, SED_TIMEOUT) {
+                Ok(new) => Some((f, new?)),
+                Err(e) => {
+                    eprintln!(
+                        "larpcop: warning: not predicting `sed` on {}: {e:#}",
+                        f.display()
+                    );
+                    None
+                }
+            }
         })
         .collect()
 }
 
-fn run(sed: &Path, args: &[String], input: &str) -> Option<String> {
+/// `input` through `sed`; `None` when sed rejects the script or answers in
+/// something other than UTF-8. Errors when sed cannot run or outlasts `timeout`.
+fn run(sed: &Path, args: &[String], input: &str, timeout: Duration) -> Result<Option<String>> {
     let mut child = Process::new(sed)
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
-        .ok()?;
-    child.stdin.take()?.write_all(input.as_bytes()).ok()?;
-    let out = child.wait_with_output().ok()?;
-    out.status
+        .with_context(|| format!("starting {}", sed.display()))?;
+    let mut stdin = child.stdin.take().context("sed stdin")?;
+    let mut stdout = child.stdout.take().context("sed stdout")?;
+    // Both pipes are served at once: a file larger than the pipe buffers would
+    // otherwise leave sed blocked writing while the hook is blocked writing.
+    let output = std::thread::scope(|scope| -> Result<Vec<u8>> {
+        let feeder = scope.spawn(move || stdin.write_all(input.as_bytes()));
+        let (tx, rx) = mpsc::channel();
+        scope.spawn(move || {
+            let mut out = Vec::new();
+            let read = stdout.read_to_end(&mut out).map(|_| out);
+            // The receiver is gone only after the deadline passed.
+            tx.send(read).ok();
+        });
+        let read = rx.recv_timeout(timeout);
+        if read.is_err() {
+            // Killing sed closes both pipes, which ends the two threads.
+            child.kill().context("stopping sed")?;
+        }
+        let fed = feeder.join();
+        let out = read
+            .map_err(|_| anyhow::anyhow!("sed did not finish within {timeout:?}"))?
+            .context("reading sed's output")?;
+        match fed {
+            // sed left before reading everything (a script it rejects): its status says so.
+            Ok(Err(e)) if e.kind() != ErrorKind::BrokenPipe => {
+                return Err(e).context("sending the file to sed");
+            }
+            Ok(_) => {}
+            Err(_) => bail!("the thread feeding sed panicked"),
+        }
+        Ok(out)
+    });
+    // Reaps sed after a kill too.
+    let status = child.wait().context("waiting for sed")?;
+    let output = output?;
+    Ok(status
         .success()
-        .then(|| String::from_utf8(out.stdout).ok())
-        .flatten()
+        .then(|| String::from_utf8(output).ok())
+        .flatten())
 }
 
 /// `s/a/b/g; s|c|d|` and nothing else: no addresses, no `w`/`e` flags that
@@ -163,6 +215,74 @@ fn substitutions_only(script: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use std::time::Instant;
+
+    fn sed_works() -> bool {
+        let sed = crate::shell::which("sed");
+        Process::new(sed)
+            .arg("s/a/b/")
+            .stdin(Stdio::null())
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }
+
+    #[test]
+    fn a_file_larger_than_the_pipe_buffers_does_not_deadlock() {
+        if !sed_works() {
+            return;
+        }
+        let input =
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n".repeat(40_000);
+        assert!(input.len() > 2_000_000);
+        let args = ["-e".to_string(), "s/a/b/".to_string()];
+        let started = Instant::now();
+        let out = run(
+            &crate::shell::which("sed"),
+            &args,
+            &input,
+            Duration::from_secs(30),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(out.len(), input.len());
+        assert!(out.starts_with("baaaa"));
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "{:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn a_rejected_script_predicts_nothing_and_a_hung_sed_is_killed() {
+        if !sed_works() {
+            return;
+        }
+        let sed = crate::shell::which("sed");
+        let bad = ["-e".to_string(), "s/\\(/x/".to_string()];
+        assert_eq!(
+            run(
+                &sed,
+                &bad,
+                "text\n".repeat(100_000).as_str(),
+                Duration::from_secs(30)
+            )
+            .unwrap(),
+            None
+        );
+        // `sleep` never reads its stdin or answers: the deadline has to stop it.
+        let started = Instant::now();
+        let hung = run(
+            Path::new("sleep"),
+            &["30".to_string()],
+            "x",
+            Duration::from_millis(300),
+        );
+        assert!(hung.is_err());
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
     #[test]
     fn only_plain_substitutions_are_run() {
         use super::substitutions_only as ok;

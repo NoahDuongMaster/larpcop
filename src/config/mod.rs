@@ -82,8 +82,8 @@ pub fn resolve(root: &Path, forced: &[String], refresh: bool) -> Result<Config> 
     Ok(cfg)
 }
 
-/// Rule directories declared by one standards directory (for `larpcop test DIR`).
-/// The rules one standards directory defines itself (not what it extends).
+/// The rules one standards directory defines itself (not what it extends),
+/// for `larpcop test DIR`.
 pub fn rules_of(dir: &Path) -> Result<crate::rules::testing::Defined> {
     let file = STANDARDS_CONFIG
         .iter()
@@ -112,7 +112,7 @@ fn identity(spec: &ExtendSpec, base: &Path) -> String {
         }
         ExtendSpec::Path { path } => dunce::canonicalize(base.join(path))
             .map_or_else(|_| path.clone(), |p| p.display().to_string()),
-        ExtendSpec::Short(_) => unreachable!("normalized before use"),
+        ExtendSpec::Short(short) => short.clone(),
     }
 }
 
@@ -138,7 +138,7 @@ fn apply_extend(
             (subdir.map_or(checkout.clone(), |s| checkout.join(s)), label)
         }
         ExtendSpec::Path { path } => (base.join(&path), path),
-        ExtendSpec::Short(_) => unreachable!("normalized above"),
+        ExtendSpec::Short(short) => bail!("extends `{short}` is neither a path nor a git URL"),
     };
     let dir =
         dunce::canonicalize(&dir).with_context(|| format!("standards `{label}` not found"))?;
@@ -162,19 +162,11 @@ impl Config {
         if raw.max_lines.is_some() && self.max_lines.is_some() {
             self.ensure_unlocked(crate::rules::MAX_LINES_ID, source, "override")?;
         }
-        for linter in &raw.linters {
-            if self.linters.iter().any(|l| l.id == linter.id) {
-                self.ensure_unlocked(&linter.id, source, "override")?;
-            }
-        }
         self.disabled.extend(raw.disable);
         if raw.max_lines.is_some() {
             self.max_lines = raw.max_lines;
         }
-        for linter in raw.linters {
-            self.linters.retain(|l| l.id != linter.id);
-            self.linters.push(linter);
-        }
+        self.upsert(raw.linters, source, |l| &l.id, |c| &mut c.linters)?;
         self.rule_dirs
             .extend(raw.rule_dirs.iter().map(|d| dir.join(d)));
         self.exclude.extend(raw.exclude);
@@ -199,30 +191,12 @@ impl Config {
             }
             self.metrics = Some(m);
         }
-        for rule in raw.taint {
-            if self.taint.iter().any(|t| t.id == rule.id) {
-                self.ensure_unlocked(&rule.id, source, "override")?;
-            }
-            self.taint.retain(|t| t.id != rule.id);
-            self.taint.push(rule);
-        }
-        for rule in raw.text {
-            if self.text.iter().any(|t| t.id == rule.id) {
-                self.ensure_unlocked(&rule.id, source, "override")?;
-            }
-            self.text.retain(|t| t.id != rule.id);
-            self.text.push(rule);
-        }
+        self.upsert(raw.taint, source, |t| &t.id, |c| &mut c.taint)?;
+        self.upsert(raw.text, source, |t| &t.id, |c| &mut c.text)?;
         self.language_servers.extend(raw.language_servers);
         if let Some(llm) = raw.llm {
             self.llm.command = llm.command.or(self.llm.command.take());
-            for rule in llm.rules {
-                if self.llm.rules.iter().any(|r| r.id == rule.id) {
-                    self.ensure_unlocked(&rule.id, source, "override")?;
-                }
-                self.llm.rules.retain(|r| r.id != rule.id);
-                self.llm.rules.push(rule);
-            }
+            self.upsert(llm.rules, source, |r| &r.id, |c| &mut c.llm.rules)?;
         }
         // Exclusions only accumulate; a locked `secrets` rule takes none.
         if let Some(s) = raw.secrets {
@@ -281,6 +255,26 @@ impl Config {
         p.exempt.extend(d.exempt);
         if vulns.is_some() {
             p.vulnerabilities = vulns;
+        }
+        Ok(())
+    }
+
+    /// Adds each of `items` to the list `list` picks, replacing the entry with the
+    /// same `id` from an earlier layer, which must not be locked.
+    fn upsert<T>(
+        &mut self,
+        items: Vec<T>,
+        source: &str,
+        id: impl Fn(&T) -> &String,
+        list: impl Fn(&mut Self) -> &mut Vec<T>,
+    ) -> Result<()> {
+        for item in items {
+            if list(self).iter().any(|old| id(old) == id(&item)) {
+                self.ensure_unlocked(id(&item), source, "override")?;
+            }
+            let entries = list(self);
+            entries.retain(|old| id(old) != id(&item));
+            entries.push(item);
         }
         Ok(())
     }

@@ -73,31 +73,52 @@ pub(super) fn is_function<D: Doc>(node: &Node<D>) -> bool {
     node.is_named() && FUNCTIONS.contains(&node.kind().as_ref())
 }
 
-fn is_branch<D: Doc>(node: &Node<D>) -> bool {
-    if !node.is_named() {
-        return false;
-    }
-    let kind = node.kind();
-    if BRANCHES.contains(&kind.as_ref()) {
-        return true;
-    }
-    kind == "binary_expression"
-        && node
-            .field("operator")
-            .is_some_and(|op| matches!(op.text().as_ref(), "&&" | "||" | "??" | "and" | "or"))
+/// What a node kind means for the metrics. A kind id always has the same name
+/// and named-ness, so this is decided once per kind and file, not per node.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Class {
+    Unknown,
+    Other,
+    Function,
+    Branch,
+    /// A branch only when its operator is `&&`, `||`, `??`, `and` or `or`.
+    Binary,
 }
 
-/// Branch points below `node`, not counting nested functions.
-fn branches<D: Doc>(node: &Node<D>) -> usize {
-    node.children()
-        .map(|c| {
-            if is_function(&c) {
-                0
-            } else {
-                usize::from(is_branch(&c)) + branches(&c)
-            }
-        })
-        .sum()
+#[derive(Default)]
+struct Classes(Vec<Class>);
+
+impl Classes {
+    fn of<D: Doc>(&mut self, node: &Node<D>) -> Class {
+        let id = usize::from(node.kind_id());
+        if id >= self.0.len() {
+            self.0.resize(id + 1, Class::Unknown);
+        }
+        if self.0[id] == Class::Unknown {
+            self.0[id] = classify(node);
+        }
+        self.0[id]
+    }
+}
+
+fn classify<D: Doc>(node: &Node<D>) -> Class {
+    let kind = node.kind();
+    if !node.is_named() {
+        Class::Other
+    } else if FUNCTIONS.contains(&kind.as_ref()) {
+        Class::Function
+    } else if BRANCHES.contains(&kind.as_ref()) {
+        Class::Branch
+    } else if kind == "binary_expression" {
+        Class::Binary
+    } else {
+        Class::Other
+    }
+}
+
+fn logical<D: Doc>(node: &Node<D>) -> bool {
+    node.field("operator")
+        .is_some_and(|op| matches!(op.text().as_ref(), "&&" | "||" | "??" | "and" | "or"))
 }
 
 fn name<D: Doc>(node: &Node<D>) -> String {
@@ -116,20 +137,40 @@ pub fn functions(lang: SupportLang, source: &str) -> Vec<Function> {
     functions_of(&grep.root())
 }
 
-/// The functions of a tree that has already been parsed.
+/// The functions of a tree that has already been parsed, in document order.
+/// One pre-order walk: a branch point counts for the innermost function that
+/// is still open (a node starting at or after its end is outside it).
 pub fn functions_of<D: Doc>(root: &Node<D>) -> Vec<Function> {
-    root.dfs()
-        .filter(|n| is_function(n))
-        .map(|f| {
-            let (start, end) = (f.start_pos().line(), f.end_pos().line());
-            Function {
-                name: name(&f),
-                line: start + 1,
-                lines: end - start + 1,
-                complexity: 1 + branches(&f),
+    let mut classes = Classes::default();
+    let mut out: Vec<Function> = Vec::new();
+    // End byte and index in `out` of the functions around the current node.
+    let mut open: Vec<(usize, usize)> = Vec::new();
+    for node in root.dfs() {
+        let range = node.range();
+        while open.last().is_some_and(|(end, _)| range.start >= *end) {
+            open.pop();
+        }
+        let branch = match classes.of(&node) {
+            Class::Function => {
+                let (start, end) = (node.start_pos().line(), node.end_pos().line());
+                open.push((range.end, out.len()));
+                out.push(Function {
+                    name: name(&node),
+                    line: start + 1,
+                    lines: end - start + 1,
+                    complexity: 1,
+                });
+                false
             }
-        })
-        .collect()
+            Class::Branch => true,
+            Class::Binary => logical(&node),
+            Class::Unknown | Class::Other => false,
+        };
+        if let (true, Some((_, at))) = (branch, open.last()) {
+            out[*at].complexity += 1;
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -153,5 +194,17 @@ const inner = () => (x ? 1 : 2);\n  return x ?? 0;\n}\n";
         assert_eq!(functions(SupportLang::Go, go)[0].complexity, 3);
         let rs = "fn k(x: Option<u8>) -> u8 { match x { Some(v) if v > 1 => v, Some(_) => 1, None => 0 } }\n";
         assert_eq!(functions(SupportLang::Rust, rs)[0].complexity, 4);
+    }
+
+    #[test]
+    fn a_branch_after_a_nested_function_belongs_to_the_outer_one() {
+        let py = "def outer(x):\n    def inner(y):\n        if y:\n            return 1\n    if x:\n        return 2\n    return 3\n";
+        let f = functions(SupportLang::Python, py);
+        let by = |n: &str| f.iter().find(|f| f.name == n).unwrap().complexity;
+        assert_eq!((by("outer"), by("inner")), (2, 2));
+        // Two functions side by side: the second one's branches are its own.
+        let ts = "function a() { if (1) {} }\nfunction b() { if (2) {} if (3) {} }\n";
+        let f = functions(SupportLang::TypeScript, ts);
+        assert_eq!(f.iter().map(|f| f.complexity).collect::<Vec<_>>(), [2, 3]);
     }
 }

@@ -1,12 +1,18 @@
 //! Selects which files a check covers and loads their content.
 
+mod git;
+
 use anyhow::{Context, Result, bail};
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use ignore::WalkBuilder;
+use ignore::{WalkBuilder, WalkState};
 use rayon::prelude::*;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::sync::mpsc;
 use std::{env, fs};
+
+use git::git_list;
+pub use git::{blobs, git, in_repo, show, tree};
 
 pub enum Scope {
     /// Every non-ignored file under the root.
@@ -39,26 +45,43 @@ pub fn globset(patterns: &[String]) -> Result<GlobSet> {
 }
 
 pub fn collect(root: &Path, scope: &Scope, exclude: &GlobSet) -> Result<Vec<SourceFile>> {
-    Ok(collect_listed(root, scope, exclude, &list(root, scope)?))
+    collect_listed(root, scope, exclude, &list(root, scope)?)
 }
 
+/// The text files among `listed` that `exclude` does not skip. A file that cannot
+/// be read is an error, never a clean file.
 pub fn collect_listed(
     root: &Path,
     scope: &Scope,
     exclude: &GlobSet,
     listed: &[String],
-) -> Vec<SourceFile> {
-    let staged = matches!(scope, Scope::Staged);
-    listed
-        .par_iter()
+) -> Result<Vec<SourceFile>> {
+    let wanted: Vec<&String> = listed
+        .iter()
         .filter(|r| !exclude.is_match(r.as_str()))
-        .filter_map(|rel| {
-            read(root, rel, staged).map(|content| SourceFile {
+        .collect();
+    let contents: Vec<Option<String>> = if matches!(scope, Scope::Staged) {
+        let specs: Vec<String> = wanted.iter().map(|rel| format!(":./{rel}")).collect();
+        blobs(root, &specs)?
+            .into_iter()
+            .map(|bytes| bytes.and_then(|b| String::from_utf8(b).ok()))
+            .collect()
+    } else {
+        wanted
+            .par_iter()
+            .map(|rel| read_worktree(root, rel))
+            .collect::<Result<_>>()?
+    };
+    Ok(wanted
+        .into_iter()
+        .zip(contents)
+        .filter_map(|(rel, content)| {
+            Some(SourceFile {
                 rel: rel.clone(),
-                content,
+                content: content?,
             })
         })
-        .collect()
+        .collect())
 }
 
 /// Root-relative paths a scope covers, sorted, before any `exclude`.
@@ -71,7 +94,7 @@ pub fn list(root: &Path, scope: &Scope) -> Result<Vec<String>> {
         "-z",
     ];
     let mut rels = match scope {
-        Scope::All => walk(root, root),
+        Scope::All => walk(root, root)?,
         Scope::Paths(paths) | Scope::Touched(paths) => from_paths(root, paths)?,
         Scope::Staged => git_list(root, &[&DIFF[..], &["--cached"]].concat())?,
         Scope::Changed => changed(root)?,
@@ -98,27 +121,43 @@ pub fn base(root: &Path, scope: &Scope) -> Option<String> {
     Some(rev)
 }
 
-/// Content of `rel` at commit `rev`; `None` if it did not exist there.
-pub fn show(root: &Path, rev: &str, rel: &str) -> Option<String> {
-    git_bytes(root, &format!("{rev}:./{rel}")).and_then(|b| String::from_utf8(b).ok())
-}
-
-/// Every file path at commit `rev`, relative to the root.
-pub fn tree(root: &Path, rev: &str) -> Vec<String> {
-    git_list(root, &["ls-tree", "-r", "--name-only", "-z", rev]).unwrap_or_default()
-}
-
-fn walk(root: &Path, start: &Path) -> Vec<String> {
+fn walk(root: &Path, start: &Path) -> Result<Vec<String>> {
     // Dot-directories hold code too (`.github/workflows`, `.env`, `.husky`):
     // only `.git` itself and git-ignored files are skipped.
-    let mut out: Vec<String> = WalkBuilder::new(start)
+    let (tx, rx) = mpsc::channel();
+    WalkBuilder::new(start)
         .hidden(false)
         .filter_entry(|e| e.file_name() != ".git")
-        .build()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
-        .filter_map(|e| rel_of(root, e.path()))
-        .collect();
+        .build_parallel()
+        .run(|| {
+            let tx = tx.clone();
+            Box::new(move |entry| {
+                let found = match entry {
+                    Ok(e) if e.file_type().is_some_and(|t| t.is_file()) => {
+                        rel_of(root, e.path()).map(Ok)
+                    }
+                    Ok(_) => None,
+                    Err(e) => Some(Err(e.to_string())),
+                };
+                match found.map(|f| tx.send(f)) {
+                    Some(Err(_)) => WalkState::Quit,
+                    _ => WalkState::Continue,
+                }
+            })
+        });
+    drop(tx);
+    let (mut out, mut errors) = (Vec::new(), Vec::new());
+    for found in rx {
+        match found {
+            Ok(rel) => out.push(rel),
+            Err(e) => errors.push(e),
+        }
+    }
+    if !errors.is_empty() {
+        bail!("walking {}: {}", start.display(), errors.join("; "));
+    }
+    // Workers finish in any order.
+    out.sort();
     // A file committed despite `.gitignore` (`git add -f .env`) is in the repo
     // all the same: tracked files are always checked.
     let under = rel_of(root, start).unwrap_or_default();
@@ -127,15 +166,18 @@ fn walk(root: &Path, start: &Path) -> Vec<String> {
     } else {
         under
     };
-    if let Ok(tracked) = git_list(root, &["ls-files", "-z", "--", &spec]) {
-        let known: std::collections::HashSet<String> = out.iter().cloned().collect();
-        out.extend(
-            tracked
-                .into_iter()
-                .filter(|f| !known.contains(f) && root.join(f).is_file()),
-        );
-    }
-    out
+    let tracked = match git_list(root, &["ls-files", "-z", "--", &spec]) {
+        Ok(tracked) => tracked,
+        Err(_) if !in_repo(root) => Vec::new(),
+        Err(e) => return Err(e),
+    };
+    let known: std::collections::HashSet<&str> = out.iter().map(String::as_str).collect();
+    let extra: Vec<String> = tracked
+        .into_iter()
+        .filter(|f| !known.contains(f.as_str()) && root.join(f).is_file())
+        .collect();
+    out.extend(extra);
+    Ok(out)
 }
 
 /// Root-relative form of `path`, which may not exist yet (nor its parents).
@@ -163,7 +205,7 @@ fn from_paths(root: &Path, paths: &[PathBuf]) -> Result<Vec<String>> {
             continue;
         };
         if abs.is_dir() {
-            out.extend(walk(root, &abs));
+            out.extend(walk(root, &abs)?);
         } else if let Some(rel) = rel_of(root, &abs) {
             out.push(rel);
         }
@@ -190,43 +232,33 @@ fn changed(root: &Path) -> Result<Vec<String>> {
     Ok(out)
 }
 
-fn git_list(root: &Path, args: &[&str]) -> Result<Vec<String>> {
-    let out = Command::new("git")
-        .args(args)
-        .current_dir(root)
-        .output()
-        .context("running git")?;
-    if !out.status.success() {
-        bail!(
-            "git {} failed: {}",
-            args.join(" "),
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
+/// Text of `rel`; `None` for a file that is not text (not UTF-8), a directory
+/// (a submodule) or gone. Any other failure is an error: a file that cannot be
+/// read is not a clean file.
+pub fn try_read(root: &Path, rel: &str, staged: bool) -> Result<Option<String>> {
+    if staged {
+        let spec = [format!(":./{rel}")];
+        let blob = blobs(root, &spec)?.pop().flatten();
+        return Ok(blob.and_then(|b| String::from_utf8(b).ok()));
     }
-    Ok(String::from_utf8_lossy(&out.stdout)
-        .split('\0')
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
-        .collect())
+    read_worktree(root, rel)
 }
 
-/// Binary or unreadable files are skipped: rules only apply to text.
+fn read_worktree(root: &Path, rel: &str) -> Result<Option<String>> {
+    match fs::read(root.join(rel)) {
+        Ok(bytes) => Ok(String::from_utf8(bytes).ok()),
+        Err(e) if matches!(e.kind(), ErrorKind::NotFound | ErrorKind::IsADirectory) => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("reading {rel}")),
+    }
+}
+
+/// `try_read` for callers that cannot propagate an error (the dependency
+/// rules): the failure is reported on stderr, and the file counts as unreadable.
 pub fn read(root: &Path, rel: &str, staged: bool) -> Option<String> {
-    let bytes = if staged {
-        git_bytes(root, &format!(":./{rel}"))?
-    } else {
-        fs::read(root.join(rel)).ok()?
-    };
-    String::from_utf8(bytes).ok()
-}
-
-fn git_bytes(root: &Path, object: &str) -> Option<Vec<u8>> {
-    let out = Command::new("git")
-        .args(["show", object])
-        .current_dir(root)
-        .output()
-        .ok()?;
-    out.status.success().then_some(out.stdout)
+    try_read(root, rel, staged).unwrap_or_else(|e| {
+        eprintln!("larpcop: warning: {e:#}");
+        None
+    })
 }
 
 /// Minified or bundled code: lines averaging over 300 bytes. Hand-written code

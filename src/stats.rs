@@ -5,7 +5,9 @@
 
 use crate::files::SourceFile;
 use crate::rules::{Engine, Level, RuleInfo, Violation};
+use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write;
 
 /// One rule and what it did here.
 #[derive(serde::Serialize)]
@@ -13,7 +15,7 @@ pub struct RuleUse {
     pub id: String,
     pub level: String,
     pub scope: String,
-    /// Findings, after the baseline.
+    /// Findings, before the baseline: a rule whose findings are all baselined still fires.
     pub count: usize,
     /// Files the rule applies to.
     pub files: usize,
@@ -35,22 +37,41 @@ pub struct Stats {
     pub unused: Vec<RuleUse>,
 }
 
-/// Counts for `files`, from `violations` (all rules, baseline applied).
+/// Rule → (what it says, how many files of this repository it covers).
+type Applied = BTreeMap<String, (RuleInfo, usize)>;
+
+/// Counts for `files`, from `violations` (all rules, before the baseline).
 pub fn collect(engine: &Engine, files: &[SourceFile], violations: &[Violation]) -> Stats {
-    // Rule → (what it says, how many files of this repository it covers).
-    let mut applied: BTreeMap<String, (RuleInfo, usize)> = BTreeMap::new();
-    for file in files {
-        for info in engine.rules_for(&file.rel) {
+    let applied: Applied = files
+        .par_iter()
+        .fold(Applied::new, |mut applied, file| {
+            for info in engine.rules_for(&file.rel) {
+                match applied.get_mut(&info.id) {
+                    Some((_, n)) => *n += 1,
+                    None => {
+                        applied.insert(info.id.clone(), (info, 1));
+                    }
+                }
+            }
             applied
-                .entry(info.id.clone())
-                .and_modify(|(_, n)| *n += 1)
-                .or_insert((info, 1));
-        }
-    }
-    // Rule → (findings, files it reported in).
-    let mut counts: BTreeMap<String, (usize, BTreeSet<String>)> = BTreeMap::new();
+        })
+        .reduce(Applied::new, |mut all, part| {
+            for (id, (info, n)) in part {
+                match all.get_mut(&id) {
+                    Some((_, total)) => *total += n,
+                    None => {
+                        all.insert(id, (info, n));
+                    }
+                }
+            }
+            all
+        });
+    // Rule → (findings, files it reported in, its level).
+    let mut counts: BTreeMap<String, (usize, BTreeSet<String>, Level)> = BTreeMap::new();
     for v in violations {
-        let entry = counts.entry(v.rule.clone()).or_default();
+        let entry = counts
+            .entry(v.rule.clone())
+            .or_insert_with(|| (0, BTreeSet::new(), v.level));
         entry.0 += 1;
         entry.1.insert(v.file.clone());
     }
@@ -58,8 +79,9 @@ pub fn collect(engine: &Engine, files: &[SourceFile], violations: &[Violation]) 
     let mut silent = Vec::new();
     let mut unused = Vec::new();
     for (id, (info, applies)) in applied {
-        let (count, hit) = counts.remove(&id).unwrap_or_default();
-        let hit_files = if hit.is_empty() { 0 } else { hit.len() };
+        let (count, hit_files) = counts
+            .remove(&id)
+            .map_or((0, 0), |(count, hit, _)| (count, hit.len()));
         let use_ = RuleUse {
             id: info.id,
             level: info.level.as_str().to_string(),
@@ -77,11 +99,11 @@ pub fn collect(engine: &Engine, files: &[SourceFile], violations: &[Violation]) 
         }
     }
     // Reported by something other than a rule of this engine: a dependency
-    // advisory, a linter run over the project.
-    for (id, (count, hit)) in counts {
+    // rule, which covers the project and not a file's language.
+    for (id, (count, hit, level)) in counts {
         fired.push(RuleUse {
             id,
-            level: Level::Error.as_str().to_string(),
+            level: level.as_str().to_string(),
             scope: "dependencies".to_string(),
             count,
             files: files.len(),
@@ -114,40 +136,41 @@ pub fn render(stats: &Stats, top: usize) -> String {
         "{} file(s), {} finding(s): {} error, {} warning\n\n",
         stats.files, stats.findings, stats.errors, stats.warnings
     );
-    out.push_str(&format!(
-        "{:>7} {:>6} {:>8}  {:<26} {:<8} {}\n",
-        "count", "files", "hit", "rule", "level", "applies to"
-    ));
+    let _ = writeln!(
+        out,
+        "{:>7} {:>6} {:>8}  {:<26} {:<8} applies to",
+        "count", "files", "hit", "rule", "level"
+    );
     for r in stats.fired.iter().take(top) {
-        out.push_str(&format!(
-            "{:>7} {:>6} {:>8}  {:<26} {:<8} {}\n",
+        let _ = writeln!(
+            out,
+            "{:>7} {:>6} {:>8}  {:<26} {:<8} {}",
             r.count,
             r.files,
             r.hit_files,
             r.id,
             r.level,
             short(&r.scope)
-        ));
+        );
     }
     if stats.fired.len() > top {
-        out.push_str(&format!(
-            "… {} more rule(s) reported\n",
-            stats.fired.len() - top
-        ));
+        let _ = writeln!(out, "… {} more rule(s) reported", stats.fired.len() - top);
     }
     if !stats.silent.is_empty() {
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "\n{} rule(s) apply to files here and caught nothing:\n  {}\n",
             stats.silent.len(),
             names(&stats.silent)
-        ));
+        );
     }
     if !stats.unused.is_empty() {
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "\n{} rule(s) apply to no file of this repository:\n  {}\n",
             stats.unused.len(),
             names(&stats.unused)
-        ));
+        );
     }
     out
 }

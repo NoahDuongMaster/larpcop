@@ -2,12 +2,15 @@
 //! v8.30 rules, 222 detectors): keyword prefilter, regex, secret group, entropy
 //! and allowlists with gitleaks' semantics. Findings are reported redacted.
 
+use super::lines::LineIndex;
 use super::{Level, RuleInfo, Violation};
 use anyhow::Result;
+use keywords::Keywords;
 use model::{Allow, RawConfig, Rule, allow, compile};
 use std::sync::OnceLock;
 
 mod decode;
+mod keywords;
 mod model;
 
 pub const ID: &str = "secrets";
@@ -15,19 +18,28 @@ const CONFIG: &str = include_str!("../../assets/gitleaks.toml");
 
 pub struct Secrets {
     rules: Vec<Rule>,
+    keywords: Keywords,
     global: Allow,
 }
 
 impl Secrets {
     pub fn new() -> Result<Self> {
         let raw: RawConfig = toml::from_str(CONFIG)?;
+        let lists: Vec<Vec<String>> = raw
+            .rules
+            .iter()
+            .map(|r| r.keywords.iter().map(|k| k.to_lowercase()).collect())
+            .collect();
+        let (keywords, ids) = Keywords::new(&lists)?;
         let rules = raw
             .rules
             .into_iter()
-            .map(|r| Rule {
+            .zip(ids)
+            .map(|(r, keywords)| Rule {
                 path: r.path.as_deref().and_then(compile),
-                keywords: r.keywords.iter().map(|k| k.to_lowercase()).collect(),
+                keywords,
                 allows: r.allowlists.into_iter().map(allow).collect(),
+                generic: r.id.to_lowercase().contains("generic"),
                 id: r.id,
                 description: r.description,
                 pattern: r.regex,
@@ -38,6 +50,7 @@ impl Secrets {
             .collect();
         Ok(Self {
             rules,
+            keywords,
             global: allow(raw.allowlist),
         })
     }
@@ -65,37 +78,47 @@ impl Secrets {
         if self.global.paths.iter().any(|p| p.is_match(rel)) {
             return Vec::new();
         }
-        let mut hits = self.scan(rel, content, None);
+        let lines = LineIndex::new(content);
+        let mut hits = self.scan(rel, content, None, &lines);
         // Like gitleaks: secrets hidden in base64 (JWT payloads, k8s secrets,
         // data URIs) are scanned decoded and reported where the encoding is.
         for (start, encoded, decoded) in decode::base64_segments(content) {
-            let line_no = content[..start].matches('\n').count();
-            let line = content.lines().nth(line_no).unwrap_or("");
-            hits.extend(self.scan(rel, &decoded, Some((line_no, line, encoded))));
+            let line_no = lines.line_of(start);
+            let line = lines.line(line_no).unwrap_or("");
+            hits.extend(self.scan(rel, &decoded, Some((line_no, line, encoded)), &lines));
         }
         // As gitleaks does: a generic finding inside a specific one on the same
         // line is the same secret, reported once.
-        let generic = |id: &str| id.to_lowercase().contains("generic");
-        let dup = |(id, line, secret, _): &Hit| {
-            generic(id)
-                && hits.iter().any(|(id2, line2, secret2, _)| {
-                    line2 == line && id2 != id && !generic(id2) && secret2.contains(secret.as_str())
+        let dup = |h: &Hit| {
+            h.rule.generic
+                && hits.iter().any(|o| {
+                    o.line == h.line
+                        && o.rule.id != h.rule.id
+                        && !o.rule.generic
+                        && o.secret.contains(h.secret.as_str())
                 })
         };
         let keep: Vec<bool> = hits.iter().map(|h| !dup(h)).collect();
         hits.into_iter()
             .zip(keep)
             .filter(|(_, k)| *k)
-            .map(|((.., v), _)| v)
+            .map(|(hit, _)| hit.finding)
             .collect()
     }
 
-    /// Findings in `text`; `origin` places decoded text: (line index, line, encoded).
-    fn scan(&self, rel: &str, text: &str, origin: Option<(usize, &str, &str)>) -> Vec<Hit> {
-        let lower = text.to_lowercase();
+    /// Findings in `text`; `origin` places decoded text: (line index, line,
+    /// encoded). Without one, `lines` indexes `text`.
+    fn scan(
+        &self,
+        rel: &str,
+        text: &str,
+        origin: Option<(usize, &str, &str)>,
+        lines: &LineIndex,
+    ) -> Vec<Hit<'_>> {
+        let present = self.keywords.found_in(text);
         let mut hits = Vec::new();
         for rule in &self.rules {
-            if !rule.keywords.is_empty() && !rule.keywords.iter().any(|k| lower.contains(k)) {
+            if !rule.keywords.is_empty() && !rule.keywords.iter().any(|k| present[*k]) {
                 continue;
             }
             if let Some(p) = &rule.path
@@ -105,12 +128,12 @@ impl Secrets {
             }
             let Some(regex) = rule.regex() else {
                 if rule.pattern.is_none() && origin.is_none() {
-                    hits.push((
-                        rule.id.clone(),
-                        0,
-                        String::new(),
-                        finding(rule, rel, 0, String::new(), false),
-                    ));
+                    hits.push(Hit {
+                        rule,
+                        line: 0,
+                        secret: String::new(),
+                        finding: finding(rule, rel, 0, String::new(), false),
+                    });
                 }
                 continue;
             };
@@ -139,8 +162,8 @@ impl Secrets {
                 let (line_no, line, shown) = match origin {
                     Some((n, line, encoded)) => (n, line, encoded),
                     None => {
-                        let n = text[..whole.start()].matches('\n').count();
-                        (n, text.lines().nth(n).unwrap_or(""), secret)
+                        let n = lines.line_of(whole.start());
+                        (n, lines.line(n).unwrap_or(""), secret)
                     }
                 };
                 let allowed = std::iter::once(&self.global)
@@ -154,7 +177,12 @@ impl Secrets {
                         redact(line, shown),
                         origin.is_some(),
                     );
-                    hits.push((rule.id.clone(), line_no + 1, secret.to_string(), v));
+                    hits.push(Hit {
+                        rule,
+                        line: line_no + 1,
+                        secret: secret.to_string(),
+                        finding: v,
+                    });
                 }
             }
         }
@@ -162,8 +190,13 @@ impl Secrets {
     }
 }
 
-/// (rule id, line, secret, finding)
-type Hit = (String, usize, String, Violation);
+/// A finding with what telling duplicates apart needs.
+struct Hit<'r> {
+    rule: &'r Rule,
+    line: usize,
+    secret: String,
+    finding: Violation,
+}
 
 /// Shannon entropy exactly as gitleaks computes it (character counts over the
 /// byte length), since its rules' thresholds are tuned to that formula; a

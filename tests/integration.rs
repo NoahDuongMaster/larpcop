@@ -21,12 +21,16 @@ mod deps_approval;
 mod foundation;
 #[path = "suite/hooks.rs"]
 mod hooks;
+#[path = "suite/lsp.rs"]
+mod lsp;
 #[path = "suite/mcp.rs"]
 mod mcp;
 #[path = "suite/quality.rs"]
 mod quality;
 #[path = "suite/security.rs"]
 mod security;
+#[path = "suite/shell_gate.rs"]
+mod shell_gate;
 #[path = "suite/shell_hook.rs"]
 mod shell_hook;
 #[path = "suite/stats.rs"]

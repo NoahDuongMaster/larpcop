@@ -51,14 +51,22 @@ impl TextRule {
             None => re.is_match(text),
             Some(path) => std::fs::read_to_string(path).is_ok_and(|t| re.is_match(&t)),
         };
-        if self.unless.iter().any(holds) {
-            return Vec::new();
-        }
-        self.regex
+        let mut found = self
+            .regex
             .find_iter(text)
             .filter(|m| !self.not.as_ref().is_some_and(|n| n.is_match(m.as_str())))
+            .peekable();
+        // `unless` may read another file: only when there is a match to drop.
+        if found.peek().is_none() || self.unless.iter().any(holds) {
+            return Vec::new();
+        }
+        // Matches come in order: count the lines between them, not from the top.
+        let (mut at, mut line) = (0, 1);
+        found
             .map(|m| {
                 let before = &text[..m.start()];
+                line += text[at..m.start()].matches('\n').count();
+                at = m.start();
                 let line_start = before.rfind('\n').map_or(0, |i| i + 1);
                 let line_end = text[m.start()..]
                     .find('\n')
@@ -67,7 +75,7 @@ impl TextRule {
                     rule: self.id.clone(),
                     level: self.level,
                     file: file.rel.clone(),
-                    line: before.matches('\n').count() + 1,
+                    line,
                     column: before[line_start..].chars().count() + 1,
                     message: self.message.clone(),
                     note: self.note.clone(),

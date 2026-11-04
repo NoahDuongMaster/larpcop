@@ -1,16 +1,19 @@
 //! The agent hook's view of a shell command before it runs: installs of
 //! unapproved, malicious or too-new packages, and weakened age gates.
 
-use super::{Deps, approval, install};
+use super::osv::Osv;
+use super::{Deps, approval, clock, install};
+use crate::shell_ast::Script;
+use jiff::Timestamp;
 use std::path::Path;
 
 impl Deps {
-    /// Agent hook check on a shell command before it runs; `Some(reason)` blocks it.
-    pub fn gate_command(&self, root: &Path, cwd: &Path, command: &str) -> Option<String> {
-        let script = crate::shell_ast::parse(command);
+    /// Agent hook check on a parsed shell command before it runs; `Some(reason)`
+    /// blocks it.
+    pub fn gate_command(&self, root: &Path, cwd: &Path, script: &Script) -> Option<String> {
         if self
             .min_days
-            .is_some_and(|days| install::weakens_age_gate(command, days))
+            .is_some_and(|days| install::weakens_age_gate(script, days))
         {
             return Some(
                 "weakening the package manager's minimum release age is not allowed: the repo \
@@ -18,10 +21,18 @@ sets it for everyone."
                     .into(),
             );
         }
-        let invocations = install::invocations(&script);
-        if let Some(reason) = self
+        // The release-age window as a date; a window that cannot be computed blocks.
+        let window: Option<(u32, Timestamp)> = match self
             .min_days
-            .and_then(|days| self.gate_forms(days, &script, &invocations))
+            .map(|days| clock::cutoff(days).map(|cutoff| (days, cutoff)))
+            .transpose()
+        {
+            Ok(window) => window,
+            Err(e) => return Some(format!("{e:#}; this check fails closed.")),
+        };
+        let invocations = install::invocations(script);
+        if let Some(reason) =
+            window.and_then(|(days, cutoff)| self.gate_forms(days, cutoff, script, &invocations))
         {
             return Some(reason);
         }
@@ -34,7 +45,7 @@ sets it for everyone."
         }
         if let Some(reason) = self
             .vulns
-            .and_then(|min| self.gate_vulnerable(min, &requests))
+            .and_then(|min| self.gate_vulnerable(&Osv::new(), min, &requests))
         {
             return Some(reason);
         }
@@ -43,8 +54,8 @@ sets it for everyone."
         {
             return Some(reason);
         }
-        self.min_days
-            .and_then(|days| self.gate_young(days, &requests, &invocations, cwd))
+        window
+            .and_then(|(days, cutoff)| self.gate_young(days, cutoff, &requests, &invocations, cwd))
     }
 
     fn gate_unapproved(

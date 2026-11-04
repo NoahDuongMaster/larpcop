@@ -38,7 +38,13 @@ impl Map {
     fn load(root: &Path) -> Self {
         let mut out = Map::default();
         // The repo's files, tracked ones included even when git-ignored.
-        let rels = crate::files::list(root, &crate::files::Scope::All).unwrap_or_default();
+        let rels = match crate::files::list(root, &crate::files::Scope::All) {
+            Ok(rels) => rels,
+            Err(e) => {
+                eprintln!("larpcop: cannot list the files holding application settings: {e:#}");
+                Vec::new()
+            }
+        };
         for rel in rels {
             if rel.split('/').any(|part| SKIPPED.contains(&part)) {
                 continue;
@@ -49,11 +55,15 @@ impl Map {
             if !(name.ends_with(".properties") || yaml) {
                 continue;
             }
-            let Ok(text) = std::fs::read_to_string(root.join(&rel)) else {
-                continue;
+            let text = match std::fs::read_to_string(root.join(&rel)) {
+                Ok(text) => text,
+                Err(e) => {
+                    eprintln!("larpcop: cannot read the settings file {rel}: {e}");
+                    continue;
+                }
             };
             if yaml {
-                out.yaml(&text);
+                out.yaml(&rel, &text);
             } else {
                 out.properties(&text);
             }
@@ -82,8 +92,14 @@ impl Map {
         }
     }
 
-    fn yaml(&mut self, text: &str) {
-        let docs: Vec<serde_json::Value> = serde_saphyr::from_multiple(text).unwrap_or_default();
+    fn yaml(&mut self, rel: &str, text: &str) {
+        let docs: Vec<serde_json::Value> = match serde_saphyr::from_multiple(text) {
+            Ok(docs) => docs,
+            Err(e) => {
+                eprintln!("larpcop: cannot parse the settings file {rel}: {e}");
+                return;
+            }
+        };
         for doc in &docs {
             self.flatten("", doc);
         }

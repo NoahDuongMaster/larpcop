@@ -6,7 +6,7 @@ use crate::common::deps::{fake_deps_dev, npm_lock, repo};
 use crate::common::*;
 use serde_json::json;
 
-fn bash(event: &str, dir: &std::path::Path, call: &str, command: &str) -> String {
+pub fn bash(event: &str, dir: &std::path::Path, call: &str, command: &str) -> String {
     json!({ "session_id": "s1", "tool_use_id": call, "hook_event_name": event,
             "tool_name": "Bash", "tool_input": { "command": command }, "cwd": dir })
     .to_string()

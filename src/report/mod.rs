@@ -4,6 +4,8 @@ mod ci;
 
 use crate::context::Outcome;
 use crate::rules::{Level, Violation};
+use anyhow::{Context, Result};
+use serde::Serialize;
 use std::fmt::Write;
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -26,15 +28,17 @@ construct in another form to dodge a check (aliases, computed property access, e
 violation too. Do not add suppression comments, use `--no-verify`, or edit `.larpcop.yaml`; if a rule \
 looks wrong, stop and ask a human.";
 
-pub fn render(outcome: &Outcome, format: Format) -> String {
-    match format {
+/// The report in `format`. A report that cannot be produced is an error: an empty
+/// JSON/SARIF file would read as "no findings" to the CI that consumes it.
+pub fn render(outcome: &Outcome, format: Format) -> Result<String> {
+    Ok(match format {
         Format::Text => text(outcome),
-        Format::Json => json(outcome),
+        Format::Json => json(outcome)?,
         Format::Github => github(outcome) + &text(outcome),
-        Format::Sarif => ci::sarif(outcome),
-        Format::Gitlab => ci::gitlab(outcome),
+        Format::Sarif => ci::sarif(outcome)?,
+        Format::Gitlab => ci::gitlab(outcome)?,
         Format::Markdown => ci::markdown(outcome),
-    }
+    })
 }
 
 pub(crate) fn summary(outcome: &Outcome) -> String {
@@ -113,14 +117,21 @@ fn write_violation(out: &mut String, v: &Violation) {
     }
 }
 
-fn json(outcome: &Outcome) -> String {
-    let value = serde_json::json!({
-        "files_checked": outcome.files,
-        "errors": outcome.errors(),
-        "baselined": outcome.baselined,
-        "violations": outcome.violations,
-    });
-    serde_json::to_string_pretty(&value).unwrap_or_default() + "\n"
+fn json(outcome: &Outcome) -> Result<String> {
+    #[derive(Serialize)]
+    struct Report<'a> {
+        files_checked: usize,
+        errors: usize,
+        baselined: usize,
+        violations: &'a [Violation],
+    }
+    let report = Report {
+        files_checked: outcome.files,
+        errors: outcome.errors(),
+        baselined: outcome.baselined,
+        violations: &outcome.violations,
+    };
+    Ok(serde_json::to_string_pretty(&report).context("serializing the JSON report")? + "\n")
 }
 
 fn github(outcome: &Outcome) -> String {

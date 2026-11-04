@@ -1,7 +1,7 @@
 //! `larpcop rules` and `larpcop stats`: what the rules are, and what they did.
 
 use crate::context::Ctx;
-use crate::files::{self, Scope};
+use crate::files::Scope;
 use anyhow::Result;
 use std::path::PathBuf;
 
@@ -62,9 +62,7 @@ pub fn rules(ctx: &Ctx, for_path: Option<PathBuf>, json: bool) -> Result<u8> {
 
 pub fn stats(ctx: &Ctx, scope: Scope, top: usize, json: bool) -> Result<u8> {
     let (cfg, engine) = ctx.load()?;
-    let exclude = files::globset(&cfg.exclude)?;
-    let sources = files::collect(&cfg.root, &scope, &exclude)?;
-    let outcome = ctx.raw(&cfg, &engine, &scope)?;
+    let (outcome, sources) = ctx.raw(&cfg, &engine, &scope)?;
     let summary = crate::stats::collect(&engine, &sources, &outcome.violations);
     if json {
         println!("{}", serde_json::to_string_pretty(&summary)?);

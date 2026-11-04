@@ -10,7 +10,10 @@
 //! (spaces, newlines kept). HTML too long for its room is shortened where
 //! contexts.rs does not read it; past that, the line's later columns shift.
 
+use shrink::shrink;
 use std::borrow::Cow;
+
+mod shrink;
 
 /// Marks a comment holding the page's HTML.
 const MARK: &str = "/*@";
@@ -71,15 +74,13 @@ fn page(
         // What still does not fit moves the rest of the line right: its
         // columns shift, its line does not.
         let (body, _) = shrink(body, (fixed + html.len()).saturating_sub(room));
-        {
-            out.push_str(head);
-            out.push_str(MARK);
-            out.push_str(&body);
-            out.push_str("*/");
-            out.push_str(echo);
-            pad(out, start + room);
-            return;
-        }
+        out.push_str(head);
+        out.push_str(MARK);
+        out.push_str(&body);
+        out.push_str("*/");
+        out.push_str(echo);
+        pad(out, start + room);
+        return;
     }
     out.push_str(if closed.is_some() { "; " } else { "" });
     let mut blanked = String::new();
@@ -94,79 +95,6 @@ fn page(
     out.push_str(&blanked);
     out.push_str(echo);
     pad(out, start + room);
-}
-
-/// Drops `excess` characters what contexts.rs reads does not need, from the
-/// start: text between tags, then whole tags other than `script` and
-/// `style` ones, then the name of an unfinished tag at the end, then
-/// repeated spaces.
-/// Line breaks stay. Returns the HTML and what is still in excess.
-fn shrink(body: String, mut excess: usize) -> (String, usize) {
-    if excess == 0 {
-        return (body, 0);
-    }
-    // Text runs and tags (`<…>`; the last may be unfinished).
-    let mut pieces: Vec<(String, bool)> = Vec::new();
-    for c in body.chars() {
-        let in_tag = pieces
-            .last()
-            .is_some_and(|(p, tag)| *tag && !p.ends_with('>'));
-        match pieces.last_mut() {
-            Some((p, tag)) if c != '<' && (in_tag || !*tag) => p.push(c),
-            _ => pieces.push((c.to_string(), c == '<')),
-        }
-    }
-    let lines = |s: &str| {
-        s.chars()
-            .filter(|c| matches!(c, '\n' | '\r'))
-            .collect::<String>()
-    };
-    for (p, tag) in pieces.iter_mut().filter(|(_, tag)| !tag) {
-        let _ = tag;
-        p.retain(|c| {
-            let drop = excess > 0 && !matches!(c, '\n' | '\r');
-            excess -= usize::from(drop);
-            !drop
-        });
-    }
-    for (p, _) in pieces
-        .iter_mut()
-        .filter(|(p, tag)| *tag && p.ends_with('>'))
-    {
-        let name = p.trim_start_matches(['<', '/']).to_ascii_lowercase();
-        if excess == 0 || name.starts_with("script") || name.starts_with("style") {
-            continue;
-        }
-        let kept = lines(p);
-        excess = excess.saturating_sub(p.len() - kept.len());
-        *p = kept;
-    }
-    // An unfinished tag: its name (`<div class=` → `< class=`).
-    if let Some((p, true)) = pieces.last_mut()
-        && excess > 0
-        && p.starts_with('<')
-        && !p.ends_with('>')
-    {
-        let name: String = p[1..].chars().take_while(|c| !c.is_whitespace()).collect();
-        let lower = name.trim_start_matches('/').to_ascii_lowercase();
-        let attributes = p.len() > 1 + name.len();
-        if attributes && !lower.starts_with("script") && !lower.starts_with("style") {
-            let cut: String = name.chars().take(excess).collect();
-            p.replace_range(1..1 + cut.len(), "");
-            excess -= cut.chars().count();
-        }
-    }
-    let mut out: String = pieces.into_iter().map(|(p, _)| p).collect();
-    if excess > 0 {
-        let mut prev = '\0';
-        out.retain(|c| {
-            let drop = excess > 0 && c == ' ' && prev == ' ';
-            prev = c;
-            excess -= usize::from(drop);
-            !drop
-        });
-    }
-    (out, excess)
 }
 
 fn pad(out: &mut String, to: usize) {

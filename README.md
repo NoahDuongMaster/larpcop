@@ -208,6 +208,7 @@ dependencies:
 - Lỗ hổng từ mức đã chọn trở lên chặn phiên bản *mà thay đổi này đưa vào*. `larpcop check` không giới hạn phạm vi thì kiểm toàn bộ. Thông báo nêu luôn phiên bản đã vá.
 - Hook chặn lệnh cài **trước khi chạy**: tên package dính mã độc (`npm i aaa-evil`), hoặc phiên bản pin dính lỗ hổng (`npm i lodash@4.17.15`). Không gọi được OSV thì lệnh cài cũng bị chặn (fail closed), giống phần lockfile.
 - Mức nghiêm trọng lấy theo đánh giá của advisory, nếu không có thì tính từ vector CVSS 3/4 (crate `cvss`).
+- Câu trả lời của OSV cho lockfile được lưu trong cache 15 phút (`<cache>/osv-query/`, theo từng package@version), nên chạy `check` lại ngay sau đó không tốn lượt gọi mạng. Lệnh cài **không bao giờ** đọc cache này, và lỗi hay phản hồi thiếu thì không được lưu. Bản mã độc mới được báo trong 15 phút đó sẽ bị chặn từ lần chạy kế tiếp, không phải ngay.
 
 Đã chạy với dữ liệu thật (lockfile gồm `lodash@4.17.15`, `local-commander-agent@0.3.52`, `zod@3.23.8`):
 
@@ -218,7 +219,7 @@ dependencies:
 
 ## AI review và học rule (thay CodeRabbit/Bugbot, Packmind)
 
-Model là CLI mà team đang dùng (`claude -p`, `codex exec -`, `gemini`, `ollama run …`). larpcop gửi prompt qua stdin và đọc stdout, nên không giữ API key và không phụ thuộc SDK của hãng nào. Không khai `llm.command` thì tự dùng `claude -p`, nếu không có thì `codex exec -`. Có thể đổi bằng biến `LARPCOP_LLM`.
+Model là CLI mà team đang dùng (`claude -p`, `codex exec -`, `gemini`, `ollama run …`). larpcop gửi prompt qua stdin và đọc stdout, nên không giữ API key và không phụ thuộc SDK của hãng nào. Không khai `llm.command` thì tự dùng `claude -p`, nếu không có thì `codex exec -`. Có thể đổi bằng biến `LARPCOP_LLM`. Một lần gọi model chạy tối đa 10 phút rồi bị dừng; đổi bằng `LARPCOP_LLM_TIMEOUT_SECS` (số giây, lớn hơn 0).
 
 ```yaml
 llm:
@@ -426,6 +427,7 @@ larpcop org status <owner> [--standards URL#tag] [--json]
 larpcop org setup  <owner> --standards URL#tag [--repos a,b] [--workflow-ref vX] [--dry-run]
 ```
 
+- Với 1000 repo trở lên (giới hạn của `gh repo list`) cả `status` lẫn `setup` báo lỗi thay vì lặng lẽ chỉ xử lý một phần.
 - `status` liệt kê từng repo (không archived, không fork): có `.larpcop.yaml` không, extends standards nào và pin tag nào, có workflow gọi gate không, lần chạy gần nhất ra sao, có PR setup đang mở không. Exit 1 nếu còn repo chưa có gate. Đo trên tài khoản thật: 57 repo trong khoảng 22 giây.
 - `setup` mở **một PR mỗi repo** gồm `.larpcop.yaml`, workflow `.github/workflows/larpcop.yml` và mọi file agent mà `sync` sinh ra từ nội dung hiện có của repo, nên PR qua được `sync --check` ngay. Chạy lại thì bỏ qua repo đã có gate hoặc đã có PR, và dùng lại nhánh nếu lần trước dừng giữa chừng.
 - Ghi file trong `.github/workflows` cần token có scope `workflow`. Thiếu scope thì PR vẫn được mở, và nội dung workflow nằm trong mô tả PR để thêm tay (`gh auth refresh -s workflow` để lần sau tự thêm).

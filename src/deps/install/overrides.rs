@@ -2,14 +2,15 @@
 //! Values are read, so a stricter setting (`--min-release-age=30`, uv's
 //! `--exclude-newer "30 days"`) passes and only a weaker one blocks.
 
-use crate::shell_ast::{Command, parse};
-use jiff::{SignedDuration, Span, SpanRelativeTo, Timestamp, Unit, civil};
+use super::super::clock;
+use super::super::pm_config::yarn_minutes;
+use crate::shell_ast::{Command, Script};
+use jiff::{Span, SpanRelativeTo, Timestamp, Unit, civil};
 use regex::Regex;
 use std::sync::LazyLock;
 
 /// The command would weaken a package manager's age gate below `days`.
-pub fn weakens_age_gate(command: &str, days: u32) -> bool {
-    let script = parse(command);
+pub fn weakens_age_gate(script: &Script, days: u32) -> bool {
     let env_weak = script.assignments().any(|(k, v)| env_weakens(k, v, days));
     env_weak || script.commands.iter().any(|c| words_weaken(c, days))
 }
@@ -118,29 +119,6 @@ fn below(value: &str, days: u32, per_day: f64) -> bool {
         .map_or(true, |v| v < f64::from(days) * per_day)
 }
 
-/// Yarn durations: a bare number is minutes; otherwise `<n><unit>` terms (`1w`, `3d12h`).
-fn yarn_minutes(text: &str) -> Option<f64> {
-    static TERM: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"(\d+(?:\.\d+)?)\s*(ms|s|m|h|d|w)").expect("static regex"));
-    let text = text.trim().trim_matches('"');
-    if let Ok(minutes) = text.parse::<f64>() {
-        return Some(minutes);
-    }
-    let per = |unit: &str| match unit {
-        "ms" => 1.0 / 60_000.0,
-        "s" => 1.0 / 60.0,
-        "m" => 1.0,
-        "h" => 60.0,
-        "d" => 1440.0,
-        _ => 10_080.0,
-    };
-    let terms: Vec<f64> = TERM
-        .captures_iter(text)
-        .filter_map(|c| Some(c[1].parse::<f64>().ok()? * per(&c[2])))
-        .collect();
-    (!terms.is_empty()).then(|| terms.iter().sum())
-}
-
 /// uv's `exclude-newer`: a duration of at least `days`, or a date at least `days` ago.
 pub fn uv_ok(value: &str, days: u32) -> bool {
     let value = value.trim().trim_matches(['"', '\'']);
@@ -150,10 +128,8 @@ pub fn uv_ok(value: &str, days: u32) -> bool {
             .total((Unit::Day, relative))
             .is_ok_and(|d| d >= f64::from(days));
     }
-    let Some(cutoff) = Timestamp::now()
-        .checked_sub(SignedDuration::from_hours(i64::from(days) * 24))
-        .ok()
-    else {
+    // A window that cannot be computed is not met: the command counts as weakening.
+    let Ok(cutoff) = clock::cutoff(days) else {
         return false;
     };
     let at = value.parse::<Timestamp>().ok().or_else(|| {
@@ -170,6 +146,7 @@ pub fn uv_ok(value: &str, days: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shell_ast::parse;
 
     #[test]
     fn only_weaker_settings_block() {
@@ -185,7 +162,7 @@ mod tests {
             "UV_EXCLUDE_NEWER=2099-01-01 uv lock",
             "uvx --exclude-newer '3 days' ruff",
         ] {
-            assert!(weakens_age_gate(cmd, 14), "{cmd}");
+            assert!(weakens_age_gate(&parse(cmd), 14), "{cmd}");
         }
         for cmd in [
             "npm config get min-release-age",
@@ -197,7 +174,7 @@ mod tests {
             "uv lock --exclude-newer 2020-01-01",
             "YARN_NPM_MINIMAL_AGE_GATE=3w yarn add x",
         ] {
-            assert!(!weakens_age_gate(cmd, 14), "{cmd}");
+            assert!(!weakens_age_gate(&parse(cmd), 14), "{cmd}");
         }
     }
 }

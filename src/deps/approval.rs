@@ -5,18 +5,30 @@ use super::manifest::{self, Direct};
 use super::{APPROVAL_ID, Deps, View, file_name, unreadable};
 use crate::files::{self, Scope};
 use crate::rules::{Level, Violation};
+use rayon::prelude::*;
 use std::fs;
 use std::path::Path;
 
 impl Deps {
+    /// New direct dependencies in the manifests among `listed`.
+    pub(super) fn check_approval(&self, view: &View, listed: &[&str]) -> Vec<Violation> {
+        let manifests: Vec<&str> = listed
+            .iter()
+            .copied()
+            .filter(|rel| manifest::is_manifest(file_name(rel)))
+            .collect();
+        if manifests.is_empty() {
+            return Vec::new();
+        }
+        let known = known(view);
+        manifests
+            .into_iter()
+            .flat_map(|rel| self.unapproved(rel, file_name(rel), view, &known))
+            .collect()
+    }
+
     /// Dependencies `rel` declares that no manifest declared at the base commit.
-    pub(super) fn unapproved(
-        &self,
-        rel: &str,
-        name: &str,
-        view: &View,
-        known: &Direct,
-    ) -> Vec<Violation> {
+    fn unapproved(&self, rel: &str, name: &str, view: &View, known: &Direct) -> Vec<Violation> {
         let Some(content) = view.current(rel) else {
             return Vec::new();
         };
@@ -51,30 +63,28 @@ ask the user to approve it: they add `{eco}:{dep}` to `dependencies.approved` in
 }
 
 /// Direct dependencies of every manifest at the base commit. A dependency the repo
-/// already declares somewhere is not new, even in a new workspace package.
+/// already declares somewhere is not new, even in a new workspace package. Each
+/// manifest costs a `git show`, so they are read in parallel.
 pub(super) fn known(view: &View) -> Direct {
     let Some(base) = view.base.as_deref() else {
         return Direct::new();
     };
-    files::tree(view.root, base)
-        .iter()
+    let root = view.root;
+    files::tree(root, base)
+        .par_iter()
         .filter(|rel| manifest::is_manifest(file_name(rel)))
         .filter_map(|rel| {
-            let content = files::show(view.root, base, rel)?;
+            let content = files::show(root, base, rel)?;
             manifest::parse(file_name(rel), &content)?.ok()
         })
-        .flatten()
+        .flat_map_iter(|declared| declared)
         .collect()
 }
 
 /// For the agent hook: what HEAD declares, plus uncommitted manifest edits from
 /// `cwd` up to the root (a human may have added the dependency already).
 pub(super) fn known_now(root: &Path, cwd: &Path) -> Direct {
-    let view = View {
-        root,
-        staged: false,
-        base: files::base(root, &Scope::Changed),
-    };
+    let view = View::new(root, &Scope::Changed);
     let cwd = dunce::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
     let nearby = cwd
         .ancestors()

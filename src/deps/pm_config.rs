@@ -4,7 +4,7 @@
 //! only sees a bad version after it was installed, so the repo must turn this on.
 
 use regex::Regex;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 /// Files whose change can switch a package manager's age gate on or off.
 pub fn relevant(file_name: &str) -> bool {
@@ -84,7 +84,7 @@ const GATES: [Gate; 5] = [
 ];
 
 /// Age gates missing or too short in `dir`. `read` gets a repo-relative file.
-pub fn check(dir: &str, min_days: u32, read: &dyn Fn(&str) -> Option<String>) -> Vec<Gap> {
+pub fn check(dir: &str, min_days: u32, read: &dyn Fn(&str) -> Option<Arc<str>>) -> Vec<Gap> {
     let path = |name: &str| {
         if dir.is_empty() {
             name.to_string()
@@ -153,19 +153,16 @@ fn yaml_number(content: &str, key: &str) -> Option<f64> {
     yaml_value(content, key)?.as_f64()
 }
 
-/// Yarn durations: a bare number is minutes; otherwise `<n><unit>` terms (`1w`, `3d12h`).
-fn yarn_duration(content: &str) -> Option<f64> {
+/// A yarn duration in minutes: a bare number is minutes; otherwise `<n><unit>` terms
+/// (`1w`, `3d12h`). The one reader of them, for the config files and for commands.
+pub(super) fn yarn_minutes(text: &str) -> Option<f64> {
     static TERM: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"(\d+(?:\.\d+)?)\s*(ms|s|m|h|d|w)").expect("static regex"));
-    let value = yaml_value(content, "npmMinimalAgeGate")?;
-    if let Some(minutes) = value.as_f64() {
-        return Some(minutes);
-    }
-    let text = value.as_str()?.trim();
+    let text = text.trim().trim_matches('"');
     if let Ok(minutes) = text.parse::<f64>() {
         return Some(minutes);
     }
-    let minutes_per = |unit: &str| match unit {
+    let per = |unit: &str| match unit {
         "ms" => 1.0 / 60_000.0,
         "s" => 1.0 / 60.0,
         "m" => 1.0,
@@ -175,9 +172,14 @@ fn yarn_duration(content: &str) -> Option<f64> {
     };
     let terms: Vec<f64> = TERM
         .captures_iter(text)
-        .filter_map(|c| Some(c[1].parse::<f64>().ok()? * minutes_per(&c[2])))
+        .filter_map(|c| Some(c[1].parse::<f64>().ok()? * per(&c[2])))
         .collect();
     (!terms.is_empty()).then(|| terms.iter().sum())
+}
+
+fn yarn_duration(content: &str) -> Option<f64> {
+    let value = yaml_value(content, "npmMinimalAgeGate")?;
+    value.as_f64().or_else(|| yarn_minutes(value.as_str()?))
 }
 
 fn bunfig(content: &str) -> Option<f64> {
@@ -237,7 +239,7 @@ mod tests {
 
     #[test]
     fn reports_missing_and_short_gates() {
-        let files = |rel: &str| -> Option<String> {
+        let files = |rel: &str| -> Option<Arc<str>> {
             match rel {
                 "web/pnpm-lock.yaml" => Some("lockfileVersion: '9.0'\n".into()),
                 "web/pnpm-workspace.yaml" => Some("minimumReleaseAge: 1440\n".into()),

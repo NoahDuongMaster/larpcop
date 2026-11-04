@@ -118,3 +118,18 @@ fn install_refuses_to_clobber_foreign_hooks() {
     assert!(run.stderr().contains("not managed by larpcop"));
     assert_eq!(repo.run(&["install", "--force"]).code(), 0);
 }
+
+#[test]
+fn install_does_not_overwrite_a_hook_it_cannot_read() {
+    let repo = Repo::with_standards();
+    // Not UTF-8: whose it is cannot be told.
+    std::fs::write(
+        repo.tmp.path().join(".git/hooks/pre-commit"),
+        [0xff, 0xfe, 0x00],
+    )
+    .unwrap();
+    let run = repo.run(&["install"]);
+    assert_eq!(run.code(), 3);
+    assert!(run.stderr().contains("cannot be read"), "{}", run.stderr());
+    assert_eq!(repo.run(&["install", "--force"]).code(), 0);
+}

@@ -82,8 +82,15 @@ pub fn context_in(p: &str, lang: SupportLang) -> Option<(String, String)> {
 }
 
 /// Rule files with patterns to fix, rewritten; `None` if nothing changes.
-pub fn rewrite_rule_file(text: &str) -> Option<String> {
-    let mut docs: Vec<Value> = serde_saphyr::from_multiple(text).ok()?;
+pub fn rewrite_rule_file(text: &str) -> Result<Option<String>, serde_saphyr::Error> {
+    // Only a `$$$` pattern or a Go rule is ever rewritten: a file with neither
+    // (a `go` word anywhere only errs towards parsing) is not even parsed.
+    static REWRITABLE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?i)\$\$\$|\bgo(lang)?\b").expect("static regex"));
+    if !REWRITABLE.is_match(text) {
+        return Ok(None);
+    }
+    let mut docs: Vec<Value> = serde_saphyr::from_multiple(text)?;
     let mut changed = false;
     for doc in &mut docs {
         let go = doc["language"]
@@ -95,12 +102,12 @@ pub fn rewrite_rule_file(text: &str) -> Option<String> {
             }
         }
     }
-    changed.then(|| {
+    Ok(changed.then(|| {
         docs.iter()
             .map(Value::to_string)
             .collect::<Vec<_>>()
             .join("\n---\n")
-    })
+    }))
 }
 
 fn rewrite(v: &mut Value, go: bool) -> bool {
@@ -158,11 +165,12 @@ mod tests {
         assert_eq!(sel, "call_expression");
         assert!(super::context("func $F($$$P) { $$$B }").is_none());
         let yaml = "id: x\nlanguage: Go\nrule:\n  any:\n    - pattern: exec.Command($C)\n    - kind: call_expression\n";
-        let out = super::rewrite_rule_file(yaml).unwrap();
+        let out = super::rewrite_rule_file(yaml).unwrap().unwrap();
         assert!(out.contains("\"selector\":\"call_expression\""), "{out}");
-        assert!(
+        assert_eq!(
             super::rewrite_rule_file("id: y\nlanguage: TypeScript\nrule:\n  pattern: eval($X)\n")
-                .is_none()
+                .unwrap(),
+            None
         );
         assert_eq!(
             super::variants("$M.eval($X, $$$R)"),
@@ -178,7 +186,16 @@ mod tests {
             ]
         );
         let js = "id: z\nlanguage: JavaScript\nrule:\n  pattern: f($A, $$$B)\n";
-        let out = super::rewrite_rule_file(js).unwrap();
+        let out = super::rewrite_rule_file(js).unwrap().unwrap();
         assert!(out.contains("\"f($A)\""), "{out}");
+    }
+
+    #[test]
+    fn files_nothing_applies_to_are_not_parsed_and_broken_ones_are_reported() {
+        // Nothing to rewrite, so not even read as YAML: ast-grep reports it.
+        assert_eq!(super::rewrite_rule_file("id: [unclosed\n").unwrap(), None);
+        // A pattern to rewrite in a file that is not YAML is an error, not a skip.
+        assert!(super::rewrite_rule_file("pattern: f($A, $$$B\nrule: [\n").is_err());
+        assert!(super::rewrite_rule_file("language: Go\nrule: {\n").is_err());
     }
 }

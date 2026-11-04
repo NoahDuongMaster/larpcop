@@ -1,6 +1,7 @@
 //! Exact versions a lockfile pins. Only packages from the public registry count:
 //! private registries, git, path and workspace entries have no public publish date.
 
+mod cache;
 mod js;
 mod manifest_pins;
 mod other;
@@ -9,32 +10,60 @@ mod tests;
 
 use super::ecosystem::{Ecosystem, Pinned};
 use anyhow::{Context, Result};
+pub(super) use cache::{LockCache, ParsedLock};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
-/// `None` when `file_name` is not a lockfile larpcop reads.
-pub fn parse(file_name: &str, content: &str) -> Option<Result<Vec<Pinned>>> {
-    let parsed = match file_name {
-        "package-lock.json" | "npm-shrinkwrap.json" => js::npm(content),
-        "pnpm-lock.yaml" => js::pnpm(content),
-        "yarn.lock" => js::yarn(content),
-        "bun.lock" => js::bun(content),
-        "Gemfile.lock" => Ok(other::gemfile_lock(content)),
-        "packages.lock.json" => other::nuget_lock(content),
-        "gradle.lockfile" => Ok(other::gradle_lock(content)),
-        "composer.lock" => other::composer_lock(content),
-        "pom.xml" => other::pom(content),
-        n if is_project_file(n) => other::csproj(content),
-        "Cargo.lock" => cargo(content),
-        "uv.lock" => uv(content),
-        "poetry.lock" => poetry(content),
-        "go.mod" => Ok(go_requires(content)
-            .into_iter()
-            .map(|r| Pinned::new(Ecosystem::Go, &r.module, &r.version))
-            .collect()),
+type Parser = fn(&str) -> Result<Vec<Pinned>>;
+
+/// The parser of a lockfile larpcop reads: the one place that says which files those are.
+fn lockfile_parser(file_name: &str) -> Option<Parser> {
+    let parser: Parser = match file_name {
+        "package-lock.json" | "npm-shrinkwrap.json" => js::npm,
+        "pnpm-lock.yaml" => js::pnpm,
+        "yarn.lock" => js::yarn,
+        "bun.lock" => js::bun,
+        "Gemfile.lock" => |c| Ok(other::gemfile_lock(c)),
+        "packages.lock.json" => other::nuget_lock,
+        "gradle.lockfile" => |c| Ok(other::gradle_lock(c)),
+        "composer.lock" => other::composer_lock,
+        "pom.xml" => other::pom,
+        n if is_project_file(n) => other::csproj,
+        "Cargo.lock" => cargo,
+        "uv.lock" => uv,
+        "poetry.lock" => poetry,
+        "go.mod" => |c| {
+            Ok(go_requires(c)
+                .into_iter()
+                .map(|r| Pinned::new(Ecosystem::Go, &r.module, &r.version))
+                .collect())
+        },
         _ => return None,
     };
-    Some(parsed.with_context(|| format!("reading {file_name}")))
+    Some(parser)
+}
+
+/// The parser of a manifest whose exact pins count when no lockfile governs it.
+fn manifest_parser(file_name: &str) -> Option<Parser> {
+    let parser: Parser = match file_name {
+        "package.json" => manifest_pins::package_json,
+        n if n.starts_with("requirements") && n.ends_with(".txt") => {
+            |c| Ok(manifest_pins::requirements(c))
+        }
+        _ => return None,
+    };
+    Some(parser)
+}
+
+/// Whether `file_name` is a file whose pins are read, by `parse` or `manifest_pins`.
+pub fn reads_pins(file_name: &str) -> bool {
+    lockfile_parser(file_name).is_some() || manifest_parser(file_name).is_some()
+}
+
+/// `None` when `file_name` is not a lockfile larpcop reads.
+pub fn parse(file_name: &str, content: &str) -> Option<Result<Vec<Pinned>>> {
+    let parser = lockfile_parser(file_name)?;
+    Some(parser(content).with_context(|| format!("reading {file_name}")))
 }
 
 /// Exact pins of a manifest read as a lockfile when the project has none
@@ -44,17 +73,11 @@ pub fn manifest_pins(
     content: &str,
     superseded: impl Fn(&[&str]) -> bool,
 ) -> Option<Result<Vec<Pinned>>> {
-    let parsed = match file_name {
-        "package.json" => manifest_pins::package_json(content),
-        n if n.starts_with("requirements") && n.ends_with(".txt") => {
-            Ok(manifest_pins::requirements(content))
-        }
-        _ => return None,
-    };
+    let parser = manifest_parser(file_name)?;
     if superseded(manifest_pins::superseded_by(file_name)) {
         return None;
     }
-    Some(parsed.with_context(|| format!("reading {file_name}")))
+    Some(parser(content).with_context(|| format!("reading {file_name}")))
 }
 
 /// .NET project files (`App.csproj`, `Lib.fsproj`, `X.vbproj`).

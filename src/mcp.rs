@@ -56,89 +56,109 @@ fn failed(e: anyhow::Error) -> ErrorData {
     ErrorData::internal_error(format!("{e:#}"), None)
 }
 
+/// A panic in a tool answers that call with an error; the server keeps running.
+fn guarded(f: impl FnOnce() -> Reply) -> Reply {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or_else(|p| {
+        Err(failed(anyhow::anyhow!(
+            "internal error (a bug in larpcop): {}",
+            crate::panic::message(&*p)
+        )))
+    })
+}
+
 #[tool_router]
 impl Server {
     #[tool(
         description = "Rules enforced on one file (by its language and path), with how to comply. Call before writing or editing a file."
     )]
     fn rules_for(&self, Parameters(PathArg { path }): Parameters<PathArg>) -> Reply {
-        let ctx = self.ctx().map_err(failed)?;
-        let (cfg, engine) = ctx.load().map_err(failed)?;
-        let rel = self.rel(&ctx, &path);
-        let rules = engine.rules_for(&rel);
-        let mut out = format!("{} rule(s) apply to {rel}:\n", rules.len());
-        for r in rules {
-            let lock = cfg.locked.get(&r.id).map_or("", |_| " [locked]");
-            let _ = writeln!(
-                out,
-                "\n- {} ({}){lock}: {}",
-                r.id,
-                r.level.as_str(),
-                r.message
-            );
-            if let Some(note) = &r.note {
-                let _ = writeln!(out, "  how to comply: {note}");
+        guarded(|| {
+            let ctx = self.ctx().map_err(failed)?;
+            let (cfg, engine) = ctx.load().map_err(failed)?;
+            let rel = self.rel(&ctx, &path);
+            let rules = engine.rules_for(&rel);
+            let mut out = format!("{} rule(s) apply to {rel}:\n", rules.len());
+            for r in rules {
+                let lock = cfg.locked.get(&r.id).map_or("", |_| " [locked]");
+                let _ = writeln!(
+                    out,
+                    "\n- {} ({}){lock}: {}",
+                    r.id,
+                    r.level.as_str(),
+                    r.message
+                );
+                if let Some(note) = &r.note {
+                    let _ = writeln!(out, "  how to comply: {note}");
+                }
             }
-        }
-        text(out)
+            text(out)
+        })
     }
 
     #[tool(
         description = "Check content before writing it to a file. Returns the violations it would introduce; write only clean content."
     )]
     fn check_content(&self, Parameters(arg): Parameters<ContentArg>) -> Reply {
-        let ctx = self.ctx().map_err(failed)?;
-        let path = ctx.root.join(self.rel(&ctx, &arg.path));
-        let outcome = ctx.check_content(&path, &arg.content).map_err(failed)?;
-        text(report::text(&outcome))
+        guarded(|| {
+            let ctx = self.ctx().map_err(failed)?;
+            let path = ctx.root.join(self.rel(&ctx, &arg.path));
+            let outcome = ctx.check_content(&path, &arg.content).map_err(failed)?;
+            text(report::text(&outcome))
+        })
     }
 
     #[tool(
         description = "Check files on disk (default: every uncommitted change) against all enforced rules."
     )]
     fn check(&self, Parameters(PathsArg { paths }): Parameters<PathsArg>) -> Reply {
-        let ctx = self.ctx().map_err(failed)?;
-        let outcome = ctx.check(&self.scope(&ctx, paths)).map_err(failed)?;
-        text(report::text(&outcome))
+        guarded(|| {
+            let ctx = self.ctx().map_err(failed)?;
+            let outcome = ctx.check(&self.scope(&ctx, paths)).map_err(failed)?;
+            text(report::text(&outcome))
+        })
     }
 
     #[tool(description = "Apply the automatic fixes rules provide, then report what is left.")]
     fn fix(&self, Parameters(PathsArg { paths }): Parameters<PathsArg>) -> Reply {
-        let ctx = self.ctx().map_err(failed)?;
-        let (cfg, engine) = ctx.load().map_err(failed)?;
-        let scope = self.scope(&ctx, paths);
-        let exclude = crate::files::globset(&cfg.exclude).map_err(failed)?;
-        let sources = crate::files::collect(&cfg.root, &scope, &exclude).map_err(failed)?;
-        let mut out = String::new();
-        for (rel, content, n) in engine.fix(&sources) {
-            std::fs::write(cfg.root.join(&rel), content).map_err(|e| failed(e.into()))?;
-            let _ = writeln!(out, "fixed {rel} ({n} fix(es))");
-        }
-        let outcome = ctx.check(&scope).map_err(failed)?;
-        text(out + &report::text(&outcome))
+        guarded(|| {
+            let ctx = self.ctx().map_err(failed)?;
+            let (cfg, engine) = ctx.load().map_err(failed)?;
+            let scope = self.scope(&ctx, paths);
+            let exclude = crate::files::globset(&cfg.exclude).map_err(failed)?;
+            let sources = crate::files::collect(&cfg.root, &scope, &exclude).map_err(failed)?;
+            let mut out = String::new();
+            for (rel, content, n) in engine.fix(&sources) {
+                std::fs::write(cfg.root.join(&rel), content).map_err(|e| failed(e.into()))?;
+                let _ = writeln!(out, "fixed {rel} ({n} fix(es))");
+            }
+            let outcome = ctx.check(&scope).map_err(failed)?;
+            text(out + &report::text(&outcome))
+        })
     }
 
     #[tool(
         description = "Explain one rule: what it forbids, how to comply, and valid/invalid examples."
     )]
     fn explain_rule(&self, Parameters(RuleArg { id }): Parameters<RuleArg>) -> Reply {
-        let ctx = self.ctx().map_err(failed)?;
-        let (cfg, engine) = ctx.load().map_err(failed)?;
-        let Some(rule) = engine.rules().into_iter().find(|r| r.id == id) else {
-            return Err(ErrorData::invalid_params(format!("no rule `{id}`"), None));
-        };
-        let mut out = format!(
-            "{} ({}, {}): {}\n",
-            rule.id,
-            rule.level.as_str(),
-            rule.scope,
-            rule.message
-        );
-        if let Some(note) = rule.note {
-            let _ = writeln!(out, "How to comply: {note}");
-        }
-        out += &crate::rules::testing::examples(&cfg.rule_dirs, &id);
-        text(out)
+        guarded(|| {
+            let ctx = self.ctx().map_err(failed)?;
+            let (cfg, engine) = ctx.load().map_err(failed)?;
+            let Some(rule) = engine.rules().into_iter().find(|r| r.id == id) else {
+                return Err(ErrorData::invalid_params(format!("no rule `{id}`"), None));
+            };
+            let mut out = format!(
+                "{} ({}, {}): {}\n",
+                rule.id,
+                rule.level.as_str(),
+                rule.scope,
+                rule.message
+            );
+            if let Some(note) = rule.note {
+                let _ = writeln!(out, "How to comply: {note}");
+            }
+            out += &crate::rules::testing::examples(&cfg.rule_dirs, &id).map_err(failed)?;
+            text(out)
+        })
     }
 }
 

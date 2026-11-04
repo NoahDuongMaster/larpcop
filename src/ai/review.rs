@@ -6,11 +6,12 @@ use super::{Llm, extract_json};
 use crate::config::{Config, LlmRule};
 use crate::files::{self, Scope, SourceFile};
 use crate::rules::{Level, Violation};
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use globset::GlobSet;
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
+use std::io::ErrorKind;
 use std::path::Path;
 use std::process::Command;
 
@@ -28,7 +29,7 @@ pub fn review(cfg: &Config, scope: &Scope, cached: bool) -> Result<(usize, Vec<V
         .collect::<Result<_>>()?;
     let exclude = files::globset(&cfg.exclude)?;
     let sources = files::collect(&cfg.root, scope, &exclude)?;
-    let changed = changed_lines(&cfg.root, scope);
+    let changed = changed_lines(&cfg.root, scope)?;
     let jobs: Vec<(&SourceFile, Vec<&LlmRule>)> = sources
         .iter()
         .filter(|f| f.content.len() <= MAX_BYTES)
@@ -47,8 +48,21 @@ pub fn review(cfg: &Config, scope: &Scope, cached: bool) -> Result<(usize, Vec<V
         jobs.par_iter()
             .map(|(file, rules)| {
                 let lines = changed.as_ref().and_then(|c| c.get(&file.rel));
-                let answer = llm.ask(&prompt(file, rules, lines), cached)?;
-                Ok(parse(&answer, file, rules, lines))
+                let prompt = prompt(file, rules, lines);
+                let answer = llm.ask(&prompt, cached)?;
+                match parse(&answer, file, rules, lines) {
+                    Some(found) => Ok(found),
+                    None => {
+                        // Do not serve the same unusable answer on every re-run.
+                        llm.forget(&prompt);
+                        bail!(
+                            "`{}` did not answer with a JSON array for {}:\n{}",
+                            llm.name(),
+                            file.rel,
+                            answer.trim()
+                        )
+                    }
+                }
             })
             .collect()
     });
@@ -91,66 +105,84 @@ nothing else (no style nits, no general advice).\n\nRules:\n",
     p
 }
 
+/// The findings in a model's answer; `None` when it holds no JSON array.
 fn parse(
     answer: &str,
     file: &SourceFile,
     rules: &[&LlmRule],
     changed: Option<&BTreeSet<usize>>,
-) -> Vec<Violation> {
-    let Some(serde_json::Value::Array(items)) = extract_json(answer) else {
-        return Vec::new();
+) -> Option<Vec<Violation>> {
+    let serde_json::Value::Array(items) = extract_json(answer)? else {
+        return None;
     };
     let lines = file.content.lines().count();
-    items
-        .iter()
-        .filter_map(|i| {
-            let id = i["rule"].as_str()?;
-            let rule = rules.iter().find(|r| r.id == id)?;
-            let line = usize::try_from(i["line"].as_u64()?).ok()?;
-            let on_diff = changed.is_none_or(|c| c.contains(&line));
-            (line >= 1 && line <= lines && on_diff).then(|| Violation {
-                rule: rule.id.clone(),
-                level: Level::Warning,
-                file: file.rel.clone(),
-                line,
-                column: 1,
-                message: i["message"].as_str().unwrap_or("").trim().to_string(),
-                note: Some(format!("AI review: {}", rule.prompt.trim())),
-                snippet: file
-                    .content
-                    .lines()
-                    .nth(line - 1)
-                    .map(|l| l.trim().to_string()),
+    Some(
+        items
+            .iter()
+            .filter_map(|i| {
+                let id = i["rule"].as_str()?;
+                let rule = rules.iter().find(|r| r.id == id)?;
+                let line = usize::try_from(i["line"].as_u64()?).ok()?;
+                let on_diff = changed.is_none_or(|c| c.contains(&line));
+                (line >= 1 && line <= lines && on_diff).then(|| Violation {
+                    rule: rule.id.clone(),
+                    level: Level::Warning,
+                    file: file.rel.clone(),
+                    line,
+                    column: 1,
+                    message: i["message"].as_str().unwrap_or("").trim().to_string(),
+                    note: Some(format!("AI review: {}", rule.prompt.trim())),
+                    snippet: file
+                        .content
+                        .lines()
+                        .nth(line - 1)
+                        .map(|l| l.trim().to_string()),
+                })
             })
-        })
-        .collect()
+            .collect(),
+    )
 }
 
-/// Lines added or modified per file; `None` when the scope is not a diff.
-fn changed_lines(root: &Path, scope: &Scope) -> Option<BTreeMap<String, BTreeSet<usize>>> {
+/// Lines added or modified per file; `None` when the scope is not a diff. A
+/// failing `git diff` is an error: reviewing the whole file instead would
+/// report (and pay for) lines the diff never touched.
+fn changed_lines(root: &Path, scope: &Scope) -> Result<Option<BTreeMap<String, BTreeSet<usize>>>> {
     let range = match scope {
         Scope::Staged => vec!["--cached".to_string()],
         Scope::Changed => vec!["HEAD".to_string()],
         Scope::Since(base) => vec![format!("{base}...HEAD")],
-        Scope::All | Scope::Paths(_) | Scope::Touched(_) => return None,
+        Scope::All | Scope::Paths(_) | Scope::Touched(_) => return Ok(None),
     };
     let out = Command::new("git")
         .args(["diff", "-U0", "--no-color", "--relative"])
         .args(&range)
         .current_dir(root)
         .output()
-        .ok()?;
+        .context("running `git diff`")?;
+    if !out.status.success() {
+        bail!(
+            "`git diff` failed ({}): {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
     let mut map = parse_diff(&String::from_utf8_lossy(&out.stdout));
     // Untracked files are new in full.
     if matches!(scope, Scope::Changed) {
-        for rel in files::list(root, scope).ok()? {
-            map.entry(rel).or_insert_with_key(|rel| {
-                let n = std::fs::read_to_string(root.join(rel)).map_or(0, |c| c.lines().count());
-                (1..=n).collect()
-            });
+        for rel in files::list(root, scope)? {
+            if map.contains_key(&rel) {
+                continue;
+            }
+            // A binary or deleted file has no lines to review.
+            let lines = match std::fs::read_to_string(root.join(&rel)) {
+                Ok(content) => content.lines().count(),
+                Err(e) if matches!(e.kind(), ErrorKind::InvalidData | ErrorKind::NotFound) => 0,
+                Err(e) => return Err(e).with_context(|| format!("reading {rel}")),
+            };
+            map.insert(rel, (1..=lines).collect());
         }
     }
-    Some(map)
+    Ok(Some(map))
 }
 
 fn parse_diff(diff: &str) -> BTreeMap<String, BTreeSet<usize>> {

@@ -6,6 +6,8 @@
 //! become a `0` as long as the tag when they print a value, blanks
 //! otherwise; scripts of another type (`text/template`) are left out.
 
+mod comments;
+
 /// Appended to a page's path for its scripts' view (`page.php#script.js`).
 pub const SUFFIX_JS: &str = "#script.js";
 pub const SUFFIX_TS: &str = "#script.ts";
@@ -58,43 +60,66 @@ pub fn view(rel: &str, content: &str) -> Option<(String, bool)> {
     if !PAGES.contains(&ext.as_str()) {
         return None;
     }
-    let lower = content.to_ascii_lowercase();
-    if !lower.contains("<script") {
-        return None;
-    }
-    let php = matches!(ext.as_str(), "php" | "phtml");
-    let mut out: Vec<u8> = content
-        .bytes()
-        .map(|b| if b == b'\n' || b == b'\r' { b } else { b' ' })
-        .collect();
-    let (mut any, mut ts) = (false, false);
+    let mut php = matches!(ext.as_str(), "php" | "phtml").then(|| PhpScan::new(content));
+    let mut comments = comments::CommentScan::new(content);
+    // The scripts (from, to) are located before any copy of the page is made:
+    // most pages have none.
+    let mut scripts = Vec::new();
+    let mut ts = false;
     let mut i = 0;
-    while let Some(at) = lower[i..].find("<script").map(|p| i + p) {
+    while let Some(at) = find_ci(content, "<script", i) {
         let Some(tag_end) = tag_end(content, at) else {
             break;
         };
         // `<?php echo "<script>…" ?>`: a script in code is the code's business.
-        if php && in_php(content, at) {
+        if php.as_mut().is_some_and(|p| p.holds(at)) {
             i = tag_end;
             continue;
         }
-        let attrs = &lower[at + 7..tag_end];
-        let close = lower[tag_end..]
-            .find("</script")
-            .map_or(content.len(), |p| tag_end + p);
-        let kind = attribute(attrs, "type").unwrap_or_default();
-        if JS_TYPES.contains(&kind.as_str()) && !in_comment(&lower, at) {
-            let lang = attribute(attrs, "lang").unwrap_or_default();
+        let attrs = content[at + 7..tag_end].to_ascii_lowercase();
+        let close = find_ci(content, "</script", tag_end).unwrap_or(content.len());
+        let kind = attribute(&attrs, "type").unwrap_or_default();
+        if JS_TYPES.contains(&kind.as_str()) && !comments.holds(at) {
+            let lang = attribute(&attrs, "lang").unwrap_or_default();
             ts |= kind == "text/typescript" || matches!(lang.as_str(), "ts" | "typescript");
-            copy(content, tag_end + 1, close, &mut out);
-            any = true;
+            scripts.push((tag_end + 1, close));
         }
         i = close;
+    }
+    if scripts.is_empty() {
+        return None;
+    }
+    let mut out: Vec<u8> = content
+        .bytes()
+        .map(|b| if b == b'\n' || b == b'\r' { b } else { b' ' })
+        .collect();
+    for (from, to) in scripts {
+        copy(content, from, to, &mut out);
     }
     // Only ASCII bytes were blanked and whole scripts (cut at ASCII `>`,
     // `<`) copied: still UTF-8.
     let text = String::from_utf8(out).ok()?;
-    any.then_some((text, ts))
+    Some((text, ts))
+}
+
+/// Where `needle` (lowercase ASCII, starting with `<`) first occurs in `text`
+/// at or after `from`, in any case.
+fn find_ci(text: &str, needle: &str, mut from: usize) -> Option<usize> {
+    while let Some(p) = text[from..].find('<') {
+        let at = from + p;
+        if starts_with_ci(&text[at..], needle) {
+            return Some(at);
+        }
+        from = at + 1;
+    }
+    None
+}
+
+/// Does `text` start with `prefix` (lowercase ASCII), in any case?
+fn starts_with_ci(text: &str, prefix: &str) -> bool {
+    text.as_bytes()
+        .get(..prefix.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(prefix.as_bytes()))
 }
 
 /// Where a tag opened at `at` ends (its `>`), quoted values skipped.
@@ -136,24 +161,49 @@ fn attribute(attrs: &str, name: &str) -> Option<String> {
     None
 }
 
-/// Is `at` inside an HTML comment?
-fn in_comment(lower: &str, at: usize) -> bool {
-    let before = &lower[..at];
-    before
-        .rfind("<!--")
-        .is_some_and(|open| before[open..].find("-->").is_none())
+/// Tells whether positions, asked in increasing order, are inside PHP code
+/// (after a `<?` not yet closed by `?>`), reading the page once: not from its
+/// start for every question.
+struct PhpScan<'c> {
+    content: &'c str,
+    /// Where the page is not read yet: after the last block that ended.
+    from: usize,
+    /// The block read last, if still open at the last question: where it
+    /// ends (`Some(None)`: never).
+    block: Option<Option<usize>>,
 }
 
-/// Is `at` inside PHP code (after a `<?` not yet closed by `?>`)?
-fn in_php(content: &str, at: usize) -> bool {
-    let mut i = 0;
-    while let Some(open) = content[i..at].find("<?").map(|p| i + p) {
-        match php_close(content, open + 2) {
-            Some(end) if end <= at => i = end,
-            _ => return true,
+impl<'c> PhpScan<'c> {
+    fn new(content: &'c str) -> Self {
+        Self {
+            content,
+            from: 0,
+            block: None,
         }
     }
-    false
+
+    fn holds(&mut self, at: usize) -> bool {
+        loop {
+            let end = match self.block {
+                Some(end) => end,
+                None => {
+                    let Some(p) = self.content[self.from..at].find("<?") else {
+                        return false;
+                    };
+                    let end = php_close(self.content, self.from + p + 2);
+                    self.block = Some(end);
+                    end
+                }
+            };
+            match end {
+                Some(end) if end <= at => {
+                    self.from = end;
+                    self.block = None;
+                }
+                _ => return true,
+            }
+        }
+    }
 }
 
 /// Where PHP code from `i` ends: after its `?>`, strings skipped.
@@ -214,8 +264,8 @@ fn copy(content: &str, from: usize, to: usize, out: &mut [u8]) {
             continue;
         };
         let stop = end + close.len();
-        let head = content[i..stop].to_ascii_lowercase();
-        if prints.iter().any(|p| head.starts_with(p)) {
+        let head = &content[i..stop];
+        if prints.iter().any(|p| starts_with_ci(head, p)) {
             out[i] = b'0';
         }
         // The rest stays blank, line breaks kept.

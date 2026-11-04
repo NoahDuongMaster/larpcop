@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Scores tools on the OWASP Benchmark (Java or Python) the way its own scorecard does:
-a test case counts as reported when a finding of the matching vulnerability
+"""Scores larpcop on the OWASP Benchmark (Java or Python) the way its own scorecard
+does: a test case counts as reported when a finding of the matching vulnerability
 category falls in its file; score = true-positive rate - false-positive rate,
 per category, then averaged over categories.
 
-    owasp_benchmark.py BENCHMARK_DIR LARPCOP_JSON SEMGREP_JSON [SEMGREP_JSON_2 ...]
+    owasp_benchmark.py BENCHMARK_DIR LARPCOP_JSON
+
+LARPCOP_JSON is the output of `larpcop check --format json`.
 """
 import csv
 import glob
@@ -12,9 +14,6 @@ import json
 import re
 import sys
 
-CWE = {"22": "pathtraver", "78": "cmdi", "79": "xss", "89": "sqli", "90": "ldapi", "327": "crypto",
-       "328": "hash", "330": "weakrand", "501": "trustbound", "614": "securecookie", "643": "xpathi",
-       "94": "codeinj", "95": "codeinj", "502": "deserialization", "601": "redirect", "611": "xxe"}
 LARPCOP = {
     "java-taint-sql": "sqli", "java-no-sql-concat": "sqli", "java-taint-shell": "cmdi",
     "java-no-shell-string": "cmdi",
@@ -53,19 +52,6 @@ def larpcop(path):
     return found
 
 
-def semgrep(path):
-    found = set()
-    for r in json.load(open(path))["results"]:
-        m = TEST.search(r["path"])
-        cwes = r.get("extra", {}).get("metadata", {}).get("cwe", [])
-        cwes = cwes if isinstance(cwes, list) else [cwes]
-        for c in cwes:
-            n = re.match(r"CWE-(\d+)", str(c))
-            if m and n and n.group(1) in CWE:
-                found.add((m.group(1), CWE[n.group(1)]))
-    return found
-
-
 def score(truth, found):
     cats = {}
     for test, (cat, real) in truth.items():
@@ -82,18 +68,14 @@ def score(truth, found):
 
 
 def main():
-    root, tools = sys.argv[1], [("larpcop", larpcop(sys.argv[2]))]
-    for i, p in enumerate(sys.argv[3:]):
-        tools.append((f"Semgrep ({p.rsplit('/', 1)[-1].removesuffix('.json')})", semgrep(p)))
-    truth = expected(root)
-    results = [(name, *score(truth, found)) for name, found in tools]
+    root = sys.argv[1]
+    rows, average = score(expected(root), larpcop(sys.argv[2]))
     out = sys.stdout.write
-    out("| Category | " + " | ".join(f"{n} TPR / FPR / score" for n, *_ in results) + " |\n")
-    out("|---|" + "---|" * len(results) + "\n")
-    for i, (cat, *_) in enumerate(results[0][1]):
-        cells = [f"{r[1][i][1]:.0%} / {r[1][i][2]:.0%} / **{r[1][i][3]:+.0%}**" for r in results]
-        out(f"| {cat} | " + " | ".join(cells) + " |\n")
-    out("| **average** | " + " | ".join(f"**{r[2]:+.1%}**" for r in results) + " |\n")
+    out("| Category | larpcop TPR / FPR / score |\n")
+    out("|---|---|\n")
+    for cat, tpr, fpr, diff in rows:
+        out(f"| {cat} | {tpr:.0%} / {fpr:.0%} / **{diff:+.0%}** |\n")
+    out(f"| **average** | **{average:+.1%}** |\n")
 
 
 if __name__ == "__main__":

@@ -1,123 +1,185 @@
-# Benchmark: larpcop vs Semgrep OSS vs gitleaks
+# larpcop benchmark
 
-Chạy lại được bằng một lệnh: `bench/run.sh` (cần git, python3, node, semgrep, gitleaks và một bản build release của larpcop). Kết quả thô nằm trong [`results/`](results): `juice-shop.md`, `NodeGoat.md`, `dvna.md`, `dvpwa.md`, `dvws-node.md`, `govwa.md`, `seeds.md`, `timing.txt`; các file JSON không được commit.
+This directory measures larpcop's security rules on deliberately vulnerable projects and public test suites. Every suite has an answer key: the lines, endpoints or test cases known to contain a bug. `run.sh` fetches each suite at a pinned version, runs larpcop with the `standards/recommended` rule set and scores the findings against the key. The scored output is committed in [`results/`](results). A summary table is in [docs/benchmarks.md](../docs/benchmarks.md).
 
-## Đối tượng và cách chấm
+- [`run.sh`](run.sh) fetches the suites, runs larpcop, scores and writes `results/`.
+- [`scripts/`](scripts) holds the scorers (`score.py`, `owasp_benchmark.py`, `juliet.py`, `sard_php.py`, `dvwa.py`, `java_sec_code.py`, `seeds.py`), the timing helper `time_it.py` and `scale.sh`.
+- [`truth/`](truth) holds the answer keys written for this benchmark (`*-truth.json`) and the scripts that generate some of them (`java_sec_code_truth.py`, `java_endpoints.py`, `vulnerableapp_truth.py`).
+- [`results/`](results) holds one page per suite and [`timing.txt`](results/timing.txt).
 
-| | Mã nguồn | Đáp án |
-|---|---|---|
-| Juice Shop | [OWASP Juice Shop](https://github.com/juice-shop/juice-shop) `v20.3.0` (Express + Angular) | Comment `// vuln-code-snippet vuln-line` do chính nhóm Juice Shop đặt: 27 dòng (bỏ `test/` và `data/static/codefixes/`) |
-| NodeGoat | [OWASP NodeGoat](https://github.com/OWASP/NodeGoat) `c5cb68a` (Express + MongoDB) | [`nodegoat-truth.json`](nodegoat-truth.json): 14 dòng theo tutorial của NodeGoat |
-| DVNA | [appsecco/dvna](https://github.com/appsecco/dvna) `9ba473a` (Express + Sequelize + EJS) | [`dvna-truth.json`](dvna-truth.json): 14 dòng theo `docs/solution/*.md` của DVNA |
-| DVPWA | [anxolerd/dvpwa](https://github.com/anxolerd/dvpwa) `a1d8f89` (Python, aiohttp + Jinja2) | [`dvpwa-truth.json`](dvpwa-truth.json): 4 dòng theo mục *Vulnerabilities* trong README của DVPWA |
-| GoVWA | [0c34/govwa](https://github.com/0c34/govwa) `4058f79` (Go, net/http + html/template) | [`govwa-truth.json`](govwa-truth.json): 4 dòng theo comment đánh dấu lỗ hổng của chính dự án trong `vulnerability/sqli` và `vulnerability/xss` (IDOR và client-side auth là lỗi logic; module XXE là file rỗng) |
-| DVWS-Node | [snoopysecurity/dvws-node](https://github.com/snoopysecurity/dvws-node) `e83689c` (Express + MongoDB + MySQL + GraphQL + SOAP/XML-RPC) | [`dvws-truth.json`](dvws-truth.json): 15 dòng theo `CHALLENGES.md`, mỗi challenge mà lỗi nằm ở một dòng code (bỏ IDOR, CORS, rate limit… là lỗi thiết kế) |
-| vulnerable-node | [cr0hn/vulnerable-node](https://github.com/cr0hn/vulnerable-node) `d68f2a3`, thư mục `sast/seeds/` | Do chính dự án viết (`sast/ground-truth.yaml`) và chấm bằng script của dự án (`sast/tests/score.js`): 12 file, mỗi file một lỗ hổng, cộng 2 file sạch để đo báo nhầm |
-| XVWA | [s4n7h0/xvwa](https://github.com/s4n7h0/xvwa) `fb30fa5` (PHP thuần) | [`xvwa-truth.json`](xvwa-truth.json): 19 lỗi README của dự án liệt kê, mỗi lỗi một module |
-| WackoPicko | [adamdoupe/WackoPicko](https://github.com/adamdoupe/WackoPicko) `cabc1b3` (PHP thuần) | [`wackopicko-truth.json`](wackopicko-truth.json): 14 lỗi README liệt kê (mật khẩu admin nằm trong database, không tính) |
+## Running it
 
-- **Một dòng tính là tìm thấy** khi có finding của công cụ phủ dòng đó, chấp nhận lệch ±3 dòng, áp dụng như nhau cho mọi công cụ. Với vulnerable-node, một file tính là tìm thấy khi công cụ báo bất kỳ finding nào trong file (cách chấm của dự án); cột thứ hai bỏ các rule báo cho mọi handler Express bất kể lỗi (`validate-request-input` của larpcop, kiểm middleware CSRF của Semgrep).
-- **Công cụ**: larpcop với bộ [`standards/recommended`](../standards/recommended), chỉ tính rule bảo mật; Semgrep OSS 1.183.0 với gói `p/default` (1073 rule), tải về một lần trước khi đo; gitleaks 8.30.1, chỉ để so phần secrets.
-- **Thời gian**: trung vị của 3 lần chạy trên MacBook arm64 8 nhân.
+You need `git`, `python3`, `node` (the vulnerable-node scorer is a Node script), `curl`, `unzip` and a release build of larpcop. The run clones the projects and downloads the NIST archives, so it needs network access.
 
-## Bộ nào còn là bộ kiểm chứng
+```sh
+cargo build --release
+bench/run.sh                         # uses target/release/larpcop
+bench/run.sh /path/to/larpcop        # another binary
+BENCH_WORK=/data/bench bench/run.sh  # another working directory
+```
 
-Một bộ chỉ đo được độ tổng quát khi rule chưa được viết sau khi xem đáp án của nó. Thứ tự đã diễn ra:
+`BENCH_WORK` is where checkouts and archives are kept. It defaults to `${TMPDIR:-/tmp}/larpcop-bench`. Existing checkouts are reused, so only the first run clones. A run overwrites the pages in `results/`. The raw JSON reports it writes next to them are ignored by git.
 
-1. **Juice Shop** là bộ phát triển: lần đầu larpcop 5/27, Semgrep 6/27; `no-bypass-security-trust`, `no-directory-listing`, `no-weak-hash`, `no-mongo-where`, `taint-redirect` được thêm sau đó.
-2. **NodeGoat** được chấm lần đầu khi chưa ai xem đáp án: larpcop **8/14**, Semgrep 4/14. Bốn chỗ trống (ReDoS, log injection, tắt autoescape, so mật khẩu plain text) sau đó có rule, nên NodeGoat không còn là bộ kiểm chứng.
-3. **DVNA** đo bốn rule đó: chúng không bắt thêm dòng nào (DVNA không có các lỗi này). Lần chạy đầu: larpcop **5/14**, Semgrep **7/14**. Các chỗ trống (secret của session viết cứng, XXE, deserialization, `mathjs.eval`, output không escape trong template EJS) sau đó có rule, nên DVNA cũng hết là bộ kiểm chứng.
-4. **vulnerable-node** đo các rule của bước 3, lần đầu: larpcop 10/12 file, 1 báo nhầm (6/12 nếu bỏ rule chung chung), Semgrep 10/12, 1 báo nhầm (8/12). Các chỗ trống (XSS qua `res.send`, path traversal, SSRF, ReDoS, prototype pollution) và báo nhầm (redirect đã được kiểm bằng `startsWith`) sau đó được xử lý bằng rule taint mới, `guards` và `safe_prefix`.
+For each suite the script checks out the pinned commit (or unpacks the selected cases from the NIST archive), writes a `.larpcop.yaml` that extends `standards/recommended`, runs `larpcop check --format json` and passes the report to the suite's scorer. The scoring run uses the full set, including `dependency-vulnerability`, which queries OSV.dev. The timing runs of the application suites disable that rule, so the clock does not include advisory lookups.
 
-5. **DVPWA** là bộ Python đầu tiên, đo mọi rule Python tới lúc đó, lần đầu: larpcop **1/4**, Semgrep **2/4**. Chỗ trống lộ ra ba điểm yếu chung: SQL được dựng bằng `%` ở một biến rồi mới truyền vào `execute`, `md5` gọi trực tiếp sau `from hashlib import md5`, và nguồn request của aiohttp/Starlette/Tornado chưa được khai. Thêm vào đó, taint chưa theo được qua method của class được import (`Student.create(...)`). Cả bốn đã được sửa.
+Timings are the median wall time of three runs. `scripts/time_it.py` starts the clock around the larpcop process only. A run that exits with a code other than 0 or 1 (1 means findings were reported) stops the benchmark and is recorded as `FAILED(exit N)`, so a crash cannot show up as a fast run. The first line of `timing.txt` records the larpcop version, the operating system and the CPU count.
 
-6. **DVWS-Node** đo mọi rule tới bước 5, kể cả session fixation, taint qua decorator của NestJS và tham số handler của FastAPI/Flask (hai thứ này đã được thử trên mẫu thật `nestjs/nest/sample` và `fastapi/full-stack-fastapi-template` để đếm báo nhầm, không phải trên bộ có đáp án). Lần đầu: larpcop **10/15** (9/15 nếu bỏ `validate-request-input`), Semgrep **7/15**. Chỗ trống lộ ra: JWT chấp nhận `alg: none`, filter LDAP ghép chuỗi, file `.env` có secret được commit dù nằm trong `.gitignore` (larpcop bỏ qua file đã track nhưng bị ignore: một bug), tham số của resolver GraphQL không được coi là dữ liệu request, và `fsPromise.writeFile` không phải sink vì chỉ có `fs.*`/`fsp.*`. Lần chạy đó cũng lộ ra báo nhầm: `RegExp.prototype.exec` bị tính là `child_process.exec`, `stream.write(a + b)` là XSS, `dict.get(x)` là SSRF; sink giờ khai theo tên (`cp.exec`, `res.send`, `session.get`). Tất cả đã được sửa, nên DVWS-Node cũng hết là bộ kiểm chứng.
+`scripts/scale.sh` is separate from `run.sh`. It times a full check of two large real repositories, `django/django` (`a05e16a`) and `rails/rails` (`d0f264a`), and counts the findings. Nobody wrote these for a benchmark, so there is no answer key. See [`results/scale.md`](results/scale.md).
 
-7. **GoVWA** là bộ Go đầu tiên, đo 5 rule taint Go vừa viết (SQL, shell, path, SSRF, redirect) cùng `go-no-sql-sprintf`. Lần đầu: larpcop **0/4**, Semgrep **4/4**. Lần chạy lộ ra bốn điểm yếu chung của phần Go: không có rule XSS nào (`template.HTML(x)`), `go-no-sql-sprintf` chỉ bắt `fmt.Sprintf` nằm ngay trong `db.Query(...)` chứ không bắt khi câu SQL được dựng trước ở một biến, method Go (`func (p *Profile) Load()`) không có summary theo kiểu receiver nên taint không qua được `p.Load(uid)` ở file khác cùng package, và pattern nguồn `$C.Query(k)` của gin trùng với sink `db.Query(sql)`. Cả bốn đã được sửa (`go-taint-xss`, `go-no-unsafe-template-type`, SQL dựng ở bất kỳ đâu, method theo receiver, sink nằm trong nguồn thì không tính). Chạy thử trên `pocketbase/pocketbase` (Go thật, không phải bộ có đáp án) lộ thêm báo nhầm: `stmt.Exec(args)` của prepared statement, `resp.Body` của response bị coi là nguồn; đã sửa.
+## How scores are computed
 
-8. **OWASP Benchmark (Java)** đo 8 rule taint Java và 5 rule cú pháp Java vừa viết, chấm như scorecard của chính dự án (mỗi hạng mục: tỉ lệ bắt đúng − tỉ lệ báo nhầm, rồi lấy trung bình). Lần đầu: larpcop **+37,5%**, Semgrep `p/default` +34,9%, `p/java` +17,7%. Lần chạy lộ ra một điểm yếu chung của taint: phép gán sạch nằm trong nhánh `if` (`if (param == null) param = "";`) xoá taint như thể nó luôn chạy. Giờ phép gán chỉ chạy trên một số đường (trong `if`, vòng lặp, `try`, `switch`) có thể làm bẩn nhưng không làm sạch một biến: **+44,0%**. Báo nhầm còn lại phần lớn là các ca cố ý của Benchmark mà taint không có hằng số và chỉ số collection không phân biệt được (`(7*18)+num > 200 ? "safe" : param`, `list.remove(0); list.get(1)`), và rule quy ước `java-no-sql-concat` báo mọi câu SQL ghép chuỗi, kể cả khi giá trị ghép vào là an toàn.
+Only security rules count. The code-quality rules in the recommended set (complexity, function length and similar) are ignored.
 
-9. **DVWA (PHP)** đo 8 rule taint PHP và 3 rule cú pháp PHP vừa viết. Đáp án lấy từ cấu trúc của chính DVWA: trong mỗi module, `source/low.php`, `medium.php`, `high.php` có lỗ hổng theo thiết kế, `impossible.php` là bản đã sửa (8 module: SQLi, SQLi blind, command injection, file inclusion, upload, XSS phản chiếu, XSS lưu trữ, open redirect). Lần đầu: larpcop **+40,0%**, Semgrep **+3,3%**. Báo nhầm trên các bản `impossible.php` lộ ra: `is_numeric`/`ctype_digit` là phép kiểm (guard) chứ không phải hàm làm sạch, giá trị qua `md5()` là an toàn, `$_SERVER['SERVER_PROTOCOL']` không do client đặt (chỉ các khoá `HTTP_*`, `REQUEST_URI`, `QUERY_STRING`, `PHP_SELF`… là nguồn), hàm trong file được `require` không có summary, và một phép gán sạch trong nhánh `if` không làm sạch được biến cho phần còn lại của chính nhánh đó. Sau khi sửa: **+60,0%**, rồi **+80,0%**: file nguồn của mỗi mức chỉ dựng chuỗi `$html` mà template chung in ra, nên giá trị ghép vào markup (`html_fragments` của PHP) là sink ngay tại chỗ ghép (XSS phản chiếu 3/3); phép so bằng với literal là guard và chứng minh cho cả giá trị dựng từ biến được kiểm, nên bản upload `impossible.php` hết bị báo. Còn sót, và cũng không được báo ở file dùng chung: các mức file inclusion chỉ gán `$file` ở top level của file mà `fi/index.php` `require` qua đường dẫn chỉ biết lúc chạy rồi `include`, mà biến do file được `require` đặt không được theo sang file `require` nó; các mức XSS lưu trữ ghi dòng mà `dvwaGuestbook()` dùng chung đọc qua `mysqli_fetch_row` rồi in ra: `php-taint-stored-xss` (viết sau khi đã xem DVWA, nên không phải kết quả held-out) báo ở đó (`dvwaPage.inc.php:625`), không ở file theo mức mà scorer chấm.
+Line-scored suites give a list of vulnerable lines. A line is found when a larpcop security finding covers it, give or take 3 lines, in the same file. The class of the finding is not compared with the listed bug; each result page shows which rules matched, so a reader can judge. A finding at a call site also credits a sink line in another file when the finding's note names that line. The score is lines found over lines listed. These suites measure recall only: a finding on any other line is neither rewarded nor penalised.
 
-10. **NIST Juliet C# 1.3** đo 9 rule taint C# (thêm `cs-taint-ldap`, `cs-taint-xpath` và các tên `HttpRequest`/`HttpResponse` cổ điển trước khi chạy). Chỉ lấy 1.443 ca có dữ liệu đến từ request HTTP (`QueryString`, `Params`, `Cookies`) ở 10 CWE: SQLi, lệnh OS, path traversal tương đối/tuyệt đối, open redirect, ba loại XSS, LDAP, XPath. Đáp án là nhãn của chính Juliet: mã trong method `Bad*` (hay file `*_bad.cs`) có lỗ hổng, mã trong `Good*` thì không. Lần đầu: larpcop **+43,9%**, Semgrep `p/default` và `p/csharp` cùng **+0,8%** (Semgrep bắt 67% ca SQL nhưng báo cả 61% bản đã sửa). Các ca bị sót lộ ra những chỗ engine chưa theo được: luồng qua nhiều file (Java/C# không có `import` cho class cùng namespace), `(new Helper()).Run(x)`, `cmd.CommandText += …`, `List.Add`/`AddLast`/`Dictionary`, field của class viết không có `this.`. Sau khi sửa engine, cộng sanitizer `SecurityElement.Escape` và sink `StatusDescription`: **+86,5%**, không còn báo nhầm. Còn sót: chuỗi gọi qua hơn 2 file (biến thể 53, 54), field static của class khác (68), dữ liệu qua serialize (75), gọi qua lớp cơ sở ảo (81).
+The vulnerable-node seeds use the project's own scorer, `sast/tests/score.js`. A seed (one file, one bug) counts as found when the report names its file, and two clean files measure false positives. The seeds are scored twice: with every security finding, and without the generic per-file checks (`validate-request-input`), which credit a file without naming its bug.
 
-11. **RailsGoat (Ruby)** đo 8 rule taint Ruby và 6 rule cú pháp Ruby, commit trước khi chạy (9229a73). Đáp án (`railsgoat-truth.json`, 14 dòng) lấy từ wiki của RailsGoat, viết sau khi commit rule và trước khi chạy công cụ. Lần đầu: larpcop **10/14**, Semgrep **9/14**. (Lần chấm đầu cho larpcop 1/14 vì `score.py` chưa biết tên rule Ruby; kết quả quét không đổi, chỉ sửa bộ chấm. Bộ chấm giờ cũng tính một finding ở chỗ gọi cho dòng sink mà ghi chú của nó nêu ở file khác, "Reaches the sink through `Benefits.save` → … at app/models/benefits.rb:15"; điểm của các bộ cũ không đổi.) Ca sót: SQL qua `scope :hits_by_ip, ->(ip, col) { select("#{col}") }` lấy dữ liệu từ `custom_fields` (method không ngoặc, trả về ngầm); cookie session `httponly: false`; `escape_html_entities_in_json = false`; CSRF tắt. Sau khi sửa engine (scope là method, lời gọi không ngoặc, trả về ngầm), thêm sink `select` không receiver và 3 rule cấu hình: **13/14**. CSRF được bắt ở dòng khai báo class (dòng 2), còn đáp án ghi dòng `#protect_from_forgery` bị comment (dòng 9), nên vẫn tính là sót. Chạy trên `rubygems/rubygems.org` (1.432 file Ruby) lộ thêm báo nhầm và đã sửa: `render View.new(…)` không phải path, `content_tag` tự escape, MD5 dùng làm ETag/Content-MD5, `params` là tham số của hàm, record tìm theo `current_user`. Còn 3 finding Ruby: một redirect theo `omniauth.origin` và hai câu SQL nội suy tên cột từ cấu hình.
+Category-scored suites label safe code as well. Cases are grouped by vulnerability category. For each category, TPR is the share of vulnerable cases with a finding of that category, FPR is the share of safe cases with one, and the category score is TPR − FPR. The suite score is the mean over categories, from −100% to +100%. Reporting every case scores 0 in a category, and so does reporting none. How a case is labelled and located depends on the suite:
 
-12. **java-sec-code (Java, Spring)** đo các rule taint Java viết ở commit cc74e2e (SSRF, code injection, deserialization mới thêm) với đáp án 76 endpoint lấy từ route (`/vuln`, `/sec`) và comment của dự án (`java-sec-code-truth.json`, commit 643b158 trước khi chạy). Lần đầu: larpcop **+6,6%**, Semgrep p/default **+20,8%**, p/java +11,3%. larpcop thua. Nguyên nhân: không theo import Java khác package (`org.joychou.util.HttpUtils`), không có rule XXE Java, không có SSTI, thiếu redirect `return "redirect:" + url` và XSS khi handler `@ResponseBody` trả về chuỗi, validator của dự án (`SecurityUtil.cmdFilter`) không được hiểu. Sau khi sửa engine (import Java, validator suy ra từ hàm trả `null`/`false`, kiểu khai báo cho `sink_types`, `response_returns`) và thêm rule (`java-no-xxe`, `java-taint-ssti`, MyBatis `${}`, Jackson default typing): **+50,6%** (`results/java-sec-code.md`). Chạy trên app thật (spring-petclinic, macrozheng/mall, halo, shiro, microblog, djangoproject.com) lộ báo nhầm và đã sửa: `Page.getContent()` khớp sink `URL.getContent()`, Elasticsearch `search()` khớp sink LDAP, 692 chỗ `${criterion.condition}` của MyBatis Generator, mixin Jackson của Spring Security, `redirect(next)` sau `urlsplit(next).netloc != ''`, `url = reverse(…); url += "?q=" + q`. mall còn 3 finding (2 là luồng request → HTML thật của Alipay).
+- OWASP Benchmark: the project's expected-results file; a case is reported when a finding of its category falls in its file, as in the project's own scorecard. Policy rules, which forbid a construct whatever reaches it, count as findings of their category (for example `java-no-sql-concat` for SQL injection).
+- Juliet: code in a `bad*` method or `*_bad` file is vulnerable, code in `good*` is not. The stored XSS suites count `java-taint-stored-xss` and `cs-taint-stored-xss`, and Juliet C counts `c-taint-shell` and `c-taint-format`.
+- SARD PHP: each file is labelled bad or good as a whole by the suite's manifest. larpcop is counted through its `php-taint-*` rules, not through policy rules.
+- DVWA: in each module `low`, `medium` and `high` are vulnerable and `impossible` is the fixed version.
+- java-sec-code and VulnerableApp: a case is an endpoint or handler, and it is reported when a finding of its category lies in its line range. A call-site finding of a flow into a helper counts.
 
-13. **VulnerableApp (Java, Spring)** đo các rule Java viết ở bước 12 (XXE, SSTI, MyBatis, Jackson, XSS khi handler trả chuỗi, redirect) và engine mới, commit e913760 trước khi chạy. Đáp án (`vulnerableapp-truth.json`, commit 4b055e8 trước khi chạy): 97 handler, nhãn là `variant = Variant.SECURE` của chính dự án. Lần đầu: larpcop **+7,2%**, Semgrep p/default và p/java **+16,5%**. larpcop lại thua. Nguyên nhân chính: dự án dùng meta-annotation riêng (`@VulnerableAppRequestMapping`, `@VulnerableAppRestController`) nên regex handler Spring không khớp; `getResourceAsStream(base + name)` không phải sink path; LDAP qua UnboundID (`connection.search(base, scope, filter)`); redirect qua `HttpHeaders` và `new ResponseEntity<>(headers, HttpStatus.FOUND)`; guard `$L.contains($H)` làm sạch cả chuỗi bẩn trong `url.contains(NULL_BYTE)`. Sau khi sửa (regex nhận meta-annotation, sink mới, guard membership chỉ làm sạch đối số, guard so bằng `equals` chỉ làm sạch toán hạng là tên trơn, `HtmlUtils.htmlEscapeHex`, `Filter.encodeValue`, container `h.get(k).add(x)`, kiểu khai báo trong try-with-resources): **+46,4%** (`results/vulnerableapp.md`). OWASP Benchmark Java lên +46,8%.
+## Suites
 
-14. **OWASP Benchmark Python** (1.230 ca, nhãn trong `expectedresults-0.1.csv` của dự án) đo các rule Python mới (LDAP, XPath, trust boundary, random, cookie, XXE qua xml.sax) và phần Python của `owasp_benchmark.py`, commit 31c1118 trước khi chạy. Lần đầu: larpcop **+39,8%**, Semgrep p/default +6,9%, p/python −0,8%. Bỏ sót chính: `match`/`case` của Python không được coi là nhánh; chuỗi trả về dựng bằng `+=` không được coi là response HTML; thiếu nguồn `request.cookies`/`headers`/`self.request.*`; `codecs.open`, `os.path.exists`, `elementpath.select` không phải sink; method của class tên viết thường không có summary. Sau khi sửa (cùng với phần tử map theo key cố định và nhánh quyết định bởi giá trị biết trước: `if 7 * 42 - num > 200`, `match "ABC"[0]`, `switch` trên `"ABC".charAt(1)`): **+54,3%**; OWASP Benchmark Java lên +72,6%. Thêm list đọc theo vị trí trong code thẳng (`add("safe"); add(param); remove(0); get(1)`), escaper gọi qua chuỗi (`org.owasp.esapi.ESAPI.encoder().encodeForHTML`) và class Java viết đủ tên không có import: Python **+56,4%** (`results/owasp-benchmark-python.md`), Java **+86,8%**.
+There are 22 suites, one for each result page that `run.sh` writes. Names link to the result page.
 
-15. **NIST Juliet Java 1.3** đo engine sau bước 14 (nhánh quyết định bởi giá trị biết trước, list theo vị trí, map theo key, lambda/method reference làm phép kiểm, implementation của interface, `unless:`, guard allow-list cho mọi rule) trên Java, commit trước khi chạy cùng scorer `juliet.py` (gộp từ `juliet_cs.py`, điểm C# không đổi). Chỉ lấy 1.665 ca servlet (`getParameter`, `getCookies`, `getQueryString`) ở cùng 10 CWE như bộ C#; nhãn là method `bad*`/`good*` của Juliet. Lần đầu: larpcop **+68,6%**, Semgrep p/default +22,4%, p/java +33,0%. Bỏ sót chính: Juliet đọc `getQueryString` bằng `token.startsWith("id=")`, mà `startsWith` với chuỗi cố định được coi là guard của path; `StringEscapeUtils.escapeXml` không phải sanitizer của XPath (89% ca good XPath bị báo); lời gọi qua lớp cơ sở (`Base b = new Bad()`, flow 81). Sau khi sửa: **+86,0%**, rồi **+91,2%** khi import được theo 4 tầng (`results/juliet-java.md`); còn lại là field static của class khác, serialize và `sendError` (CWE81).
-16. **Kotlin**: bốn file test có nhãn của kho rule Semgrep (`semgrep/semgrep-rules` 16b9e6d: MD5, SHA-1, ECB, command injection), cho `kt-no-weak-hash` (mới), `kt-no-weak-cipher` (mới) và `kt-taint-shell`; bộ chọn ca và scorer `semgrep_kotlin.py` commit (aaafc72) trước khi chạy. Lần đầu: **+55,6%** (5/9 tìm thấy, 0/3 báo nhầm). Bỏ sót: `DigestUtils.getMd5Digest()` của Commons Codec, `exec("/bin/sh -c …" + input)` với `input` là tham số không có request data nào tới. Sau khi sửa: **+88,9%** (`results/semgrep-kotlin.md`).
-17. **Stored XSS (Juliet Java 1.3)**: 148 ca XSS (CWE80/81/83) mà dữ liệu đọc từ một dòng database (`executeQuery` rồi `getString`). Bộ chọn ca, scorer (`juliet.py --stored`) và tên rule được đếm (`java-taint-stored-xss`) commit (c9056cc) trước khi viết rule và trước khi chạy bất kỳ công cụ nào. Lần đầu: larpcop **+75,0%** (mọi ca CWE80/83, 0% code good bị báo; 37 ca bỏ sót đều là CWE81 `sendError`, cố ý không phải sink), Semgrep `p/default` và `p/java` **+0,0%** (`results/juliet-java-stored.md`).
-18. **Stored XSS (Juliet C# 1.3)**: 148 ca XSS mà dữ liệu đọc từ database (`_Web_Database_`), cho rule `cs-taint-stored-xss`; bộ chọn ca và tên rule commit (e902978) trước khi viết rule và trước khi chạy. Lần đầu: larpcop **+100,0%** (148/148, 0% code good bị báo), Semgrep `p/default` **+0,0%** (`results/juliet-cs-stored.md`).
-19. **NIST Juliet C 1.3**: 6.080 ca `.c` của CWE78 (lệnh OS, 3.800 ca) và CWE134 (format string, 2.280 ca), dữ liệu từ console, biến môi trường, file và socket. Bộ chọn ca, scorer (`juliet.py --c`), tên rule và chính hai rule `c-taint-shell`/`c-taint-format` (cùng phần engine cho C: macro đổi tên, hàm ghi vào đối số như `fgets`/`recv`, hàm chép như `strncat`/`sprintf`, vector của `execl`/`execv`/`_spawnl`, hàm định nghĩa ở file khác cùng thư mục) commit (a613308, e5b2724) trước khi chạy bất kỳ công cụ nào. Lần đầu: larpcop **+84,7%** (format +87%, shell +83%, 0% code good bị báo), Semgrep `p/default` **+0,0%**. Mọi nguồn và sink đều bắt được; 960 ca sót là nguyên các biến thể luồng: hai con trỏ cùng trỏ một biến (32), con trỏ hàm (44, 65), biến toàn cục (45, 68), và chuỗi 4–5 file kết thúc ở `exec*`/`_spawn*` (53, 54) vì phép kiểm độ sâu chỉ thấy sink dạng pattern. Sau khi sửa engine: **+100,0%** (`results/juliet-c.md`); 12 app thật và các bench khác không đổi. Chạy trên jq, tmux, curl lộ một báo nhầm ở tmux (`pipe-pane` chạy lệnh của người dùng qua `sh -c`, lệnh có thư mục hiện tại lấy từ `getenv("PWD")` cách ba file): các biến mà login đặt cho phiên của chính người dùng (`HOME`, `USER`, `SHELL`, `PWD`, `TMPDIR`, `PATH`…) không còn là nguồn; `LANG`/`LC_*`/`TERM` (SSH chuyển tiếp) và biến CGI vẫn là nguồn.
+### Line-scored
 
-20. **NIST SARD PHP Vulnerability Test Suite** (2015-10-27, sha256 `3407473f…`): 20.856 ca một file có dữ liệu từ request (`$_GET`, `$_POST`, qua mảng, qua object, `unserialize`) ở 8 loại (XSS, SQL, XPath, LDAP, redirect, file inclusion, lệnh OS, `eval`), nhãn bad/good của từng file. Bộ chọn ca và scorer (`sard_php.py`) commit (d94970f, 2d73792) trước khi chạy bất kỳ công cụ nào. Lần đầu: larpcop **+5,3%** (16,9 s), Semgrep `p/default` **+0,1%** (98,1 s). Nguyên nhân chính: phần lớn ca là file trộn HTML với `<?php … ?>`, mà grammar PHP-only của ast-grep đọc phần HTML như code; object giữ dữ liệu request trong field (constructor rồi getter); sanitizer chưa biết hay đọc sai (ép kiểu, `settype`, `filter_var`, allow-list `preg_match` qua biến cục bộ và `== 1`, `preg_replace` bỏ mọi ký tự khác); `sprintf("%d", …)`; escape SQL dùng ngoài dấu nháy hay tính cho LDAP/XPath; `preg_replace` bị coi là thực thi code với mọi đối số. Sau khi sửa: **+56,4%** (`results/sard-php.md`). Phần còn lại phần lớn là ca có nhãn trái với code: 768 ca "bad" kiểm và chép `$sanitized` chưa từng được gán, 272 ca chỉ in literal, các ca `span_Style` in hằng `checked_data` chứ không phải dữ liệu request, 48 ca "good" làm sạch `$tained` (gõ sai) trong khi `$tainted` thô tới `system()`, và 1.328 ca "good" dùng hàm escape làm cho sink khác (`addslashes` cho XPath, shell, đường dẫn; `htmlspecialchars` cho LDAP). DVWA giữ +80,0% (bớt báo nhầm, thêm đúng hai dòng query của mức SQLi medium); 12 app thật và các bench khác không đổi.
+| Suite | Source, pinned | Answer key | Found | First run |
+|---|---|---|---|---|
+| [Juice Shop](results/juice-shop.md) | OWASP Juice Shop `v20.3.0` (Express, Angular) | `// vuln-code-snippet vuln-line` comments placed by the Juice Shop maintainers: 27 lines, excluding `test/` and `data/static/codefixes/` | 11/27 (8/27 without `validate-request-input`) | 5/27 |
+| [NodeGoat](results/NodeGoat.md) | OWASP NodeGoat `c5cb68a` (Express, MongoDB) | [`nodegoat-truth.json`](truth/nodegoat-truth.json): 14 lines from the NodeGoat tutorial | 12/14 | 8/14 |
+| [DVNA](results/dvna.md) | appsecco/dvna `9ba473a` (Express, Sequelize, EJS) | [`dvna-truth.json`](truth/dvna-truth.json): 14 lines from the project's `docs/solution/*.md` | 12/14 | 5/14 |
+| [DVPWA](results/dvpwa.md) | anxolerd/dvpwa `a1d8f89` (Python, aiohttp, Jinja2) | [`dvpwa-truth.json`](truth/dvpwa-truth.json): 4 lines from the Vulnerabilities section of the README | 4/4 | 1/4 |
+| [GoVWA](results/govwa.md) | 0c34/govwa `4058f79` (Go, net/http, html/template) | [`govwa-truth.json`](truth/govwa-truth.json): 4 lines the project marks with its own comments in `vulnerability/sqli` and `vulnerability/xss`. IDOR and client-side auth are logic bugs, and the XXE module is an empty file | 4/4 | 0/4 |
+| [DVWS-Node](results/dvws-node.md) | snoopysecurity/dvws-node `e83689c` (Express, MongoDB, MySQL, GraphQL, SOAP and XML-RPC) | [`dvws-truth.json`](truth/dvws-truth.json): 15 lines from `CHALLENGES.md`, one for each challenge whose bug sits on a single line. IDOR, CORS, rate limiting and other design flaws are left out | 13/15 (13/15 without `validate-request-input`) | 10/15 (9/15 without) |
+| [RailsGoat](results/railsgoat.md) | OWASP/railsgoat `f5951f1` (Ruby on Rails) | [`railsgoat-truth.json`](truth/railsgoat-truth.json): 14 lines from the RailsGoat wiki | 13/14 | 10/14 |
+| [XVWA](results/php-apps.md) | s4n7h0/xvwa `fb30fa5` (plain PHP) | [`xvwa-truth.json`](truth/xvwa-truth.json): the 19 bugs the README lists, one module each | 17/19 (16 of the listed kind) | 12/19 (11 of the listed kind) |
+| [WackoPicko](results/php-apps.md) | adamdoupe/WackoPicko `cabc1b3` (plain PHP) | [`wackopicko-truth.json`](truth/wackopicko-truth.json): the 14 bugs the README lists. The admin password lives in the database dump, not in code, and is not counted | 11/14 | 9/14 |
+| [DSVW](results/dsvw.md) | stamparm/DSVW `9ca3c9a` (Python, 98 lines in one file) | [`dsvw-truth.json`](truth/dsvw-truth.json): 15 sink lines, written from the app's own table of cases before any rule ran on it | 13/15, several credited from a neighbouring line (see [DSVW](#dsvw)) | 1 line |
 
-21. **XVWA** (`s4n7h0/xvwa` `fb30fa5`, PHP): 19 module, mỗi module một lỗi mà README của dự án liệt kê. Đáp án [`xvwa-truth.json`](xvwa-truth.json) (kèm `php-taint-stored-xss` và `foreach` của PHP, commit 9083607, trước khi chạy bất kỳ công cụ nào). Lần đầu: larpcop **12/19** (11 đúng loại), Semgrep 5/19. Sau khi sửa: **17/19** (`results/php-apps.md`); hai dòng còn lại là IDOR và `delete` thiếu kiểm tra admin.
-22. **WackoPicko** (`adamdoupe/WackoPicko` `cabc1b3`, PHP): 14 lỗi README liệt kê (mật khẩu admin/admin nằm trong database, không có trong code). Đáp án [`wackopicko-truth.json`](wackopicko-truth.json), commit cùng bước 21. Lần đầu: larpcop **9/14**, Semgrep 1/14. Sau khi sửa: **11/14**; ba dòng còn lại là forceful browsing, trang xem không cần đăng nhập và coupon dùng lại được.
+One of the 17 XVWA lines, the CSRF one, is credited through a finding of a different kind one line away. The other 16 are found by a finding of the kind the README names.
 
-Ngoài các bộ có đáp án, `bench/scale.sh` chạy trên hai repo thật (`django/django`, `rails/rails`) để đo thời gian và xem báo cáo trên code không viết cho benchmark: [`results/scale.md`](results/scale.md).
+### File-scored
 
-Kết quả dưới đây là sau bước 22: chỉ có ý nghĩa *không thụt lùi* trên cả hai mươi hai bộ. Rule mới cần một bộ chưa ai nhìn.
+| Suite | Source, pinned | Answer key | Found | First run |
+|---|---|---|---|---|
+| [vulnerable-node seeds](results/seeds.md) | cr0hn/vulnerable-node `d68f2a3`, directory `sast/seeds/` | The project's `sast/ground-truth.yaml`: 12 files with one bug each and 2 clean files | 11/12, 1 false positive (11/12, 0 false positives without the generic per-file checks) | 10/12, 1 false positive (6/12 without) |
 
-## Kết quả (01/11/2026)
+### Category-scored
 
-| | larpcop | Semgrep OSS | gitleaks |
-|---|---|---|---|
-| Juice Shop: thời gian | 6,63 s | 33,75 s | **4,76 s** |
-| Juice Shop: dòng tìm thấy (/27) | **11** (8 nếu không tính `validate-request-input`) | 6 | – |
-| NodeGoat: thời gian | 3,25 s | 10,64 s | **0,21 s** |
-| NodeGoat: dòng tìm thấy (/14) | **12** | 4 | – |
-| DVNA: thời gian | 1,21 s | 10,12 s | **0,24 s** |
-| DVNA: dòng tìm thấy (/14) | **12** | 7 | – |
-| DVPWA: thời gian | 2,59 s | 26,01 s | **0,21 s** |
-| DVPWA: dòng tìm thấy (/4) | **4** | 2 | – |
-| DVWS-Node: thời gian | 1,94 s | 11,14 s | **0,27 s** |
-| DVWS-Node: dòng tìm thấy (/15) | **13** (cả 13 khi bỏ `validate-request-input`) | 7 | – |
-| GoVWA: thời gian | 1,57 s | – | – |
-| GoVWA: dòng tìm thấy (/4) | **4** (lần đầu 0) | 4 | – |
-| OWASP Benchmark Java: thời gian | **7,11 s** | 48,6 s (`p/default`), 54,9 s (`p/java`) | 49,8 s |
-| DVWA (PHP): điểm trung bình (TPR − FPR) | **+80,0%** (lần đầu +40,0%) | +3,3% | – |
-| Juliet C# (1.443 ca web): thời gian | **4,96 s** | 16,1 s (`p/default`) | – |
-| RailsGoat (Ruby): dòng tìm thấy (/14) | **13** (lần đầu 10) | 9 | – |
-| java-sec-code (76 endpoint): điểm trung bình (TPR − FPR) | **+84,6%** (lần đầu +6,6%) | +20,8% (p/default) | – |
-| VulnerableApp (97 handler): điểm trung bình (TPR − FPR) | **+88,1%** (lần đầu +7,2%) | +16,5% | – |
-| Juliet C# (1.443 ca web): điểm trung bình (TPR − FPR) | **+99,2%** (lần đầu +43,9%) | +0,8% (`p/default`, `p/csharp`) | – |
-| Juliet Java (1.665 ca servlet): điểm trung bình (TPR − FPR) | **+96,4%** (lần đầu +68,6%) | +22,4% (`p/default`), +33,0% (`p/java`) | – |
-| Juliet Java stored XSS (148 ca, dữ liệu từ database): điểm trung bình (TPR − FPR) | **+75,0%** (held-out, CWE81 `sendError` cố ý bỏ qua) | +0,0% (`p/default`, `p/java`) | – |
-| Juliet C# stored XSS (148 ca, dữ liệu từ database): điểm trung bình (TPR − FPR) | **+100,0%** (held-out) | +0,0% (`p/default`) | – |
-| Juliet C (6.080 ca lệnh OS và format string): thời gian / điểm (TPR − FPR) | **21,7 s / +100,0%** (held-out lần đầu +84,7%) | 32,5 s / +0,0% (`p/default`) | – |
-| XVWA (PHP): dòng tìm thấy (/19) | **17** (12 lúc đầu; 16 đúng loại, dòng CSRF được tính nhờ một finding khác cách một dòng) | 5 | – |
-| WackoPicko (PHP): dòng tìm thấy (/14) | **11** (9 lúc đầu) | 1 | – |
-| SARD PHP (20.856 ca): thời gian / điểm (TPR − FPR) | **23,6 s / +56,4%** (held-out lần đầu 16,9 s / +5,3%) | 98,1 s / +0,1% (`p/default`) | – |
-| Semgrep Kotlin tests (9 ca lỗi, 3 ca sạch): điểm (TPR − FPR) | **+88,9%** (lần đầu +55,6%) | – (test của chính Semgrep) | – |
-| OWASP Benchmark Java: điểm trung bình (TPR − FPR) | **+91,9%** (lần đầu +37,5%) | +34,9% (`p/default`), +17,7% (`p/java`) | – |
-| OWASP Benchmark Python: thời gian | **2,7 s** | 8,1 s (`p/python`) | – |
-| OWASP Benchmark Python: điểm trung bình (TPR − FPR) | **+70,6%** (lần đầu +39,8%) | +6,9% (`p/default`), −0,8% (`p/python`) | – |
-| vulnerable-node seeds (/12 file, báo nhầm trên 2 file sạch) | **11**, 1 báo nhầm (11 và 0 báo nhầm nếu bỏ rule chung chung) | 10, 1 báo nhầm (8 và 1 báo nhầm nếu bỏ rule chung chung) | – |
-| Secrets (so với gitleaks) | 69/69 và 3/3 trùng khớp | – | 69 và 3 |
+| Suite | Source, pinned | Cases and labels | Score | First run |
+|---|---|---|---|---|
+| [OWASP Benchmark Java](results/owasp-benchmark.md) | OWASP-Benchmark/BenchmarkJava `f40c618` | 2,740 cases, labelled by the project | +91.9% | +37.5% |
+| [OWASP Benchmark Python](results/owasp-benchmark-python.md) | OWASP-Benchmark/BenchmarkPython `f129148` | 1,230 cases, labelled in `expectedresults-0.1.csv` | +70.6% | +39.8% |
+| [DVWA](results/dvwa.md) | digininja/DVWA `a1978a2` (PHP) | 8 modules (SQL injection, blind SQL injection, command injection, file inclusion, upload, reflected XSS, stored XSS, open redirect) at 4 levels each | +80.0% | +40.0% |
+| [Juliet C#](results/juliet-cs.md) | NIST SARD Juliet C# 1.3 (2020-08-01 archive) | 1,443 cases whose data comes from an HTTP request (`QueryString`, `Params`, `Cookies`), in 10 CWEs: SQL injection, OS command, relative and absolute path traversal, open redirect, three kinds of XSS, LDAP, XPath | +99.2% | +43.9% |
+| [Juliet Java](results/juliet-java.md) | NIST SARD Juliet Java 1.3 (2017-10-01 archive) | 1,665 servlet cases (`getParameter`, `getCookies`, `getQueryString`) in the same 10 CWEs | +96.4% | +68.6% |
+| [Juliet Java stored XSS](results/juliet-java-stored.md) | Same archive | 148 XSS cases (CWE80, 81, 83) whose data is read from a database row | +75.0% | +75.0% (no good code flagged) |
+| [Juliet C# stored XSS](results/juliet-cs-stored.md) | Same C# archive | 148 XSS cases whose data is read from a database row | +100.0% | +100.0% (148 of 148, no good code flagged) |
+| [Juliet C](results/juliet-c.md) | NIST SARD Juliet C/C++ 1.3 (2017-10-01 archive) | 6,080 `.c` cases: OS command injection (CWE78, 3,800) and format string (CWE134, 2,280), with data from the console, the environment, files and sockets | +100.0% | +84.7% (format +87%, shell +83%, no good code flagged) |
+| [SARD PHP](results/sard-php.md) | NIST SARD PHP Vulnerability Test Suite #103 (2015-10-27), sha256 `3407473fc2cfa38eea9216b8a7f22559b656f20ba5f2eb3b6992010265780f8c` | 20,856 of the 42,212 cases, those whose data comes from the request, in 8 vulnerability types (XSS, SQL, XPath, LDAP, redirect, file inclusion, OS command, `eval`) | +56.4% | +5.3% (took 16.9 s) |
+| [java-sec-code](results/java-sec-code.md) | JoyChou93/java-sec-code `4711f4e` (Java, Spring) | [`java-sec-code-truth.json`](truth/java-sec-code-truth.json): 76 endpoints, labelled from the project's routes (`/vuln`, `/sec`) and comments | +84.6% | +6.6% |
+| [VulnerableApp](results/vulnerableapp.md) | SasanLabs/VulnerableApp `9f45cd5` (Java, Spring) | [`vulnerableapp-truth.json`](truth/vulnerableapp-truth.json): 97 handlers, labelled by the project's `Variant.SECURE` | +88.1% | +7.2% |
 
-larpcop chạy cả bộ `recommended` (ast-grep, mọi rule taint, rule template, secrets, metric, lỗ hổng dependency). Mọi rule taint dùng chung một lần parse và một lần duyệt cây cho mỗi file; mỗi rule chỉ thử pattern của nó trên các node đúng loại. Juice Shop chậm hơn bản 0.3.0 (5,00 s) vì giờ đọc cả 9 file thư viện (three.js…, 39.500 dòng) mà Juice Shop commit dù có trong `.gitignore`: file đã track thì vẫn được kiểm. Thời gian NodeGoat gần như toàn bộ là chờ mạng: OSV được hỏi về 1.480 package trong `package-lock.json`.
+The Juliet stored XSS suites have the same first-run and current score because nothing was changed after their first run.
 
-### Những gì không công cụ nào bắt được
+### Timings
 
-- Juice Shop: 16 dòng lỗi logic, phân quyền, cấu hình (route admin lộ, allowlist redirect dùng `includes`, rate limit tin `X-Forwarded-For`, prompt injection chatbot…).
-- NodeGoat: chính sách mật khẩu yếu (`session.js:144`), mật khẩu lưu plain text (`user-dao.js:25`, phép gán chứ không phải phép so sánh).
-- DVNA: API trả mọi bản ghi user (`appHandler.js:207`), route admin không kiểm quyền (`routes/app.js:42`).
-- DVWS-Node: XXE trong bộ mở rộng entity tự viết (`vulnerable-xml.js:81`, không dùng parser XML nào), SSRF qua tham số của method XML-RPC (`xml-rpc/server.js:29`, thư viện `xmlrpc` không phải nguồn đã khai).
-- vulnerable-node: NoSQL injection trong một hàm nhận filter làm tham số, không có nguồn request nào trong file.
+Median of three runs of `larpcop check`, larpcop 0.3.0 on a Darwin arm64 machine with 8 CPUs. [`timing.txt`](results/timing.txt) lists the first five rows. A re-run of `run.sh` writes there the times of all application suites and of the two OWASP Benchmark editions; it does not time the Juliet and SARD PHP suites.
 
-SAST cú pháp không với tới lỗi logic và phân quyền; rule `llm` (`larpcop review`) nhắm vào loại này nhưng không được tính vì không tất định.
+| Suite | Time |
+|---|---|
+| Juice Shop | 6.63 s |
+| NodeGoat | 3.25 s |
+| DVNA | 1.21 s |
+| DVPWA | 2.59 s |
+| DVWS-Node | 1.94 s |
+| GoVWA | 1.57 s |
+| OWASP Benchmark Java | 12.9 s |
+| OWASP Benchmark Python | 2.5 s |
+| Juliet C# | 5.0 s |
+| Juliet C | 21.7 s |
+| SARD PHP | 23.6 s |
 
-### Phạm vi khác nhau
+The Juice Shop time includes 9 vendored library files (three.js and others, 39,500 lines) that the project commits although they match its `.gitignore`. larpcop checks tracked files even when they are ignored. `run.sh` times the application suites with `dependency-vulnerability` disabled. The committed `timing.txt` was taken before that, with the rule enabled, so NodeGoat's time there is mostly the wait for advisory lookups on the 1,480 packages in its `package-lock.json`.
 
-- Cả hai có rule GitHub Actions và Terraform. larpcop trước đây bỏ qua thư mục ẩn khi quét toàn repo, nên không thấy `.github/workflows`; benchmark lộ ra lỗi này và đã sửa.
-- Semgrep báo lỗi cú pháp và bỏ qua các file snippet trong `data/static/codefixes/` của Juice Shop. tree-sitter chịu lỗi nên larpcop vẫn đọc được, vì vậy có thêm finding ở đó.
-- `[innerHTML]` của Angular không bị tính là XSS: Angular tự sanitize binding này; lỗ hổng thật nằm ở `bypassSecurityTrust*`.
-- Filter của Sequelize (`where:`, `include:`) không bị tính là NoSQL injection: Sequelize không nhận operator từ JSON.
+## First runs and later changes
 
-**Secrets**: larpcop nhúng nguyên bộ rule của gitleaks và giải mã base64/JWT như gitleaks, nên kết quả trùng khớp hoàn toàn. Các lần chạy trước lộ ra 3 bug đã sửa: công thức entropy, gộp finding `generic-*` nằm trong finding cụ thể hơn, và secret nằm trong payload JWT.
+Each suite ran first as a held-out check, then served to improve larpcop. Both numbers are listed above so that the gap is visible.
+
+- Juice Shop was the development set, used while the first rules were written. Its first run is not a held-out number.
+- Every other suite was a held-out check on its first run: the rules under test had been committed before the suite was scored. For RailsGoat, java-sec-code, VulnerableApp, OWASP Benchmark Python, the Juliet and SARD PHP suites, XVWA, WackoPicko and DSVW, the answer key or case selection and the scorer were committed as well, before any run.
+- After a first run, the misses and false positives were analysed and rules or engine changes followed. The current score of those suites is a regression check, not a held-out number.
+- Juliet Java stored XSS and Juliet C# stored XSS were not tuned after their first run, so their scores are held-out numbers.
+- The current scores show only that none of the suites has regressed. Judging a new rule needs a suite nobody has looked at yet.
+
+First runs fell short for a few recurring reasons:
+
+- Request sources that a framework exposes in its own way: aiohttp, Starlette and Tornado request objects, NestJS decorators, FastAPI and Flask handler parameters, GraphQL resolver arguments, Spring meta-annotations, Python `request.cookies` and headers.
+- Flows the engine did not follow across files and classes: same-package Java and C# classes, Java imports from other packages, methods of imported classes, Go methods by receiver, PHP files pulled in with `require`, C files in the same directory, call chains of four or five files, static fields and globals of another class or file, data passed through serialization, calls through a base class.
+- Flows the engine did not follow inside a construct: Ruby scopes and calls without parentheses, C pointers that alias one variable, function pointers, Python `match`/`case`, PHP files that mix HTML and code.
+- Rules that did not exist yet: XSS in Go, XXE and server-side template injection in Java, LDAP and XPath injection in several languages, JWT `alg: none`, SQL assembled in a variable before it reaches `execute`.
+- Guards and sanitizers read wrongly: `is_numeric` and `ctype_digit` are checks, not cleaners; `startsWith` guards a path only once it is resolved; an escaper protects only the sink it is made for.
+- Sink names that were too broad: `RegExp.prototype.exec` read as `child_process.exec`, `stream.write(a + b)` as XSS, `dict.get(x)` as SSRF. Sinks are now declared by name (`cp.exec`, `res.send`, `session.get`).
+- A clean assignment inside an `if` branch clearing a variable for the whole function, as if it always ran. An assignment that runs on only some paths (inside an `if`, loop, `try` or `switch`) can now taint a variable but not clean it.
+
+## Reading a result page
+
+A line-scored page has one row per answer-key line with the larpcop rules that reported it, or a dash when none did. Below the table it gives the number of lines found and the count of security findings per rule, including findings on lines the key does not list.
+
+A category-scored page has one row per category with TPR, FPR and score, and the average. Many pages have a first-run section and a section for the current state, which is marked as not held-out. The remarks below the tables list what changed between the two and what is still wrong.
+
+`seeds.md` gives the project's scorer output for both counting modes. `php-apps.md` is a write-up of XVWA and WackoPicko together; `run.sh` writes their line tables to `xvwa.md` and `WackoPicko.md`. `timing.txt` holds the timings.
+
+## Known misses
+
+What larpcop does not report, and why. The result pages have the rest.
+
+- Juice Shop, 16 of 27 lines: logic, authorization and configuration bugs with no syntactic shape, such as an exposed admin route, a redirect allowlist built on `includes`, a rate limit that trusts `X-Forwarded-For` and chatbot prompt injection. `larpcop review` aims at this kind of bug but is not counted because its answers are not deterministic.
+- NodeGoat: a weak password policy (`session.js:144`) and a password stored in plain text (`user-dao.js:25`, an assignment rather than a comparison; the comparison at `user-dao.js:61` is found).
+- DVNA: an API that returns every user record (`appHandler.js:207`) and an admin route with no authorization check (`routes/app.js:42`).
+- DVWS-Node: XXE in a hand-written entity expander (`vulnerable-xml.js:81`, no XML parser is involved) and SSRF through an XML-RPC method parameter (`xml-rpc/server.js:29`; the `xmlrpc` library is not a declared request source).
+- vulnerable-node seeds: NoSQL injection in a function that takes the filter as a parameter, with no request source in the file. The one false positive, `clean-escaped.js`, comes from a generic per-file check.
+- RailsGoat: CSRF protection turned off. larpcop reports it at the class declaration (line 2), and the answer key lists the commented-out `protect_from_forgery` (line 9), which is outside the 3-line window, so it counts as missed.
+- XVWA: an IDOR and a `delete` with no admin check.
+- WackoPicko: forceful browsing, a page that needs no login and a coupon that can be reused.
+- DVWA: the file-inclusion levels only assign `$file` at the top level of a file that `fi/index.php` requires through a path chosen at run time, and variables that a required file sets are not followed into the file that requires it. The stored-XSS levels write the guestbook row that a shared `dvwaGuestbook()` prints; `php-taint-stored-xss` reports it there (`dvwaPage.inc.php:625`), not in the per-level files the scorer credits. That rule was written after DVWA had been scored, so it is not a held-out result.
+- OWASP Benchmark: SQL injection scores +11% on the Java edition because `java-no-sql-concat`, a policy rule, reports SQL built by concatenation whatever is concatenated. On the Python edition `py-no-shell-true`, `py-no-eval` and `py-no-ldap-interpolation` do the same for their constructs, and command injection, code injection and LDAP injection score 0%.
+- Juliet Java and Juliet Java stored XSS: `response.sendError(404, data)` (CWE81: 111 cases in the first suite, and all 37 misses in the stored suite) is deliberately not an XSS sink, because Tomcat and Jetty escape the message on their error pages.
+- Juliet C#: every case is found. The 12 cases flagged in good code are `GoodG2B` of flow 75 in SQL and XPath, where Juliet 1.3 reads the same request data as the bad code, so they are real injections labelled good.
+- SARD PHP: most remaining misses are cases whose label contradicts the code. 768 bad cases check and copy a `$sanitized` that is never assigned, 272 only print a literal, the `span_Style` cases print the constant `checked_data` rather than request data, 48 good cases sanitize `$tained` (a typo) while the raw `$tainted` reaches `system()`, and 1,328 good cases use an escape function that does not protect the sink they reach (`addslashes` for XPath, shell and paths, `htmlspecialchars` for LDAP).
+- java-sec-code: the 5 SSRF `/sec` endpoints rely on a runtime socket hook (`SecurityUtil.startSSRFHook()`), so statically they look like the vulnerable ones. The 3 MyBatis endpoints are found in the mapper files, outside the endpoint, and the scorer does not count them.
+- VulnerableApp: SQL levels 3 and 4 strip quotes and then concatenate, and `java-no-sql-concat` forbids the concatenation itself.
+
+### DSVW
+
+DSVW is a 98-line Python file. Its answer key lists 15 lines. With the standard 3-line window larpcop finds 13 of them, but the score overstates what it detects. No `py-taint-*` rule reports anything on the file; all 13 credits come from policy rules, and several are neighbouring-line credits of a different class. The reflected XSS at line 25, for example, is credited by the SQL rule at line 22 and by the deserialization rule at line 27. Lines 55 (template injection) and 70 (open redirect) have no finding.
+
+On the first run the only hit was `exec(program)` at line 49, reported by `py-taint-shell`. The current run reports line 49 through `py-no-eval`.
+
+DSVW reads all of its input through one dict built at the top of `do_GET`:
+
+```python
+params = dict((match.group("parameter"), urllib.parse.unquote(...re.findall(...)))
+              for match in re.finditer(r"((\A|[?&])(?P<parameter>[\w\[\]]+)=)([^&]+)", query))
+```
+
+Every sink then uses `params["id"]`, `params["domain"]` and so on. The source is `self.path`, the idiom of `BaseHTTPRequestHandler`, and it is not one of the Python sources larpcop knows (`request.args`, `sys.argv`, `input()` and similar). That one missing source explains the taint misses, so this is a gap in the rules, not in the taint walk.
+
+Declaring `self.path` and `self.headers` of `BaseHTTPRequestHandler` as sources would close it. The answer key has since been seen, so a score taken after that change would no longer be held-out. The gap is recorded as a measurement, and the fix belongs on a file whose key is still unknown.
+
+DSVW stays useful as a small regression check: its lines are known and a run takes under a second.
+
+## Caveats
+
+- The current scores of most suites are not held-out numbers; see [First runs and later changes](#first-runs-and-later-changes).
+- Two answer-key lines are vulnerable dependencies: NodeGoat `package-lock.json:6742` (marked 0.3.5) and DVNA `package.json:25` (mathjs 3.10.1). Only `dependency-vulnerability` finds them, and it queries the OSV database over the network. These two suites therefore need network access, and their results can change as advisories are published. With the rule off those two lines count as missed (11/14 each).
+- Line matching does not compare the class of the finding with the class of the listed bug. XVWA states both counts for this reason.
+- The recommended set includes GitHub Actions and Terraform rules, so finding totals on the result pages include their findings (`gha-unpinned-action`, `tf-open-ingress` and others).
+- larpcop parses files that contain syntax errors, so it also reports in the snippet files under Juice Shop's `data/static/codefixes/`. Those files are not in the answer key.
+- Angular's `[innerHTML]` binding is not reported as XSS, because Angular sanitizes it; the real bug in Juice Shop is `bypassSecurityTrust*`. Sequelize filters (`where:`, `include:`) are not reported as NoSQL injection, because Sequelize does not accept operators from JSON.
+- Answer keys are small. With 14 lines, one line moves a score by 7 points, so the large suites (OWASP Benchmark, Juliet, SARD PHP) are the steadier measure.

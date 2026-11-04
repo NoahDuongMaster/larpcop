@@ -1,37 +1,35 @@
 # PHP applications: XVWA and WackoPicko
 
-Two deliberately vulnerable PHP applications, neither seen before this run:
+Two deliberately vulnerable PHP applications:
 
 - XVWA, `s4n7h0/xvwa` fb30fa5: 19 modules, one per issue its README lists;
 - WackoPicko, `adamdoupe/WackoPicko` cabc1b3: the 14 vulnerabilities its
   README lists (a 15th, the admin/admin password, lives in the database dump,
   not in code).
 
-The truth files (`xvwa-truth.json`, `wackopicko-truth.json`) map each listed
-issue to the line of code that has it. They were committed (d46b77e) together
-with `php-taint-stored-xss` and PHP `foreach` (9083607), before any tool ran
-on either application. Scoring is `score.py`: a listed line counts as found
-when a security finding of the tool is within three lines of it in the same
-file. Commands: `bench/run.sh`.
+The answer keys (`bench/truth/xvwa-truth.json`, `bench/truth/wackopicko-truth.json`)
+map each listed issue to the line of code that has it. They were committed,
+together with `php-taint-stored-xss` and PHP `foreach` support, before any
+tool ran on either application. Scoring is `bench/scripts/score.py`: a listed
+line counts as found when a larpcop security finding is within three lines of
+it in the same file. Commands: `bench/run.sh`.
 
-## First run (held-out)
+## First run
 
-larpcop 9083607 (`/tmp/larpcop-php5`), Semgrep 1.183.0 `p/default`.
-
-| | larpcop | Semgrep OSS |
-|---|---|---|
-| XVWA: lines found / 19 | **12** (11 of the named kind) | 5 |
-| WackoPicko: lines found / 14 | **9** | 1 |
-| XVWA time | 0.94 s | |
-| WackoPicko time | 1.32 s | |
+| | larpcop |
+|---|---|
+| XVWA: lines found / 19 | **12** (11 of the named kind) |
+| WackoPicko: lines found / 14 | **9** |
+| XVWA time | 0.94 s |
+| WackoPicko time | 1.32 s |
 
 The twelfth XVWA line is the template injection (`$twig->render($name)` with
 `Twig_Loader_String`), credited for `php-taint-xss` on the `echo` of the
 rendered output one line below: an XSS, not the injection. The SSRF line is
-found by `php-taint-path` (and by Semgrep's `tainted-filename`), since
-`file_get_contents($_POST['img_url'])` is reported as a path, not as a request.
+found by `php-taint-path`, since `file_get_contents($_POST['img_url'])` is
+reported as a path, not as a request.
 
-Found by neither tool:
+Not found:
 
 - XVWA: formula injection (rows exported to CSV as stored), DOM XSS
   (`document.write` of `location` in an inline script), the session id kept
@@ -59,17 +57,17 @@ Wrong reports outside the listed lines (the other findings off them are real:
 
 ## After the fixes
 
-Post-fix runs are not held-out: these are the applications the rules above
-were written against.
+Rules were added for the misses of the first run using these applications, so
+these counts are not held-out.
 
-| | larpcop | Semgrep OSS |
-|---|---|---|
-| XVWA: lines found / 19 | **17** (16 of the named kind) | 5 |
-| WackoPicko: lines found / 14 | **11** | 1 |
+| | larpcop |
+|---|---|
+| XVWA: lines found / 19 | **17** (16 of the named kind) |
+| WackoPicko: lines found / 14 | **11** |
 
-What the run found besides the 12 and 9 of the first one:
+Found in addition to the 12 and 9 of the first run:
 
-- the formula injection (`php-taint-csv`, written after this run);
+- the formula injection (`php-taint-csv`);
 - the DOM XSS, from the page's `<script>` read as JavaScript (`taint-dom-xss`,
   `no-document-write`);
 - the session id kept at login (`php-no-session-fixation`), the unsalted MD5
@@ -80,7 +78,7 @@ What the run found besides the 12 and 9 of the first one:
 
 The seventeenth XVWA line, CSRF, is credited by a `php-no-weak-hash` finding
 one line above the listed line (the same handler hashes the new password with
-MD5); no rule looks for CSRF. Left: XVWA's IDOR and its delete without an
+MD5); no rule looks for CSRF. Missed: XVWA's IDOR and its delete without an
 admin check, WackoPicko's forceful browsing, its page reachable without
 login and its reusable coupon. Those four are authorization and business
 logic, which a rule matching syntax cannot decide.

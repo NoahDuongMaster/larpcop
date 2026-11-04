@@ -2,34 +2,33 @@
 
 The PHP Vulnerability Test Suite (SARD #103, sha256 `3407473f…`): 42,212
 single-file cases, each labelled bad or good as a whole by its
-`manifest.sarif`. `sard_php.py --select` keeps the 20,856 cases whose data
+`manifest.sarif`. `bench/scripts/sard_php.py --select` keeps the 20,856 cases whose data
 comes from the HTTP request (8 of the suite's 16 inputs: `$_GET`, `$_POST`,
 `$_GET` in an array or through an object, a `$_POST` string given to
 `unserialize`) in 8 categories; CWE 862 (authorization) is left out. A case is
 found when a finding of its category lands in its file, and flagged wrongly
 when that happens in a good case; score = found rate − wrongly flagged rate,
 per category. larpcop is counted through its `php-taint-*` rules. The
-selection, the scorer and the rules it counts were committed (d94970f,
-2d73792) before any tool ran on these files. Semgrep 1.183.0 with
-`p/default`.
+selection, the scorer and the rules it counts were committed before any
+tool ran on these files.
 
-## First run (held-out)
+## First run
 
-| Category (bad/good) | larpcop: found / good flagged / score | Semgrep (p/default): found / good flagged / score |
-|---|---|---|
-| code (168/648) | 62% / 53% / **+9%** | 0% / 0% / **+0%** |
-| include (336/1296) | 62% / 53% / **+9%** | 0% / 0% / **+0%** |
-| ldap (1056/864) | 51% / 62% / **-11%** | 0% / 0% / **+0%** |
-| redirect (1296/1104) | 31% / 26% / **+5%** | 0% / 0% / **+0%** |
-| shell (312/936) | 62% / 56% / **+6%** | 32% / 33% / **-1%** |
-| sql (456/4320) | 56% / 46% / **+10%** | 34% / 31% / **+2%** |
-| xpath (632/2392) | 61% / 48% / **+12%** | 0% / 0% / **+0%** |
-| xss (2176/2864) | 28% / 27% / **+1%** | 0% / 0% / **+0%** |
-| **average** | **+5.3%** | **+0.1%** |
+| Category (bad/good) | larpcop: found / good flagged / score |
+|---|---|
+| code (168/648) | 62% / 53% / **+9%** |
+| include (336/1296) | 62% / 53% / **+9%** |
+| ldap (1056/864) | 51% / 62% / **-11%** |
+| redirect (1296/1104) | 31% / 26% / **+5%** |
+| shell (312/936) | 62% / 56% / **+6%** |
+| sql (456/4320) | 56% / 46% / **+10%** |
+| xpath (632/2392) | 61% / 48% / **+12%** |
+| xss (2176/2864) | 28% / 27% / **+1%** |
+| **average** | **+5.3%** |
 
 Most cases print or use the request data from a file that mixes HTML and
 PHP (`<html>…<?php … ?>…`). ast-grep parses PHP with the PHP-only grammar,
-which read that HTML as code: findings after it were lost, and nothing told
+which reads that HTML as code: findings after it were lost, and nothing told
 an `htmlspecialchars` in a `<script>` block from one in a paragraph. The
 other misses and wrong flags came from:
 
@@ -49,7 +48,9 @@ other misses and wrong flags came from:
 - `preg_replace` counted as code execution whatever argument was tainted,
   and `http_redirect` not a redirect sink.
 
-## After fixing the engine and rules (not held-out)
+## Current
+
+The engine and rules were adjusted after the first run using this suite's misses, so these numbers are not held-out.
 
 | Category (bad/good) | larpcop: found / good flagged / score |
 |---|---|
@@ -64,7 +65,7 @@ other misses and wrong flags came from:
 | **average** | **+56.4%** |
 
 larpcop took 16.9 s on the first run and 23.6 s on the last (a loaded
-machine); Semgrep 98.1 s.
+machine).
 
 What changed:
 
@@ -98,14 +99,14 @@ What changed:
   declared as a parameter; `->query()` is an XPath sink only on a
   `DOMXPath`. A database query's result is not its text.
 
-DVWA keeps +80.0%: the SQLite `->query()` taken for XPath and a
-`preg_replace` taken for code execution are gone; new are the query lines of
-the medium SQL injection level (`mysqli_real_escape_string` on a number
-placed outside quotes) and three `{$user}` printed after a login, escaped for
-SQL only. The other benches and the 12 real applications give the same
-findings as before.
+DVWA's average is +80.0% before and after these changes. They removed
+the SQLite `->query()` taken for XPath and a `preg_replace` taken for code
+execution, and added the query lines of the medium SQL injection level
+(`mysqli_real_escape_string` on a number placed outside quotes) and three
+`{$user}` printed after a login, escaped for SQL only. The other suites and
+the 12 real applications give the same findings.
 
-## What is left
+## Remaining misses
 
 Most of the remaining misses and wrong flags are cases whose label the code
 contradicts, or where the label assumes an escaper protects a sink it was not

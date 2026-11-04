@@ -8,12 +8,15 @@ cargo-dist-version = "0.33.1"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
-installers = ["shell", "powershell"]
+installers = ["shell", "powershell", "npm"]
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
 # Path that installers should place binaries in: standard user bin dir, so
 # developers without a Rust toolchain get it on PATH.
 install-path = ["$XDG_BIN_HOME/", "$XDG_DATA_HOME/../bin", "~/.local/bin"]
+# Publish the npm package after the release exists: to npmjs.com (trusted
+# publishing) and GitHub Packages. See .github/workflows/publish-npm.yml.
+publish-jobs = ["./publish-npm"]
 # Where to host releases
 hosting = "github"
 # Whether to install an updater program

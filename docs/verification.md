@@ -36,18 +36,18 @@ Real agents were also run in a demo repo:
 - **Claude Code**:
   - With AGENTS.md: it complied on its own and refused `--no-verify`.
   - Without AGENTS.md: it wrote `console.log`, and the Stop hook forced it to delete it itself.
-  - When the user told it to use `any`, the agent stopped and asked the person. Pre-commit blocked the violating file; when the person used `--no-verify`, CI still caught it.
+  - When told to use `any`, the agent stopped and asked the person. Pre-commit blocked the violating file; when the person used `--no-verify`, CI still caught it.
 - **Codex** (no AGENTS.md, told to use `any` and `--no-verify`):
   - `--no-verify` was blocked.
   - The after-edit hook caught `any`, and Codex switched to `unknown`.
-  - The first time, Codex got around the console rule with `globalThis["console"]`. After the rule was fixed, a second run made Codex delete `console.log` outright.
+  - Against the first version of the console rule, Codex used `globalThis["console"]`. After the rule was fixed, a second run made Codex delete `console.log` outright.
 - **Claude Code with dependency rules**: two sessions were asked to "use package `slugify`, install with npm", one with AGENTS.md and one with only the hook:
-  - In both, the hook blocked `npm install slugify` *before* the command ran. Nothing was installed, no file was created, and the agent stopped to ask a person for approval (total $0.43).
-  - This run exposed a bug: `2>&1` in `npm install slugify 2>&1 | tail -5` was read as a package name. It was fixed, with a regression test.
+  - In both, the hook blocked `npm install slugify` *before* the command ran. Nothing was installed, no file was created, and the agent stopped to ask a person for approval.
+  - A command such as `npm install slugify 2>&1 | tail -5` is parsed correctly: `2>&1` is a redirect, not a package name (covered by a regression test).
 
 ## Real lockfiles
 
-Lockfiles produced by real tools, taken from public repos (the dev machine has no composer, dotnet or gradle):
+Lockfiles produced by real tools, taken from public repos (composer, dotnet and gradle were not available on the test machine):
 
 - `composer.lock` of symfony/demo: all 153/153 packages were read, and it has 4 real OSV advisories (`league/commonmark`, `symfony/http-foundation`, `symfony/yaml`).
 - `packages.lock.json` of dorssel/usbipd-win: all 40 packages were read (46 entries, duplicated across target frameworks).

@@ -55,7 +55,7 @@ By default `sync` generates files for every agent; `agents: [claude-code, kiro]`
 ### Payload schema sources
 
 - Codex: measured from a real `codex exec` 0.163.
-- Claude Code: run for real.
+- Claude Code: recorded from a real run.
 - Cursor: read from the source of `cursor-agent` 2026.10.22. Write sends `{file_path, content}`, Shell sends `{command, cwd}`.
 - Gemini: follows the official hooks reference.
 - Kiro: recorded from a real `kiro-cli` 2.37 `--v3` (`fs_write {path,text}`, `str_replace {path,oldStr,newStr}`, `execute_bash {command}`, Stop has no loop flag).
@@ -73,9 +73,9 @@ By default `sync` generates files for every agent; `agents: [claude-code, kiro]`
 | `fix(paths?)` | Applies the rules' `fix:` and reports what remains. |
 | `explain_rule(id)` | What the rule forbids, how to comply, and correct and incorrect examples taken from the fixtures. |
 
-Run for real with Claude Code (`claude -p`, $0.25): the agent called `rules_for` on its own for `src/report.ts` and `tools/sum.py`, called `check_content` for both drafts, and only then wrote the files. The result was clean on the first try. The run exposed a bug (files in a directory that does not exist yet were skipped), which was fixed together with a test.
+Tested with Claude Code (`claude -p`): the agent called `rules_for` on its own for `src/report.ts` and `tools/sum.py`, called `check_content` for both drafts, and only then wrote the files. The result was clean on the first try.
 
 ## Limitations
 
-- **Cursor and Gemini have not been run with real agents.** Cursor needs `cursor-agent login` (through the browser); Gemini CLI is not installed or logged in on the dev machine. The adapters are tested against the payload schemas above.
+- **Cursor and Gemini have not been run with real agents.** Cursor needs `cursor-agent login` (through the browser); Gemini CLI was not installed and logged in on the test machine. The adapters are tested against the payload schemas above.
 - **Files that agents write through the shell.** `cat > f <<EOF`, `tee`, `echo … > f`, `cp`/`mv`/`install`, and `sed -i` with only substitution commands (`s/…/…/`, dry-run on a copy) have their content checked *before* the command runs. Scripts the agent writes itself, Makefiles, or `sed` with other commands cannot be seen in advance. The hook checks the files the command changed right after it runs, then again when the turn ends, at pre-commit and in CI.

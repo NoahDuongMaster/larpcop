@@ -1,4 +1,4 @@
-//! Sonar/Codacy replacements: CI report formats, function metrics, the LSP server.
+//! Code-quality features: CI report formats, function metrics, the LSP server.
 
 use crate::common::*;
 use serde_json::{Value, json};

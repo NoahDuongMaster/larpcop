@@ -129,18 +129,18 @@ Claude Code and Codex were run for real. Kiro's payloads were recorded from a re
 
 ## Benchmarks
 
-Detection against deliberately vulnerable projects, scored against each project's own list of known bugs. Semgrep OSS is run with `p/default`.
+Detection against deliberately vulnerable projects, scored against each project's own list of known bugs.
 
-| Suite | larpcop | Semgrep OSS |
-|---|---|---|
-| Juice Shop, vulnerable lines found | 11/27 | 6/27 |
-| NodeGoat | 12/14 | 4/14 |
-| DVNA | 12/14 | 7/14 |
-| OWASP Benchmark Java (2,740 cases, TPR − FPR) | +91.9% | +34.9% |
-| NIST Juliet C# (1,443 web cases, TPR − FPR) | +99.2% | +0.8% |
-| NIST SARD PHP (20,856 cases, TPR − FPR) | +56.4% | +0.1% |
+| Suite | larpcop |
+|---|---|
+| Juice Shop, vulnerable lines found | 11/27 |
+| NodeGoat | 12/14 |
+| DVNA | 12/14 |
+| OWASP Benchmark Java (2,740 cases, TPR − FPR) | +91.9% |
+| NIST Juliet C# (1,443 web cases, TPR − FPR) | +99.2% |
+| NIST SARD PHP (20,856 cases, TPR − FPR) | +56.4% |
 
-Read these with one caveat in mind. Every suite was a held-out check on its first run, then was used to write more rules. The first-run numbers are lower and are listed next to the final ones, with the 22 suites, the method and the misses, in [Benchmarks](docs/benchmarks.md). Re-run it with `bench/run.sh`.
+Read these with one caveat in mind. Every suite was a held-out check on its first run, then was used to write more rules. The first-run numbers are lower and are listed next to the final ones, with the list of suites, the method and the misses, in [Benchmarks](docs/benchmarks.md). Re-run it with `bench/run.sh`.
 
 ## Where it falls short
 

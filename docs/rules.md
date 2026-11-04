@@ -6,7 +6,7 @@ This page covers how to write rules so they cannot be dodged, how `fix:` and rul
 
 ## Write rules by meaning
 
-Agents will find loopholes. When Codex was run for real, it dodged the `console.$METHOD(...)` rule by writing `globalThis["console"]["log"](x)`, and that rule still reported clean. A rule must catch the *structure* under every way of writing it: identifier, property access, and computed-key access. See `no-console` in [rules/typescript.yml](../examples/standards/rules/typescript.yml) and the regression test `no_console_cannot_be_dodged`. The message sent to the agent also says plainly that rewriting the code to dodge a rule still counts as a violation.
+Agents find loopholes. In a test run, Codex dodged the first version of the `console.$METHOD(...)` rule by writing `globalThis["console"]["log"](x)`, and that version reported clean. A rule must catch the *structure* under every way of writing it: identifier, property access, and computed-key access. See `no-console` in [rules/typescript.yml](../examples/standards/rules/typescript.yml) and the regression test `no_console_cannot_be_dodged`. The message sent to the agent also says plainly that rewriting the code to dodge a rule still counts as a violation.
 
 ### Rules on values
 
@@ -67,8 +67,6 @@ Rules for JavaScript and TypeScript are generated for TypeScript, Tsx and JavaSc
 
 ## Code quality
 
-The features below replace Sonar and Codacy.
-
 - **Metrics**: `larpcop metrics [--top N] [--json]` reports line count, function count, and the cyclomatic complexity of each function. It counts on the tree-sitter tree, for every language that ast-grep can read, and nested functions are counted separately. On this repository at the time of writing: 651 files, 4,122 functions, average 1.92. Enforce limits in config:
 
   ```yaml
@@ -79,4 +77,4 @@ The features below replace Sonar and Codacy.
 
 - **CI reports**: `--format sarif|gitlab|markdown`, or write several formats at once with `--output FORMAT=FILE`. The SARIF output was checked against the official SARIF 2.1.0 schema (0 errors) and has `partialFingerprints` that stay stable when code shifts lines. GitLab Code Quality has its own fingerprint for each issue.
 - **PR comment**: the [`enforce.yml`](../.github/workflows/enforce.yml) workflow writes `larpcop-report.md` and keeps **one** comment on the PR, edited after every push (`comment: true`, the default). `sarif: true` uploads the results to GitHub code scanning.
-- **LSP**: `larpcop lsp` gives diagnostics as you type (including unsaved buffers) and the code action "apply rule fixes". It was run in a real Neovim 0.12, where it showed `no-sql-interpolation` and `no-debugger` correctly and offered the code action. That run exposed a bug: a malformed request made the server exit. The server now returns an `InvalidParams` error and keeps running (there is a regression test).
+- **LSP**: `larpcop lsp` gives diagnostics as you type (including unsaved buffers) and the code action "apply rule fixes". It was tested in Neovim 0.12, where it showed `no-sql-interpolation` and `no-debugger` correctly and offered the code action. A malformed request returns an `InvalidParams` error and the server keeps running (covered by a regression test).

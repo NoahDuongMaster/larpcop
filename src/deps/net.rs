@@ -132,7 +132,8 @@ mod tests {
         // Nothing listens on the discard port: the connection error is retried,
         // then reported.
         let err = get(&agent, "http://127.0.0.1:9/x", 2).unwrap_err();
-        assert!(format!("{err:#}").contains("Connection refused"), "{err:#}");
+        // "Connection refused" on Unix, "actively refused it" on Windows.
+        assert!(format!("{err:#}").contains("refused"), "{err:#}");
     }
 
     #[test]

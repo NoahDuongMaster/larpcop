@@ -254,28 +254,27 @@ mod tests {
         );
     }
 
+    /// The two ways a program can fail to answer, shown with the POSIX shell
+    /// instead of `sed` itself: sed dialects differ (msys sed on Windows drops
+    /// the backslash of `\(`, so one script is an error on one OS and fine on
+    /// another).
     #[test]
     fn a_rejected_script_predicts_nothing_and_a_hung_sed_is_killed() {
-        if !sed_works() {
-            return;
-        }
-        let sed = crate::shell::which("sed");
-        let bad = ["-e".to_string(), "s/\\(/x/".to_string()];
-        assert_eq!(
-            run(
-                &sed,
-                &bad,
-                "text\n".repeat(100_000).as_str(),
-                Duration::from_secs(30)
-            )
-            .unwrap(),
-            None
+        let sh = crate::shell::posix_shell();
+        let script = |body: &str| ["-c".to_string(), body.to_string()];
+        // It reads all its input, then fails: no prediction, and no error.
+        let rejected = run(
+            &sh,
+            &script("cat >/dev/null; exit 3"),
+            "text\n".repeat(100_000).as_str(),
+            Duration::from_secs(30),
         );
-        // `sleep` never reads its stdin or answers: the deadline has to stop it.
+        assert_eq!(rejected.unwrap(), None);
+        // It never reads its stdin or answers: the deadline has to stop it.
         let started = Instant::now();
         let hung = run(
-            Path::new("sleep"),
-            &["30".to_string()],
+            &sh,
+            &script("exec sleep 30"),
             "x",
             Duration::from_millis(300),
         );

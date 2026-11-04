@@ -270,11 +270,13 @@ mod tests {
             Duration::from_secs(30),
         );
         assert_eq!(rejected.unwrap(), None);
-        // It never reads its stdin or answers: the deadline has to stop it.
+        // It never reads its stdin or answers: the deadline has to stop it. A
+        // builtin loop, not `sleep`: on Windows a child of the shell would keep
+        // the pipe open after the shell itself is killed.
         let started = Instant::now();
         let hung = run(
             &sh,
-            &script("exec sleep 30"),
+            &script("while :; do :; done"),
             "x",
             Duration::from_millis(300),
         );

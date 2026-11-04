@@ -181,7 +181,8 @@ mod tests {
         let files = many_files();
         let fake =
             linter("echo run >> runs.txt; for f in {files}; do echo \"$f\" >> seen.txt; done");
-        assert!(fake.run(dir.path(), &files).expect("runs").is_none());
+        let found = fake.run(dir.path(), &files).expect("runs");
+        assert!(found.is_none(), "{found:?}");
         let runs = std::fs::read_to_string(dir.path().join("runs.txt")).expect("runs.txt");
         let seen = std::fs::read_to_string(dir.path().join("seen.txt")).expect("seen.txt");
         assert!(runs.lines().count() >= 2, "{runs}");

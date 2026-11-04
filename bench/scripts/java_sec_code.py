@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Scores scanners on Java endpoint truths (java-sec-code, VulnerableApp): an endpoint counts as reported when a
+"""Scores larpcop on Java endpoint truths (java-sec-code, VulnerableApp): an endpoint counts as reported when a
 finding of its category lies in its line range (a call-site finding of an
 interprocedural flow sits there too). Score per category = TPR - FPR.
 
-usage: java_sec_code.py TRUTH REPO NAME=FINDINGS.json [NAME=FINDINGS.json …]
-Findings: larpcop JSON (`violations`) or Semgrep JSON (`results`)."""
+usage: java_sec_code.py TRUTH LARPCOP_JSON
+TRUTH is a file from bench/truth; LARPCOP_JSON is the output of
+`larpcop check --format json`."""
 import json
 import pathlib
 import sys
@@ -30,25 +31,19 @@ def category(rule):
     return next((c for k, c in CATEGORIES if k in rule), None)
 
 
-def findings(path, repo):
+def findings(path):
     data = json.loads(pathlib.Path(path).read_text())
-    out = []
-    for v in data.get("violations", []):
-        out.append((v["file"], v["line"], category(v["rule"])))
-    for r in data.get("results", []):
-        f = str((pathlib.Path(repo) / r["path"]).resolve().relative_to(pathlib.Path(repo).resolve()))
-        out.append((f, r["start"]["line"], category(r["check_id"])))
-    return out
+    return [(v["file"], v["line"], category(v["rule"])) for v in data["violations"]]
 
 
-def main(truth, repo, runs):
+def main(truth, runs):
     rows = json.loads(pathlib.Path(truth).read_text())
     cats = sorted({r["category"] for r in rows})
     sys.stdout.write("| category (vuln/safe) | " + " | ".join(n for n, _ in runs) + " |" + "\n")
     sys.stdout.write("|---|" + "---|" * len(runs) + "\n")
     totals = {n: [0, 0, 0, 0] for n, _ in runs}
     scores = {n: [] for n, _ in runs}
-    hits = {n: findings(p, repo) for n, p in runs}
+    hits = {n: findings(p) for n, p in runs}
     for c in cats:
         mine = [r for r in rows if r["category"] == c]
         pos = sum(r["vulnerable"] for r in mine)
@@ -74,4 +69,4 @@ def main(truth, repo, runs):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2], [tuple(a.split("=", 1)) for a in sys.argv[3:]])
+    main(sys.argv[1], [("larpcop", sys.argv[2])])

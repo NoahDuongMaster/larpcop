@@ -129,18 +129,18 @@ Claude Code 和 Codex 用真实的 Agent 跑过。Kiro 的 payload 录自真实�
 
 ## 基准测试
 
-检测对象是故意留有漏洞的项目，按各项目自带的已知漏洞清单打分。Semgrep OSS 使用 `p/default` 运行。
+检测对象是故意留有漏洞的项目，按各项目自带的已知漏洞清单打分。
 
-| 测试集 | larpcop | Semgrep OSS |
-|---|---|---|
-| Juice Shop，找到的漏洞代码行 | 11/27 | 6/27 |
-| NodeGoat | 12/14 | 4/14 |
-| DVNA | 12/14 | 7/14 |
-| OWASP Benchmark Java（2,740 个用例，TPR − FPR） | +91.9% | +34.9% |
-| NIST Juliet C#（1,443 个 web 用例，TPR − FPR） | +99.2% | +0.8% |
-| NIST SARD PHP（20,856 个用例，TPR − FPR） | +56.4% | +0.1% |
+| 测试集 | larpcop |
+|---|---|
+| Juice Shop，找到的漏洞代码行 | 11/27 |
+| NodeGoat | 12/14 |
+| DVNA | 12/14 |
+| OWASP Benchmark Java（2,740 个用例，TPR − FPR） | +91.9% |
+| NIST Juliet C#（1,443 个 web 用例，TPR − FPR） | +99.2% |
+| NIST SARD PHP（20,856 个用例，TPR − FPR） | +56.4% |
 
-看这些数字前要先说明一点：每个测试集首次运行时都是留出检验（held-out check），之后才被拿来写更多规则。首次运行的数字更低，和最终数字并排列在[基准测试](docs/benchmarks.md)里，同一页还有全部 22 个测试集、测试方法和漏掉的那些。可以用 `bench/run.sh` 重新跑一遍。
+看这些数字前要先说明一点：每个测试集首次运行时都是留出检验（held-out check），之后才被拿来写更多规则。首次运行的数字更低，和最终数字并排列在[基准测试](docs/benchmarks.md)里，同一页还有全部测试集、测试方法和漏掉的那些。可以用 `bench/run.sh` 重新跑一遍。
 
 ## 短板
 

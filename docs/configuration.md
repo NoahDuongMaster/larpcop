@@ -99,7 +99,7 @@ Variables used by larpcop and by its installer.
 | `LARPCOP_DEPS_API` | Base URL of the deps.dev API used for release dates. The default is `https://api.deps.dev/v3`. |
 | `LARPCOP_OSV_API` | Base URL of the OSV.dev API used for vulnerabilities and malware. The default is `https://api.osv.dev/v1`. |
 | `LARPCOP_PACKAGIST_API` | Base URL of the Packagist API used for Composer packages. The default is `https://repo.packagist.org`. |
-| `LARPCOP_GITHUB_TOKEN` | A token variable of the installer. It does not work for a private repo, because GitHub does not allow private assets to be downloaded through `releases/download` URLs (tried). |
+| `LARPCOP_GITHUB_TOKEN` | A token variable of the installer. It cannot fetch release assets of a non-public repository, because GitHub does not serve them through `releases/download` URLs. |
 | `LARPCOP_DOWNLOAD_URL` | Points the installer at a local directory instead of GitHub releases. The value is a `file://` URL of a directory that holds `larpcop-installer.sh` and the release archives (`*.tar.xz` and `*.tar.xz.sha256`), for example fetched with `gh release download`. |
 
 ## Windows

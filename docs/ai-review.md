@@ -1,6 +1,6 @@
 # AI review and rule learning
 
-This page describes `larpcop review` and `larpcop learn`, which replace CodeRabbit/Bugbot and Packmind, and how to configure the model command they use.
+This page describes `larpcop review` and `larpcop learn`, and how to configure the model command they use.
 
 [Back to the README](../README.md)
 
@@ -41,9 +41,9 @@ llm:
 
 This is the way to gradually turn the "soft" rules of AI review into hard rules.
 
-## Runs on a real model
+## Tested with a real model
 
-These were run for real with `claude -p --model sonnet` on a demo Express repo:
+Both commands were tested with `claude -p --model sonnet` on a demo Express repo:
 
 - `review --changed`: a new controller function that called `db.user.findUnique` was reported on exactly line 9, with a suggestion to move it to a service (8.6 s).
 - `learn "Never import moment; use date-fns. No default exports, only named exports. Never await inside a loop; collect the promises and use Promise.all."` produced 3 rules, all of which passed in the first round (22 s). Each rule had 7 to 8 examples, including near-miss cases that must stay valid: an `await` inside an arrow function that sits in a loop is not counted. After the 3 rules were added to the repo, `larpcop check` caught exactly the 3 existing violations.

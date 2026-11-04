@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Writes bench/java-sec-code-truth.json: every endpoint of JoyChou93/java-sec-code
-(4711f4e) in a category larpcop or Semgrep could check, labelled from the
+"""Writes bench/truth/java-sec-code-truth.json: every endpoint of JoyChou93/java-sec-code
+(4711f4e) in a category larpcop could check, labelled from the
 project itself: `vuln`/`sec` in the route, else the comment above it
-("Vuln Code", "Safe code", a PoC URL). Written before any tool ran on it."""
+("Vuln Code", "Safe code", a PoC URL). Written before any tool ran on it.
+
+    python3 bench/truth/java_sec_code_truth.py <java-sec-code checkout> bench/truth/java-sec-code-truth.json"""
 import json
 import pathlib
 import sys

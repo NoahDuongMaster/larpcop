@@ -1,6 +1,6 @@
 # Security checks
 
-This page describes the security layers that replace Semgrep and Snyk in larpcop: syntax conventions, text rules for templates and config files, secret detection, and the known limits for logic flaws and CSRF.
+This page describes the security layers in larpcop: syntax conventions, text rules for templates and config files, secret detection, and the known limits for logic flaws and CSRF.
 
 [Back to the README](../README.md)
 

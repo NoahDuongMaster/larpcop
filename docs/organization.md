@@ -42,7 +42,7 @@ larpcop org setup  <owner> --standards URL#tag [--repos a,b] [--workflow-ref vX]
 - `status` lists each repo (not archived, not a fork): whether it has `.larpcop.yaml`, which standards it extends and which tag it pins, whether a workflow calls the gate, how the most recent run went, and whether a setup PR is open. It exits with 1 if any repo still has no gate. Measured on a real account: 57 repos in about 22 seconds.
 - `setup` opens **one PR per repo**. The PR contains `.larpcop.yaml`, the workflow `.github/workflows/larpcop.yml` and every agent file that `sync` generates from the repo's existing content, so the PR passes `sync --check` right away. Running it again skips repos that already have the gate or a PR, and reuses the branch if the previous run stopped midway.
 - Writing files under `.github/workflows` needs a token with the `workflow` scope. Without the scope the PR is still opened, and the workflow content is placed in the PR description so it can be added by hand (`gh auth refresh -s workflow` makes the next run add it automatically).
-- Run for real on two private sandbox repos (standards + app): the PR opened, the PR branch passed `sync --check` and `check`, and running again did not create a duplicate PR. Both sandbox repos were deleted after the test.
+- Tested on two throwaway repos (standards + app): the PR opened, the PR branch passed `sync --check` and `check`, and running again did not create a duplicate PR.
 - It uses the `gh` CLI, so it stores no token and works with SSO and GitHub Enterprise.
 
 ## CI

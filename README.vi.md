@@ -129,18 +129,18 @@ Claude Code và Codex đã được chạy thật. Payload của Kiro được g
 
 ## Benchmark
 
-Kết quả phát hiện trên các dự án cố ý có lỗ hổng, chấm theo danh sách lỗi đã biết của chính từng dự án. Semgrep OSS chạy với `p/default`.
+Kết quả phát hiện trên các dự án cố ý có lỗ hổng, chấm theo danh sách lỗi đã biết của chính từng dự án.
 
-| Bộ test | larpcop | Semgrep OSS |
-|---|---|---|
-| Juice Shop, số dòng lỗ hổng tìm thấy | 11/27 | 6/27 |
-| NodeGoat | 12/14 | 4/14 |
-| DVNA | 12/14 | 7/14 |
-| OWASP Benchmark Java (2.740 ca, TPR − FPR) | +91,9% | +34,9% |
-| NIST Juliet C# (1.443 ca web, TPR − FPR) | +99,2% | +0,8% |
-| NIST SARD PHP (20.856 ca, TPR − FPR) | +56,4% | +0,1% |
+| Bộ test | larpcop |
+|---|---|
+| Juice Shop, số dòng lỗ hổng tìm thấy | 11/27 |
+| NodeGoat | 12/14 |
+| DVNA | 12/14 |
+| OWASP Benchmark Java (2.740 ca, TPR − FPR) | +91,9% |
+| NIST Juliet C# (1.443 ca web, TPR − FPR) | +99,2% |
+| NIST SARD PHP (20.856 ca, TPR − FPR) | +56,4% |
 
-Có một lưu ý khi đọc các con số này. Mỗi bộ test ở lần chạy đầu là một bài kiểm tra held-out, rồi sau đó được dùng để viết thêm rule. Số của lần chạy đầu thấp hơn, và được liệt kê cạnh số cuối cùng trong [Benchmark](docs/benchmarks.md), cùng với toàn bộ 22 bộ test, phương pháp và các lỗi bị sót. Chạy lại bằng `bench/run.sh`.
+Có một lưu ý khi đọc các con số này. Mỗi bộ test ở lần chạy đầu là một bài kiểm tra held-out, rồi sau đó được dùng để viết thêm rule. Số của lần chạy đầu thấp hơn, và được liệt kê cạnh số cuối cùng trong [Benchmark](docs/benchmarks.md), cùng với danh sách các bộ test, phương pháp và các lỗi bị sót. Chạy lại bằng `bench/run.sh`.
 
 ## Giới hạn
 

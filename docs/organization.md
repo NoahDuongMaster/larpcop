@@ -72,7 +72,7 @@ The release pipeline uses [`dist`](https://opensource.axo.dev/cargo-dist/) ([rel
 
 The shell and PowerShell installers download the binary from GitHub Releases. The repository is public, so they work for anyone. For a private fork, developers and CI fetch the binaries with `gh release download` (it needs a logged-in `gh` with read access to the repo). The `larpcop-token` secret in the CI workflow is likewise needed only when the standards repo or a fork of larpcop is private.
 
-The release has no Homebrew formula and no npm package, and `installers` in `dist-workspace.toml` lists only `shell` and `powershell`, so the release page does not offer them. To publish them once a home is chosen (a Homebrew tap such as `homebrew-tap`, an npm scope), add `"homebrew"` and `"npm"` to `installers`, set `publish-jobs = ["homebrew", "npm"]` and add the `HOMEBREW_TAP_TOKEN` and `NPM_TOKEN` secrets.
+The npm package [`larpcop`](https://www.npmjs.com/package/larpcop) holds version 0.3.1 only. It was published by hand from the `larpcop-npm-package.tar.gz` that `dist` built for that release; the package downloads the binary of its own version from the GitHub release. `installers` in `dist-workspace.toml` lists only `shell` and `powershell`, so later releases carry no npm tarball and the package does not move on its own. There is no Homebrew formula either. To publish both with every release, add `"homebrew"` and `"npm"` to `installers`, set `publish-jobs = ["homebrew", "npm"]` and add the `HOMEBREW_TAP_TOKEN` and `NPM_TOKEN` secrets (npm needs a granular token that may publish with 2FA enabled).
 
 ## Binary size
 

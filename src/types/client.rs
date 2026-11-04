@@ -17,6 +17,9 @@ const TIMEOUT: Duration = if cfg!(test) {
 } else {
     Duration::from_secs(60)
 };
+/// Starting a server (an interpreter or a JVM coming up cold) is not a question: the
+/// unit tests shorten `TIMEOUT` to see a hang quickly, not to rush the start.
+const STARTUP_TIMEOUT: Duration = Duration::from_secs(60);
 /// Asking a server to leave must not wait as long as asking it a question.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -82,7 +85,7 @@ impl Client {
             quiescent: false,
         };
         let uri = url(root);
-        client.request(
+        client.request_within(
             "initialize",
             json!({
                 "processId": std::process::id(),
@@ -96,6 +99,7 @@ impl Client {
                 // server (`import pool`, `any`); the semantic one waits for the project.
                 "initializationOptions": { "tsserver": { "useSyntaxServer": "never" } },
             }),
+            STARTUP_TIMEOUT,
         )?;
         client.notify("initialized", json!({}))?;
         client.broken = false;

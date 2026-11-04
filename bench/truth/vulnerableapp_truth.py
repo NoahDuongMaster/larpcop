@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Writes bench/vulnerableapp-truth.json: every handler of SasanLabs/VulnerableApp
+"""Writes bench/truth/vulnerableapp-truth.json: every handler of SasanLabs/VulnerableApp
 (9f45cd5) in a category a SAST tool can check, labelled by the project itself:
 `@VulnerableAppRequestMapping(variant = Variant.SECURE)` is safe, the default
 (UNSECURE) is vulnerable; the category is the package. Written before any tool
-ran on it."""
+ran on it.
+
+    python3 bench/truth/vulnerableapp_truth.py <VulnerableApp checkout> bench/truth/vulnerableapp-truth.json"""
 import json
 import pathlib
 import re

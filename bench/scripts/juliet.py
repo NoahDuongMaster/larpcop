@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scores tools on the NIST Juliet 1.3 test cases (C# or Java) whose data comes
+"""Scores larpcop on the NIST Juliet 1.3 test cases (C# or Java) whose data comes
 from an HTTP request: C# `QueryString`, `Params`, `Cookies`; Java servlet
 `getParameter`, `getCookies`, `getQueryString`. Juliet labels by
 construction: code in a `bad*` method (or a `*_bad` file) is vulnerable, code
@@ -7,8 +7,11 @@ in a `good*` method (or `*_good*`) is not. Per test case, it is found when a
 finding of its category lands in bad code and flagged wrongly when one lands
 in good code; score = found rate - wrongly flagged rate per category.
 
-    juliet.py TESTCASES_DIR LARPCOP_JSON SEMGREP_JSON [SEMGREP_JSON ...]
-    juliet.py --stored TESTCASES_DIR LARPCOP_JSON SEMGREP_JSON [...]
+    juliet.py TESTCASES_DIR LARPCOP_JSON
+    juliet.py --stored TESTCASES_DIR LARPCOP_JSON
+    juliet.py --c TESTCASES_DIR LARPCOP_JSON
+
+LARPCOP_JSON is the output of `larpcop check --format json`.
 
 `--c`: Juliet C 1.3, the `.c` cases of CWE78 (OS command injection) and CWE134
 (format string), every source (console, environment, file, sockets); larpcop
@@ -42,8 +45,6 @@ C_SELECTED = re.compile(r"^CWE(78|134)_.*\.c$")
 # `static void goodG2B()`, `char * CWE78_…_61b_badSource(char * data)`.
 C_FUNCTION = re.compile(r"^(?:static\s+)?[A-Za-z_][\w ]*?[\s*]+(\w+)\s*\(")
 STORED = re.compile(r"^CWE(80|81|83)_.*_(Servlet_database|Web_Database)_")
-CWE = {"89": "sql", "78": "shell", "77": "shell", "22": "path", "23": "path", "36": "path", "73": "path",
-       "601": "redirect", "79": "xss", "80": "xss", "90": "ldap", "643": "xpath", "134": "format"}
 METHOD = re.compile(r"^\s*(?:(?:public|private|protected|internal|static|override|virtual|async|final"
                     r"|synchronized)\s+)+[\w<>\[\],. ]+?\s+(\w+)\s*\(")
 CASE = re.compile(r"^(CWE\d+_.+?_\d+)(?:[a-e]|_bad|_good\w*|_base)?\.(cs|java|c)$")
@@ -101,38 +102,24 @@ def larpcop(path):
             yield v["file"].rsplit("/", 1)[-1], v["line"], LARPCOP[v["rule"]]
 
 
-def semgrep(path):
-    for r in json.load(open(path))["results"]:
-        cwes = r.get("extra", {}).get("metadata", {}).get("cwe", [])
-        for c in cwes if isinstance(cwes, list) else [cwes]:
-            n = re.match(r"CWE-(\d+)", str(c))
-            if n and n.group(1) in CWE:
-                yield r["path"].rsplit("/", 1)[-1], r["start"]["line"], CWE[n.group(1)]
-
-
 def main():
     args = sys.argv[1:]
     mode = args[0] if args[0] in ("--stored", "--c") else None
     args = args[1:] if mode else args
     all_cases = cases(args[0], {"--stored": STORED, "--c": C_SELECTED}.get(mode))
-    tools = [("larpcop", tally(all_cases, larpcop(args[1])))]
-    tools += [(f"Semgrep ({p.rsplit('/', 1)[-1].removesuffix('.json')})", tally(all_cases, semgrep(p)))
-              for p in args[2:]]
+    hits = tally(all_cases, larpcop(args[1]))
     cats = sorted({c for c, _ in all_cases.values()})
     out = sys.stdout.write
-    out("| Category (cases) | " + " | ".join(f"{n}: found / good flagged / score" for n, _ in tools) + " |\n")
-    out("|---|" + "---|" * len(tools) + "\n")
-    averages = [[] for _ in tools]
+    out("| Category (cases) | larpcop: found / good flagged / score |\n")
+    out("|---|---|\n")
+    scores = []
     for cat in cats:
         ids = [c for c, (k, _) in all_cases.items() if k == cat]
-        cells = []
-        for i, (_, hits) in enumerate(tools):
-            found = sum("bad" in hits.get(c, ()) for c in ids) / len(ids)
-            wrong = sum("good" in hits.get(c, ()) for c in ids) / len(ids)
-            averages[i].append(found - wrong)
-            cells.append(f"{found:.0%} / {wrong:.0%} / **{found - wrong:+.0%}**")
-        out(f"| {cat} ({len(ids)}) | " + " | ".join(cells) + " |\n")
-    out("| **average** | " + " | ".join(f"**{sum(a) / len(a):+.1%}**" for a in averages) + " |\n")
+        found = sum("bad" in hits.get(c, ()) for c in ids) / len(ids)
+        wrong = sum("good" in hits.get(c, ()) for c in ids) / len(ids)
+        scores.append(found - wrong)
+        out(f"| {cat} ({len(ids)}) | {found:.0%} / {wrong:.0%} / **{found - wrong:+.0%}** |\n")
+    out(f"| **average** | **{sum(scores) / len(scores):+.1%}** |\n")
 
 
 if __name__ == "__main__":

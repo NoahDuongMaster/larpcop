@@ -42,7 +42,7 @@ larpcop org setup  <owner> --standards URL#tag [--repos a,b] [--workflow-ref vX]
 - `status` lists each repo (not archived, not a fork): whether it has `.larpcop.yaml`, which standards it extends and which tag it pins, whether a workflow calls the gate, how the most recent run went, and whether a setup PR is open. It exits with 1 if any repo still has no gate. Measured on a real account: 57 repos in about 22 seconds.
 - `setup` opens **one PR per repo**. The PR contains `.larpcop.yaml`, the workflow `.github/workflows/larpcop.yml` and every agent file that `sync` generates from the repo's existing content, so the PR passes `sync --check` right away. Running it again skips repos that already have the gate or a PR, and reuses the branch if the previous run stopped midway.
 - Writing files under `.github/workflows` needs a token with the `workflow` scope. Without the scope the PR is still opened, and the workflow content is placed in the PR description so it can be added by hand (`gh auth refresh -s workflow` makes the next run add it automatically).
-- Run for real on two private sandbox repos (standards + app): the PR opened, the PR branch passed `sync --check` and `check`, and running again did not create a duplicate PR. Both sandbox repos were deleted after the test.
+- Tested on two throwaway repos (standards + app): the PR opened, the PR branch passed `sync --check` and `check`, and running again did not create a duplicate PR.
 - It uses the `gh` CLI, so it stores no token and works with SSO and GitHub Enterprise.
 
 ## CI
@@ -55,16 +55,16 @@ jobs:
     permissions:
       contents: read
       pull-requests: write   # comment on the PR; also add security-events: write if sarif is enabled
-    uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.3.0
+    uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.3.1
     with:
       standards: https://github.com/<org>/standards.git#v1.0.0
     secrets:
       larpcop-token: ${{ secrets.LARPCOP_TOKEN }}   # only needed when the standards repo (or a fork of larpcop) is private
 ```
 
-`permissions` must be declared in the calling job: a reusable workflow cannot have more permissions than the job that calls it, and a repo's default token usually has read-only permissions. If a permission is missing, the gate still runs and still blocks. Only the comment on the PR cannot be posted, and the workflow shows a warning that names the missing permission. This was found by trying v0.2.0 on a real PR.
+`permissions` must be declared in the calling job: a reusable workflow cannot have more permissions than the job that calls it, and a repo's default token usually has read-only permissions. If a permission is missing, the gate still runs and still blocks. Only the comment on the PR cannot be posted, and the workflow shows a warning that names the missing permission.
 
-The workflow checks only the files that a PR changes, so old technical debt does not block the PR and new debt cannot get in. It also runs `sync --check` to make sure the generated agent files always match the rules. This repo uses the same workflow on itself through [`self-enforce.yml`](../.github/workflows/self-enforce.yml).
+The workflow checks only the files that a PR changes, so old technical debt does not block the PR and new debt cannot get in. It also runs `sync --check` to make sure the generated agent files always match the rules. By default it installs the latest larpcop release (`larpcop-version` pins another tag). This repo uses the same workflow on itself through [`self-enforce.yml`](../.github/workflows/self-enforce.yml), with `larpcop-from-source: true`, so its own PRs are checked by the code they change instead of the last release.
 
 ## Releases and distribution
 

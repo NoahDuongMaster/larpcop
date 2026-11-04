@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Real repositories (nobody wrote them for a benchmark): time and findings.
-# usage: bash bench/scale.sh [WORK_DIR]   (env LARPCOP, LARPCOP_RULES)
+# usage: bash bench/scripts/scale.sh [WORK_DIR]   (env LARPCOP, LARPCOP_RULES)
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
-REPO="$(cd "$HERE/.." && pwd)"
+REPO="$(cd "$HERE/../.." && pwd)"
 LARPCOP=${LARPCOP:-$REPO/target/release/larpcop}
 RULES=${LARPCOP_RULES:-$REPO/standards/recommended}
 W=${1:-${TMPDIR:-/tmp}/larpcop-scale}

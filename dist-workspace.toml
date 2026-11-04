@@ -14,8 +14,8 @@ targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-da
 # Path that installers should place binaries in: standard user bin dir, so
 # developers without a Rust toolchain get it on PATH.
 install-path = ["$XDG_BIN_HOME/", "$XDG_DATA_HOME/../bin", "~/.local/bin"]
-# Publish the npm package after the release exists: to npmjs.com (trusted
-# publishing) and GitHub Packages. See .github/workflows/publish-npm.yml.
+# Publish the npm package to npmjs.com after the release exists (trusted
+# publishing). See .github/workflows/publish-npm.yml.
 publish-jobs = ["./publish-npm"]
 # Where to host releases
 hosting = "github"

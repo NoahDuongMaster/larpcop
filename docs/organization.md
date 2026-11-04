@@ -72,17 +72,13 @@ The release pipeline uses [`dist`](https://opensource.axo.dev/cargo-dist/) ([rel
 
 The shell and PowerShell installers download the binary from GitHub Releases. The repository is public, so they work for anyone. For a private fork, developers and CI fetch the binaries with `gh release download` (it needs a logged-in `gh` with read access to the repo). The `larpcop-token` secret in the CI workflow is likewise needed only when the standards repo or a fork of larpcop is private.
 
-After the release exists, [`publish-npm.yml`](../.github/workflows/publish-npm.yml) publishes the npm package that `dist` builds (`publish-jobs` in `dist-workspace.toml`):
+After the release exists, [`publish-npm.yml`](../.github/workflows/publish-npm.yml) publishes the npm package that `dist` builds (`publish-jobs` in `dist-workspace.toml`) to [npmjs.com](https://www.npmjs.com/package/larpcop) as `larpcop`. It uses [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC), so the repository holds no npm token. npm checks the name of the workflow that calls the publish job, so the trusted publisher is set up for `release.yml`:
 
-- to [npmjs.com](https://www.npmjs.com/package/larpcop) as `larpcop`, with [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC, so the repository holds no npm token). npm checks the name of the workflow that calls the publish job, so the trusted publisher is set up for `release.yml`:
+```sh
+npm trust github larpcop --repo NoahDuongMaster/larpcop --file release.yml --allow-publish
+```
 
-  ```sh
-  npm trust github larpcop --repo NoahDuongMaster/larpcop --file release.yml --allow-publish
-  ```
-
-- to [GitHub Packages](https://github.com/NoahDuongMaster/larpcop/pkgs/npm/larpcop) as `@noahduongmaster/larpcop`, with the job's `GITHUB_TOKEN`. This fills the Packages box on the repository page. GitHub's npm registry asks for a token even to install a public package, so the install instructions in the README use npmjs.com.
-
-The package downloads the binary of its own version from the GitHub release when it is installed. To publish an older release to GitHub Packages, run the `publish-npm` workflow by hand with its tag; npmjs.com is published by `release.yml` only. Version 0.3.1 was published to npmjs.com by hand, before the pipeline existed.
+The package downloads the binary of its own version from the GitHub release when it is installed. Version 0.3.1 was published by hand, before the pipeline existed. The package is not published to GitHub Packages.
 
 There is no Homebrew formula. To publish one with every release, add `"homebrew"` to `installers`, set `publish-jobs = ["homebrew", "./publish-npm"]` and add the `HOMEBREW_TAP_TOKEN` secret.
 

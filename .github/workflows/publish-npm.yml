@@ -1,13 +1,7 @@
-# Publishes the npm package that dist builds for a release (larpcop-npm-package.tar.gz):
-#
-# - to npmjs.com as `larpcop`, with trusted publishing (OIDC, no stored token). npm
-#   checks the name of the calling workflow, so the trusted publisher is set up for
-#   `release.yml`, which calls this file (see `publish-jobs` in dist-workspace.toml).
-# - to GitHub Packages as `@<owner>/larpcop`, with the job's GITHUB_TOKEN. That is
-#   what fills the Packages box of the repository page.
-#
-# Run it by hand with a release tag to publish that release to GitHub Packages only;
-# npmjs.com is published by release.yml alone.
+# Publishes the npm package that dist builds for a release (larpcop-npm-package.tar.gz)
+# to npmjs.com as `larpcop`, with trusted publishing (OIDC, no stored token). npm
+# checks the name of the calling workflow, so the trusted publisher is set up for
+# `release.yml`, which calls this file (see `publish-jobs` in dist-workspace.toml).
 name: publish-npm
 
 on:
@@ -17,98 +11,33 @@ on:
         description: dist's plan (JSON), passed by release.yml
         required: true
         type: string
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: Release tag to publish to GitHub Packages, for example v0.3.1
-        required: true
-        type: string
 
-# release.yml grants this call only `id-token` and `packages`, and a called workflow
-# cannot ask for more, so every job below asks for at most one of them.
+# release.yml grants this call `id-token` and `packages`, and a called workflow
+# cannot ask for more than its caller. Only `id-token` is used here.
 permissions: {}
 
 jobs:
-  package:
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.tag.outputs.tag }}
-    steps:
-      - name: Release tag
-        id: tag
-        env:
-          PLAN: ${{ inputs.plan }}
-          TAG: ${{ inputs.tag }}
-        run: |
-          if [ -n "$PLAN" ]; then TAG=$(jq -r .announcement_tag <<<"$PLAN"); fi
-          case "$TAG" in v[0-9]*) ;; *) echo "::error::not a release tag: '$TAG'"; exit 1 ;; esac
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Download the package from the release
-        env:
-          TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          curl -fsSL --retry 3 -o larpcop-npm-package.tar.gz \
-            "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/larpcop-npm-package.tar.gz"
-          tar -tzf larpcop-npm-package.tar.gz | head -3
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: npm-package
-          path: larpcop-npm-package.tar.gz
-
   npmjs:
-    # Only when release.yml calls this file: the trusted publisher is bound to it.
-    if: ${{ inputs.plan != '' }}
-    needs: package
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: npm-package
+      - name: Download the package from the release
+        env:
+          PLAN: ${{ inputs.plan }}
+        run: |
+          TAG=$(jq -r .announcement_tag <<<"$PLAN")
+          case "$TAG" in v[0-9]*) ;; *) echo "::error::not a release tag: '$TAG'"; exit 1 ;; esac
+          curl -fsSL --retry 3 -o larpcop-npm-package.tar.gz \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/larpcop-npm-package.tar.gz"
+          tar -tzf larpcop-npm-package.tar.gz | head -3
+
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
+
       # Trusted publishing needs npm 11.5.1 or newer.
       - run: npm --version
       - run: npm publish ./larpcop-npm-package.tar.gz --access public
-
-  github-packages:
-    needs: package
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: npm-package
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          registry-url: https://npm.pkg.github.com
-          package-manager-cache: false
-      # Package names on GitHub Packages carry the owner scope, in lower case.
-      - name: Scope the package to the owner
-        run: |
-          scope="@${GITHUB_REPOSITORY_OWNER,,}"
-          mkdir unpacked
-          tar -xzf larpcop-npm-package.tar.gz -C unpacked
-          cd unpacked/package
-          jq --arg name "$scope/larpcop" \
-            '.name = $name | .publishConfig = {registry: "https://npm.pkg.github.com"}' \
-            package.json > package.json.new
-          mv package.json.new package.json
-          if [ -f npm-shrinkwrap.json ]; then
-            jq --arg name "$scope/larpcop" '.name = $name | .packages[""].name = $name' \
-              npm-shrinkwrap.json > npm-shrinkwrap.json.new
-            mv npm-shrinkwrap.json.new npm-shrinkwrap.json
-          fi
-          cd ../..
-          tar -czf scoped.tgz -C unpacked package
-      - run: npm publish ./scoped.tgz
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

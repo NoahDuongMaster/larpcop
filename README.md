@@ -81,7 +81,7 @@ curl -LsSf https://github.com/NoahDuongMaster/larpcop/releases/latest/download/l
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/NoahDuongMaster/larpcop/releases/latest/download/larpcop-installer.ps1 | iex"
 ```
 
-The installers put the binary in `~/.local/bin`. To build from source, clone the repo and run `cargo build --release`. There is no crates.io or npm package yet, and the Homebrew formula is attached to the release but not published.
+The installers put the binary in `~/.local/bin`. To build from source, clone the repo and run `cargo build --release`. There is no crates.io, npm or Homebrew package yet.
 
 ## Quick start
 

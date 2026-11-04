@@ -1,188 +1,245 @@
-//! Expression evaluation and call stepping for the unified multi-taint lattice.
+//! Which rules find a node tainted: `Ctx::tainted` (flow.rs) for all the rules
+//! of a batch at once, each branch of it narrowing the rules still to judge.
 
 use super::NAMES;
 use super::fields::is_field;
 use super::flow::CALLS;
 use super::kotlin::Part;
-use super::multi_mask::{RuleMask, TaintEnv};
-use super::multi_walk::{MultiCtx, MultiReached, MultiSeen};
-use super::summary::args;
+use super::multi_mask::{RuleMask, TaintEnv, bit, rules_in};
+use super::multi_walk::MultiCtx;
+use super::summary::{args, called_name};
 use crate::rules::complexity::is_function;
 use ast_grep_core::{Doc, Node};
-use std::collections::HashMap;
 
 impl<'a, 'h, D: Doc> MultiCtx<'a, 'h, D> {
-    pub fn tainted_mask(&self, node: &Node<D>, env: &TaintEnv) -> RuleMask {
-        if is_function(node) {
+    /// Of `rules`, those that find `node` tainted given `env`.
+    pub fn tainted_mask(&self, node: &Node<D>, env: &TaintEnv, rules: RuleMask) -> RuleMask {
+        // A function value is code, not data; what it captures is followed
+        // when its body is walked.
+        if rules == 0 || is_function(node) {
             return 0;
         }
         let r = node.range();
-        let san_mask = self.hits.sanitizer_mask_at(&r);
-        let src_mask = self.hits.source_mask_at(&r);
-        let (kind, text) = (node.kind(), node.text());
-        let mut mask: RuleMask = 0;
+        let rules = rules & !self.hits.sanitizers.covers(&r, rules);
+        let covered = self.hits.sources.covers(&r, rules);
+        let rules = rules & !covered;
+        if rules == 0 {
+            return covered;
+        }
+        // A bare name token: only the name's own entry, a map read whole and
+        // a bare call can decide it.
+        if node.is_leaf() && NAMES.contains(&node.kind().as_ref()) {
+            return covered | self.name_mask(node, env, rules);
+        }
+        covered | self.expression_mask(node, env, rules)
+    }
 
+    fn name_mask(&self, node: &Node<D>, env: &TaintEnv, rules: RuleMask) -> RuleMask {
+        let text = node.text();
+        let own = env.get(&text) & rules;
+        // `int n = rs.getInt(1)`: a number holds no injected text.
+        let mut found = if own != 0 && !super::declared::scalar(node) {
+            own
+        } else {
+            0
+        };
+        let rest = rules & !own;
+        if rest == 0 {
+            return found;
+        }
+        // A map read whole holds its tainted entries.
+        let mapped = env.entry_rules() & rest;
+        if mapped != 0 {
+            found |= env.entries_of(&text) & mapped;
+        }
+        // Ruby: `custom_fields` alone may be a call of a method returning
+        // request data.
+        if self.bare_calls
+            && node.kind() == "identifier"
+            && let Some(s) = self.summaries.get(&text)
+        {
+            found |= s.returns_source & rest;
+        }
+        found
+    }
+
+    fn expression_mask(&self, node: &Node<D>, env: &TaintEnv, mut rules: RuleMask) -> RuleMask {
+        let r = node.range();
+        let (kind, text) = (node.kind(), node.text());
+        let overlapping = self.hits.sources.overlaps(&r, rules);
+        let entry_rules = env.entry_rules() & rules;
+        let mut found: RuleMask = 0;
+        // `m['k']`, `m.get("k")`: that entry, or the whole map.
+        let direct = entry_rules & !overlapping;
+        if direct != 0
+            && let Some(entry) = super::entries::entry(node)
+        {
+            let base = entry.split('[').next().unwrap_or_default();
+            let held = super::entries::read_as(&entry)
+                .iter()
+                .fold(env.get(base), |acc, e| acc | env.get(e));
+            found |= held & direct;
+            rules &= !direct;
+        }
+        // A map read whole holds its tainted entries.
+        if NAMES.contains(&kind.as_ref()) && entry_rules & rules != 0 {
+            let whole = env.entries_of(&text) & entry_rules & rules;
+            found |= whole;
+            rules &= !whole;
+        }
+        // Nothing below can be tainted: no source in it, no tainted name
+        // spelled in it, no call that could return source data.
+        let calls = text.contains('(') || self.bare_calls;
+        let sourcing = if calls { self.summaries.sourcing() } else { 0 };
+        rules &= overlapping | env.spelled_in(&text) | sourcing;
+        if rules == 0 {
+            return found;
+        }
         if NAMES.contains(&kind.as_ref()) || is_field(node) {
-            mask |= env.get(text.as_ref());
-            if env.has_entries {
-                mask |= env.entries_of(text.as_ref());
-            }
-            if self.bare_calls && kind == "identifier" {
-                let summary = self.summaries.get(text.as_ref());
-                if let Some(s) = summary {
-                    mask |= s.returns_source;
+            let own = env.get(&text) & rules;
+            if own != 0 {
+                if !super::declared::scalar(node) {
+                    found |= own;
                 }
-            }
-            if super::declared::scalar(node) {
-                mask = 0;
-            }
-            if node.is_leaf() || mask != 0 {
-                return ((mask | src_mask) & !san_mask) & self.active_rules;
+                rules &= !own;
             }
         }
-        if env.has_entries {
-            let entry = super::entries::entry(node);
-            if let Some(entry) = entry {
-                let base = entry.split('[').next().unwrap_or_default();
-                return ((env.get(&entry) | env.get(base) | src_mask) & !san_mask)
-                    & self.active_rules;
-            }
-        }
+        // `len(keys)`, `buf.size()`: a count, whatever was counted.
         if (self.numbers && kind == "binary_expression" && super::numeric::arithmetic(node))
             || super::numeric::counted(node)
         {
-            return 0;
+            return found;
         }
-        let is_cond = matches!(
+        // `c ? a : b` is `a` or `b`, never `c`; a guard in `c` cleans the
+        // side it protects (`isLocal(u) ? u : "/"`).
+        if matches!(
             kind.as_ref(),
             "ternary_expression" | "conditional_expression" | "conditional"
-        );
-        if is_cond {
-            let sides = super::deadcode::sides(node);
-            if let Some((cond, a, b)) = sides {
-                let (mut holds_map, mut fails_map) = (HashMap::new(), HashMap::new());
-                for (g_mask, check) in &self.hits.guard_checks {
-                    let (holds, fails) = super::guards::safe(&cond, std::slice::from_ref(check));
-                    for h in holds {
-                        *holds_map.entry(h).or_default() |= *g_mask;
-                    }
-                    for f in fails {
-                        *fails_map.entry(f).or_default() |= *g_mask;
-                    }
-                }
-                let ma = self.tainted_mask(&a, &env.with_guards_cleared(&holds_map));
-                let mb = self.tainted_mask(&b, &env.with_guards_cleared(&fails_map));
-                return (((ma | mb) | src_mask) & !san_mask) & self.active_rules;
+        ) && let Some((cond, a, b)) = super::deadcode::sides(node)
+        {
+            let guards = self.hits.condition(&cond);
+            let (held, failed);
+            let on_a = if guards.holds.is_empty() {
+                env
+            } else {
+                held = env.with_cleared(&guards.holds);
+                &held
+            };
+            let on_b = if guards.fails.is_empty() {
+                env
+            } else {
+                failed = env.with_cleared(&guards.fails);
+                &failed
+            };
+            let first = self.tainted_mask(&a, on_a, rules);
+            return found | first | self.tainted_mask(&b, on_b, rules & !first);
+        }
+        // `case x when "a" then "/a"`: a branch's result, not the subject.
+        if let Some(results) = super::choices::results(node) {
+            return found | self.any_of(results.iter(), env, rules);
+        }
+        // Ruby: `custom_fields` alone may be a call of a method returning
+        // request data.
+        if self.bare_calls
+            && kind == "identifier"
+            && let Some(s) = self.summaries.get(&text)
+        {
+            found |= s.returns_source & s.present & rules;
+            rules &= !s.present;
+            if rules == 0 {
+                return found;
             }
         }
-        if let Some(results) = super::choices::results(node) {
-            mask = results
-                .iter()
-                .fold(0, |acc, res| acc | self.tainted_mask(res, env));
-            return ((mask | src_mask) & !san_mask) & self.active_rules;
+        // A mapped collection carries what its callback returns.
+        if super::iteration::is_mapping(node) {
+            for k in rules_in(rules) {
+                let names = env.names_of(k);
+                if let Some(tainted) = super::iteration::mapped(self.ctxs[k as usize], node, &names)
+                {
+                    found |= bit(k) * tainted as RuleMask;
+                    rules &= !bit(k);
+                }
+            }
+            if rules == 0 {
+                return found;
+            }
         }
         if CALLS.contains(&kind.as_ref()) {
-            if let Some(s) = super::summary::called_name(node).and_then(|c| self.summaries.get(&c))
-            {
-                mask |= s.returns_source;
-                let cargs = args(node);
-                for (&idx, &ret_mask) in &s.returns {
-                    if let Some(arg) = cargs.get(idx) {
-                        mask |= self.tainted_mask(arg, env) & ret_mask;
-                    }
-                }
+            let called = self.called(node, env, rules);
+            found |= called.0;
+            rules &= !called.1;
+            if rules == 0 {
+                return found;
             }
-            let cargs = args(node);
-            if cargs.is_empty()
-                && super::summary::called_name(node).is_some_and(|m| {
-                    m.len() > 3 && m.starts_with("get") && m[3..].starts_with(char::is_uppercase)
-                })
-            {
-                let rec = node
-                    .part("function")
-                    .and_then(|f| f.part("object"))
-                    .or_else(|| node.part("object"))
-                    .or_else(|| node.part("receiver"));
-                if let Some(rec) = rec {
-                    mask |= self.tainted_mask(&rec, env);
-                }
+            // `sprintf("… id=%d", $t)`: what `%d` writes is a number.
+            if let Some(numbers) = super::numeric::formatted(node) {
+                let given = args(node);
+                let given = given.iter().filter(|a| !numbers.contains(&a.range()));
+                return found | self.any_of(given, env, rules);
             }
         }
-        if mask == 0 {
-            mask = node
-                .children()
-                .fold(0, |acc, c| acc | self.tainted_mask(&c, env));
-        }
-        ((mask | src_mask) & !san_mask) & self.active_rules
+        found | self.any_of(node.children(), env, rules)
     }
 
-    pub(super) fn step_call(
+    /// Of `rules`, those that find one of `nodes` tainted.
+    fn any_of<'n>(
         &self,
-        call: &Node<'a, D>,
-        env: &mut TaintEnv,
-        on: &mut impl FnMut(MultiSeen<'a, D>),
-    ) {
-        if let (Some(val), Some(entry)) =
-            (super::entries::stored(call), super::entries::entry(call))
-        {
-            let m = self.tainted_mask(&val, env);
-            if m != 0 {
-                env.or_mask(entry, m);
-            } else {
-                env.mask_out(&entry, self.active_rules);
-            }
-        } else if let Some(cnt) = super::containers::filled(call)
-            .filter(|_| !(self.numbers && super::containers::writes(call)))
-        {
-            let m = args(call)
-                .iter()
-                .fold(0, |acc, a| acc | self.tainted_mask(a, env));
-            if m != 0 {
-                env.or_mask(cnt, m);
+        nodes: impl IntoIterator<Item = impl std::borrow::Borrow<Node<'n, D>>>,
+        env: &TaintEnv,
+        rules: RuleMask,
+    ) -> RuleMask {
+        let mut found = 0;
+        for n in nodes {
+            found |= self.tainted_mask(n.borrow(), env, rules & !found);
+            if found == rules {
+                break;
             }
         }
-        if let Some(s) = super::summary::called_name(call).and_then(|c| self.summaries.get(&c)) {
-            let cargs = args(call);
-            for &(from, to, fill_mask) in &s.fills {
-                if let (Some(fa), Some(ta)) = (cargs.get(from), cargs.get(to)) {
-                    let is_name = NAMES.contains(&ta.kind().as_ref());
-                    if is_name {
-                        let m = self.tainted_mask(fa, env) & fill_mask;
-                        if m != 0 {
-                            env.or_mask(ta.text().as_ref(), m);
-                        }
-                    }
-                }
-            }
-            for (&i, sinks) in &s.sinks {
-                if let Some(arg) = cargs.get(i) {
-                    let am = self.tainted_mask(arg, env);
-                    for (rule_id, into) in sinks {
-                        let bit = 1u128 << *rule_id;
-                        if (am & bit & self.active_rules) != 0 {
-                            on(MultiSeen::Reached(MultiReached::Call {
-                                arg: arg.clone(),
-                                mask: bit,
-                                into: into.clone(),
-                                rule_id: *rule_id,
-                            }));
-                        }
-                    }
-                }
-            }
-            for (key, into, rule_id) in &s.statics {
-                let bit = 1u128 << *rule_id;
-                if (self.active_rules & bit) != 0
-                    && super::statics::held(call, key, &env.to_hash_set(bit))
-                {
-                    on(MultiSeen::Reached(MultiReached::Call {
-                        arg: call.clone(),
-                        mask: bit,
-                        into: into.clone(),
-                        rule_id: *rule_id,
-                    }));
-                }
-            }
+        found
+    }
+
+    /// A call of a function we have a summary for: only what it really
+    /// passes through. The rules that find it tainted, and the rules that
+    /// have such a summary.
+    fn called(&self, call: &Node<D>, env: &TaintEnv, rules: RuleMask) -> (RuleMask, RuleMask) {
+        let resolved = self.resolve(call);
+        let (mut found, mut known) = (0, 0);
+        if resolved.is_empty() {
+            return (found, known);
         }
+        let cargs = args(call);
+        // `obj.get(k)` matched to the project's only `get` by name is a
+        // guess: request data it is called on (`request.GET.get('q')`) still
+        // flows out. `order.getNote()` on an order holding request data: a
+        // getter reads the object's state, which its summary does not follow.
+        let getter = cargs.is_empty()
+            && called_name(call).is_some_and(|m| {
+                m.len() > 3 && m.starts_with("get") && m[3..].starts_with(char::is_uppercase)
+            });
+        for res in resolved.iter() {
+            let here = res.rules & rules;
+            if here == 0 {
+                continue;
+            }
+            known |= here;
+            let mut passed = res.summary.returns_source & here;
+            for (&i, &by) in &res.summary.returns {
+                if let Some(a) = cargs.get(i) {
+                    passed |= self.tainted_mask(a, env, by & here & !passed);
+                }
+            }
+            if (res.guessed || getter) && here & !passed != 0 {
+                let receiver = call
+                    .part("function")
+                    .and_then(|f| f.part("object"))
+                    .or_else(|| call.part("object"))
+                    .or_else(|| call.part("receiver"));
+                if let Some(receiver) = receiver {
+                    passed |= self.tainted_mask(&receiver, env, here & !passed);
+                }
+            }
+            found |= passed;
+        }
+        (found, known)
     }
 }

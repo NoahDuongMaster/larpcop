@@ -86,18 +86,18 @@ pub(super) fn of<D: Doc>(n: &Node<D>, checks: &[Check]) -> Vec<Guard> {
         (holds, fails)
     };
     let otherwise = n.part("alternative");
-    if super::exits::exits(&then) && !fails.is_empty() {
+    if !fails.is_empty() && super::exits::exits(&then) {
         out.push(Guard::After(n.range().end, fails.clone()));
     } else if otherwise.is_none() && !fails.is_empty() {
         out.push(Guard::Settle(n.range(), fails.clone()));
     }
     if let Some(alt) = &otherwise
+        && !holds.is_empty()
         && !matches!(
             alt.kind().as_ref(),
             "elif_clause" | "else_if_clause" | "if_statement"
         )
         && super::exits::exits(alt)
-        && !holds.is_empty()
     {
         out.push(Guard::After(n.range().end, holds.clone()));
     }

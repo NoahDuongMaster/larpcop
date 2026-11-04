@@ -11,18 +11,30 @@ use ast_grep_core::{Doc, Node};
 use ast_grep_language::SupportLang;
 use std::collections::HashSet;
 
+/// What a function is summarized with besides itself: the contexts of the
+/// round and without sources, the file and its sinks.
+pub(super) struct Summarizing<'x, 'a, D: Doc> {
+    pub round: &'x Ctx,
+    pub params_only: &'x Ctx,
+    pub lang: SupportLang,
+    pub file: &'x SourceFile,
+    pub hits: &'x Hits<'a, D>,
+}
+
 impl TaintRule {
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn summary_of<'a, D: Doc>(
         &self,
-        round: &Ctx,
-        params_only: &Ctx,
+        with: &Summarizing<'_, 'a, D>,
         def: &super::defs::FnDef<'a, D>,
-        lang: SupportLang,
-        file: &SourceFile,
-        hits: &Hits<'a, D>,
         fields: &HashSet<String>,
     ) -> (Summary, Vec<String>) {
+        let Summarizing {
+            round,
+            params_only,
+            lang,
+            file,
+            hits,
+        } = *with;
         let (name, f, params) = (&def.name, &def.node, def.params.as_slice());
         let own = |n: &Node<'a, D>| self.own_names(n);
         let mut s = Summary {

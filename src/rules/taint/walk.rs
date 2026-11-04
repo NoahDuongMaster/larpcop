@@ -32,7 +32,10 @@ impl Ctx {
         // What each tainted local was built from, for checks made after.
         let mut origins = super::origins::Origins::default();
         // C `p = &data`: `p` and `data` are one place.
-        let pointers = super::pointers::groups(&events);
+        let pointers = super::pointers::groups(events.iter().filter_map(|(_, e)| match e {
+            Event::Assign(left, right, ..) => Some((left, right)),
+            _ => None,
+        }));
         // `if` nodes whose every branch assigns these names, and the names
         // an assignment inside tainted (joins.rs).
         let mut joined: Vec<(std::ops::Range<usize>, HashSet<String>, HashSet<String>)> =
@@ -89,18 +92,21 @@ impl Ctx {
                     }
                 }
                 Event::Assign(left, right, branch, false) => {
-                    let name = left.text().to_string();
+                    let name = left.text();
                     let appended =
                         branch.is_some_and(|end| end == left.parent().map_or(0, |p| p.range().end));
-                    if appended && prefixed.contains(&name) && !names.contains(&name) {
+                    if appended
+                        && prefixed.contains(name.as_ref())
+                        && !names.contains(name.as_ref())
+                    {
                         continue;
                     }
                     let safe_start = self.starts_safe(right);
                     if !appended {
                         if safe_start {
-                            prefixed.insert(name);
+                            prefixed.insert(name.to_string());
                         } else {
-                            prefixed.remove(&name);
+                            prefixed.remove(name.as_ref());
                         }
                     }
                     // PHP `$t += 0`: a number, whatever `$t` held.
@@ -173,6 +179,8 @@ impl Ctx {
                     let written = self.captured_writes(scope, f, &names, hits);
                     names.extend(written);
                 }
+                // Nothing in the call is tainted: it changes and reaches nothing.
+                Event::Call(call) if !self.matters(call, &names) => {}
                 Event::Call(call) => {
                     // `fgets(buf, …)`, `strcat(dst, src)`: the written argument.
                     let written = self.writes.written(call, |a| self.tainted(a, &names));
@@ -261,7 +269,7 @@ impl Ctx {
 
     /// Under `safe_prefix`: does the value start with a matching literal, or
     /// with what a sanitizer returns (a URL the app builds, `reverse(…)`)?
-    fn starts_safe<D: Doc>(&self, value: &Node<D>) -> bool {
+    pub(super) fn starts_safe<D: Doc>(&self, value: &Node<D>) -> bool {
         let Some(safe) = &self.safe_prefix else {
             return false;
         };

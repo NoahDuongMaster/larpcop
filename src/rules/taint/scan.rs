@@ -76,6 +76,18 @@ impl<'a, D: Doc> FileIndex<'a, D> {
             .filter(move |n| kinds.contains(&n.kind().as_ref()))
     }
 
+    /// Is there a node of kind `id` (a kind id of the file's grammar)?
+    pub(super) fn has_kind(&self, id: u16) -> bool {
+        self.by_kind.contains_key(&id)
+    }
+
+    /// Every function of the file, named or not.
+    pub(super) fn all_functions(&self) -> impl Iterator<Item = &Node<'a, D>> {
+        self.nodes
+            .iter()
+            .filter(|n| crate::rules::complexity::is_function(n))
+    }
+
     /// Every call of the file.
     pub(super) fn calls(&self) -> impl Iterator<Item = &Node<'a, D>> {
         self.nodes
@@ -219,6 +231,14 @@ impl Indexed {
             .flatten()
             .map(|(_, needle, _)| needle.as_deref())
             .collect()
+    }
+
+    /// Could `text` hold a source? Some source pattern's word is in it, or
+    /// some pattern has none.
+    pub(super) fn may_source(&self, text: &str) -> bool {
+        self.groups[0]
+            .iter()
+            .any(|(_, needle, _)| needle.as_deref().is_none_or(|n| text.contains(n)))
     }
 
     /// Matches of every group, each in tree order (as `find_all` gives them).

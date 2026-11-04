@@ -17,18 +17,27 @@ const COMPREHENSIONS: [&str; 4] = [
 
 /// Whether `node`, a mapping, is tainted; `None` when it is not one.
 pub(super) fn mapped<D: Doc>(ctx: &Ctx, node: &Node<D>, names: &HashSet<String>) -> Option<bool> {
-    let kind = node.kind();
-    if COMPREHENSIONS.contains(&kind.as_ref()) {
+    if COMPREHENSIONS.contains(&node.kind().as_ref()) {
         return comprehension(ctx, node, names);
     }
-    if !CALLS.contains(&kind.as_ref()) {
+    let (receiver, callback) = mapping_call(node)?;
+    super::mapping::returns(ctx, &callback, ctx.tainted(&receiver, names), names)
+}
+
+/// Is `node` a mapping `mapped` may judge, whatever the rule?
+pub(super) fn is_mapping<D: Doc>(node: &Node<D>) -> bool {
+    COMPREHENSIONS.contains(&node.kind().as_ref()) || mapping_call(node).is_some()
+}
+
+/// `xs.map(callback)`: the collection and the callback.
+fn mapping_call<'a, D: Doc>(node: &Node<'a, D>) -> Option<(Node<'a, D>, Node<'a, D>)> {
+    if !CALLS.contains(&node.kind().as_ref()) {
         return None;
     }
     let (receiver, method, callback) = super::mapping::parts(node)?;
-    if !super::mapping::MAPS.contains(&method.as_str()) {
-        return None;
-    }
-    super::mapping::returns(ctx, &callback, ctx.tainted(&receiver, names), names)
+    super::mapping::MAPS
+        .contains(&method.as_str())
+        .then_some((receiver, callback))
 }
 
 /// `[body for x in xs if …]`: tainted when the body is, with `x` tainted if

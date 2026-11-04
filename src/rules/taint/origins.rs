@@ -24,6 +24,14 @@ impl Origins {
         self.0.insert(name.to_string(), merged);
     }
 
+    /// Does any name hold taint built from other tainted names, so that
+    /// [`Self::widen`] can add to what a check pins?
+    pub(super) fn derives(&self) -> bool {
+        self.0
+            .values()
+            .any(|from| from.as_ref().is_some_and(|f| !f.is_empty()))
+    }
+
     /// `pinned` and every tainted name whose taint came only from pinned names.
     pub(super) fn widen<'s>(
         &self,

@@ -1,19 +1,44 @@
-#![allow(dead_code)]
-//! Multi-Taint Lattice bitvector state and environment.
+//! Multi-taint lattice state: for each name, the set of rules (a bitmask) that
+//! find it tainted. One walk of a scope then does the work of one walk per rule.
 
-use std::collections::HashMap;
+use std::cell::Cell;
+use std::collections::{HashMap, HashSet};
 
-/// Bitmask over active taint rules (up to 128 active rules).
+/// Bitmask over the rules of a batch.
 pub type RuleMask = u128;
 
-/// Zero-based identifier of an active taint rule.
+/// Index of a rule in its batch.
 pub type RuleId = u8;
 
-/// Sparse mapping from variable and map-entry names to rule bitmasks.
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
+/// Rules a batch holds: the bits of a [`RuleMask`].
+pub const BATCH: usize = RuleMask::BITS as usize;
+
+/// The bit of rule `id`.
+pub fn bit(id: RuleId) -> RuleMask {
+    1 << id
+}
+
+/// The rules in `mask`, in order.
+pub fn rules_in(mut mask: RuleMask) -> impl Iterator<Item = RuleId> {
+    std::iter::from_fn(move || {
+        if mask == 0 {
+            return None;
+        }
+        let first = mask.trailing_zeros();
+        mask &= mask - 1;
+        Some(first as RuleId)
+    })
+}
+
+/// Names (and map entries, `m[k]`) mapped to the rules that find them tainted.
+#[derive(Clone, Default, Debug)]
 pub struct TaintEnv {
-    pub vars: HashMap<String, RuleMask>,
-    pub has_entries: bool,
+    vars: HashMap<String, RuleMask>,
+    /// Was a map entry (a name ending in `]`) ever stored?
+    has_entries: bool,
+    /// The rules holding a map entry, worked out when asked and dropped when
+    /// an entry changes.
+    entries: Cell<Option<RuleMask>>,
 }
 
 impl TaintEnv {
@@ -25,88 +50,123 @@ impl TaintEnv {
         self.vars.get(name).copied().unwrap_or(0)
     }
 
-    pub fn set(&mut self, name: impl Into<String>, mask: RuleMask) {
-        let key = name.into();
-        if key.contains('[') {
-            self.has_entries = true;
+    pub fn or_mask(&mut self, name: &str, add: RuleMask) {
+        if add == 0 {
+            return;
         }
-        if mask == 0 {
-            self.vars.remove(&key);
-        } else {
-            self.vars.insert(key, mask);
-        }
-    }
-
-    pub fn or_mask(&mut self, name: impl Into<String>, add: RuleMask) {
-        if add != 0 {
-            let key = name.into();
-            if key.contains('[') {
-                self.has_entries = true;
+        self.changed(name);
+        match self.vars.get_mut(name) {
+            Some(mask) => *mask |= add,
+            None => {
+                self.vars.insert(name.to_string(), add);
             }
-            *self.vars.entry(key).or_default() |= add;
         }
     }
 
     pub fn mask_out(&mut self, name: &str, clear: RuleMask) {
-        if let Some(entry) = self.vars.get_mut(name) {
-            *entry &= !clear;
-            if *entry == 0 {
-                self.vars.remove(name);
-            }
+        let Some(mask) = self.vars.get_mut(name) else {
+            return;
+        };
+        *mask &= !clear;
+        if *mask == 0 {
+            self.vars.remove(name);
+        }
+        self.changed(name);
+    }
+
+    fn changed(&mut self, name: &str) {
+        if name.ends_with(']') {
+            self.has_entries = true;
+            self.entries.set(None);
         }
     }
 
+    /// The rules that hold some map entry.
+    pub fn entry_rules(&self) -> RuleMask {
+        if !self.has_entries {
+            return 0;
+        }
+        if let Some(known) = self.entries.get() {
+            return known;
+        }
+        let rules = self
+            .vars
+            .iter()
+            .filter(|(name, _)| name.ends_with(']'))
+            .fold(0, |acc, (_, mask)| acc | mask);
+        self.entries.set(Some(rules));
+        rules
+    }
+
+    /// The rules that hold an entry of map `base` (`base[…]`).
     pub fn entries_of(&self, base: &str) -> RuleMask {
         if !self.has_entries {
             return 0;
         }
-        let prefix = format!("{base}[");
         self.vars
             .iter()
-            .filter(|(k, _)| k.starts_with(&prefix))
-            .fold(0, |acc, (_, v)| acc | *v)
+            .filter(|(name, _)| {
+                name.strip_prefix(base)
+                    .is_some_and(|rest| rest.starts_with('['))
+            })
+            .fold(0, |acc, (_, mask)| acc | mask)
     }
 
-    pub fn join(&self, other: &Self) -> Self {
-        let mut result = self.clone();
-        result.has_entries |= other.has_entries;
-        for (var, mask) in &other.vars {
-            *result.vars.entry(var.clone()).or_default() |= *mask;
-        }
-        result
-    }
-
-    pub fn with_guards_cleared(&self, holds: &HashMap<String, RuleMask>) -> Self {
-        let mut next = self.clone();
-        for (var, clear_mask) in holds {
-            next.mask_out(var, *clear_mask);
-        }
-        next
+    /// The rules that hold a name `text` spells (an entry `m[k]` is spelled
+    /// through its map's name).
+    pub fn spelled_in(&self, text: &str) -> RuleMask {
+        self.vars
+            .iter()
+            .filter(|(name, _)| text.contains(name.split('[').next().unwrap_or(name)))
+            .fold(0, |acc, (_, mask)| acc | mask)
     }
 
     pub fn is_empty(&self) -> bool {
         self.vars.is_empty()
     }
 
-    pub fn to_hash_set(&self, mask: RuleMask) -> std::collections::HashSet<String> {
+    /// Adds what `other` holds.
+    pub fn absorb(&mut self, other: TaintEnv) {
+        for (name, mask) in other.vars {
+            self.changed(&name);
+            *self.vars.entry(name).or_default() |= mask;
+        }
+    }
+
+    /// The names a nested function may see: those it mentions and does not
+    /// shadow with a parameter.
+    pub fn visible_to(&self, text: &str, params: &HashSet<String>) -> TaintEnv {
+        let mut out = TaintEnv::new();
+        for (name, &mask) in &self.vars {
+            if !params.contains(name) && text.contains(name.as_str()) {
+                out.or_mask(name, mask);
+            }
+        }
+        out
+    }
+
+    /// This environment with the given rules' names cleaned (`holds`: name →
+    /// the rules a guard cleans it for).
+    pub fn with_cleared(&self, holds: &HashMap<String, RuleMask>) -> TaintEnv {
+        let mut next = self.clone();
+        for (name, &clear) in holds {
+            next.mask_out(name, clear);
+        }
+        next
+    }
+
+    /// The names rule `id` finds tainted.
+    pub fn names_of(&self, id: RuleId) -> HashSet<String> {
+        let rule = bit(id);
         self.vars
             .iter()
-            .filter(|(_, m)| (*m & mask) != 0)
-            .map(|(k, _)| k.clone())
+            .filter(|(_, mask)| **mask & rule != 0)
+            .map(|(name, _)| name.clone())
             .collect()
     }
 
-    pub fn clear(&mut self) {
-        self.vars.clear();
-        self.has_entries = false;
-    }
-
-    pub fn rule_bit(rule_id: usize) -> RuleMask {
-        if rule_id < 128 { 1u128 << rule_id } else { 0 }
-    }
-
-    pub fn contains_rule(mask: RuleMask, rule_id: usize) -> bool {
-        (mask & Self::rule_bit(rule_id)) != 0
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &RuleMask)> {
+        self.vars.iter()
     }
 }
 
@@ -115,89 +175,70 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_new_and_get_default() {
-        let env = TaintEnv::new();
-        assert_eq!(env.get("x"), 0);
-        assert!(!env.has_entries);
-        assert!(env.is_empty());
-    }
-
-    #[test]
-    fn test_set_and_remove_zero() {
+    fn a_name_is_tainted_for_the_rules_that_set_it() {
         let mut env = TaintEnv::new();
-        env.set("x", 0b101);
-        assert_eq!(env.get("x"), 0b101);
-        assert!(!env.has_entries);
-
-        env.set("x", 0);
         assert_eq!(env.get("x"), 0);
+        env.or_mask("x", 0b101);
+        env.or_mask("x", 0b010);
+        assert_eq!(env.get("x"), 0b111);
+        env.or_mask("y", 0);
+        assert!(env.names_of(1).contains("x"));
+        assert!(!env.names_of(1).contains("y"));
+    }
+
+    #[test]
+    fn masking_out_drops_a_name_no_rule_holds() {
+        let mut env = TaintEnv::new();
+        env.or_mask("v", 0b111);
+        env.mask_out("v", 0b010);
+        assert_eq!(env.get("v"), 0b101);
+        env.mask_out("v", 0b101);
         assert!(env.is_empty());
     }
 
     #[test]
-    fn test_or_mask_and_entries() {
+    fn entries_are_found_by_map_and_by_rule() {
         let mut env = TaintEnv::new();
         env.or_mask("m[a]", 0b01);
         env.or_mask("m[b]", 0b10);
-        assert!(env.has_entries);
-        assert_eq!(env.get("m[a]"), 0b01);
-        assert_eq!(env.get("m[b]"), 0b10);
+        env.or_mask("plain", 0b100);
         assert_eq!(env.entries_of("m"), 0b11);
-        assert_eq!(env.entries_of("other"), 0);
+        assert_eq!(env.entries_of("mm"), 0);
+        assert_eq!(env.entry_rules(), 0b11);
+        env.mask_out("m[a]", 0b01);
+        assert_eq!(env.entry_rules(), 0b10);
     }
 
     #[test]
-    fn test_mask_out() {
+    fn a_nested_function_sees_what_it_mentions_and_does_not_shadow() {
         let mut env = TaintEnv::new();
-        env.set("v", 0b111);
-        env.mask_out("v", 0b010);
-        assert_eq!(env.get("v"), 0b101);
-
-        env.mask_out("v", 0b101);
-        assert_eq!(env.get("v"), 0);
-        assert!(!env.vars.contains_key("v"));
+        env.or_mask("seen", 0b1);
+        env.or_mask("unseen", 0b1);
+        env.or_mask("shadowed", 0b1);
+        let params: HashSet<String> = ["shadowed".to_string()].into();
+        let nested = env.visible_to("seen + shadowed", &params);
+        assert_eq!(nested.get("seen"), 0b1);
+        assert_eq!(nested.get("unseen"), 0);
+        assert_eq!(nested.get("shadowed"), 0);
     }
 
     #[test]
-    fn test_join() {
+    fn absorb_and_clear_combine_rules() {
         let mut a = TaintEnv::new();
-        a.set("x", 0b01);
-        a.set("common", 0b01);
-
+        a.or_mask("common", 0b01);
         let mut b = TaintEnv::new();
-        b.set("y", 0b10);
-        b.set("common", 0b10);
-
-        let joined = a.join(&b);
-        assert_eq!(joined.get("x"), 0b01);
-        assert_eq!(joined.get("y"), 0b10);
-        assert_eq!(joined.get("common"), 0b11);
+        b.or_mask("common", 0b10);
+        b.or_mask("only_b", 0b10);
+        a.absorb(b);
+        assert_eq!(a.get("common"), 0b11);
+        let cleared = a.with_cleared(&[("common".to_string(), 0b01)].into());
+        assert_eq!(cleared.get("common"), 0b10);
+        assert_eq!(a.get("common"), 0b11);
     }
 
     #[test]
-    fn test_with_guards_cleared() {
-        let mut env = TaintEnv::new();
-        env.set("x", 0b11);
-        env.set("y", 0b11);
-
-        let mut guards = HashMap::new();
-        guards.insert("x".to_string(), 0b01);
-        guards.insert("y".to_string(), 0b11);
-
-        let cleared = env.with_guards_cleared(&guards);
-        assert_eq!(cleared.get("x"), 0b10);
-        assert_eq!(cleared.get("y"), 0);
-        // Original unchanged
-        assert_eq!(env.get("x"), 0b11);
-        assert_eq!(env.get("y"), 0b11);
-    }
-
-    #[test]
-    fn test_rule_bit_and_contains() {
-        assert_eq!(TaintEnv::rule_bit(0), 1);
-        assert_eq!(TaintEnv::rule_bit(3), 8);
-        assert_eq!(TaintEnv::rule_bit(128), 0);
-        assert!(TaintEnv::contains_rule(0b1010, 1));
-        assert!(!TaintEnv::contains_rule(0b1010, 0));
+    fn rules_in_lists_set_bits() {
+        let ids: Vec<RuleId> = rules_in(0b1010_0001).collect();
+        assert_eq!(ids, [0, 5, 7]);
     }
 }

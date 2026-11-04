@@ -42,7 +42,7 @@ pub(super) enum Event<'a, D: Doc> {
 /// A scope's events, by position.
 pub(super) type Events<'a, D> = Rc<Vec<(usize, Event<'a, D>)>>;
 
-type Key = (usize, usize);
+pub(super) type Key = (usize, usize);
 
 /// A parameter's known value (flags.rs).
 type Seed = Option<(String, bool)>;
@@ -52,7 +52,7 @@ type EventsKey = (Key, usize, Seed);
 
 /// What a scope holds whatever the rule, in walk order: `If` stands where the
 /// guard events of an `if` go once a rule's guards are known.
-pub(crate) enum Shape<'a, D: Doc> {
+pub(super) enum Shape<'a, D: Doc> {
     /// As `Event::Assign`; whether the target is a field is worked out once
     /// per file here, it is costly.
     Assign(Node<'a, D>, Node<'a, D>, Option<usize>, bool),
@@ -65,17 +65,17 @@ pub(crate) enum Shape<'a, D: Doc> {
     Dead(usize, usize),
 }
 
-pub(crate) type Skeleton<'a, D> = Vec<(usize, Shape<'a, D>)>;
+pub(super) type Skeleton<'a, D> = Vec<(usize, Shape<'a, D>)>;
 
 /// Skeletons of a file's scopes, shared by the rules checking it.
-pub(crate) type Skeletons<'a, D> = Rc<RefCell<HashMap<Key, Rc<Skeleton<'a, D>>>>>;
+pub(super) type Skeletons<'a, D> = Rc<RefCell<HashMap<Key, Rc<Skeleton<'a, D>>>>>;
 
 /// The sink matches of a file, and the events of each scope walked so far.
-pub(crate) struct Hits<'a, D: Doc> {
+pub(super) struct Hits<'a, D: Doc> {
     pub list: Vec<Hit<'a, D>>,
     /// Scope → its sinks (indexes into `list`).
-    pub(super) by_scope: HashMap<Key, Vec<usize>>,
-    pub(super) skeletons: Skeletons<'a, D>,
+    by_scope: HashMap<Key, Vec<usize>>,
+    skeletons: Skeletons<'a, D>,
     /// By scope, number of guard matches (validators add some once known)
     /// and seed.
     events: RefCell<HashMap<EventsKey, Events<'a, D>>>,
@@ -83,7 +83,7 @@ pub(crate) struct Hits<'a, D: Doc> {
     seed: RefCell<Option<(Key, String, bool)>>,
 }
 
-fn key<D: Doc>(n: &Node<D>) -> Key {
+pub(super) fn key<D: Doc>(n: &Node<D>) -> Key {
     let r = n.range();
     (r.start, r.end)
 }
@@ -120,6 +120,11 @@ impl<'a, D: Doc> Hits<'a, D> {
         out
     }
 
+    /// The seed in force, if a summary is being made for a value of a flag.
+    pub(super) fn seeding(&self) -> Option<(Key, String, bool)> {
+        self.seed.borrow().clone()
+    }
+
     /// The seed that applies to `scope`.
     fn seed_of(&self, scope: &Node<'a, D>) -> Seed {
         let seed = self.seed.borrow();
@@ -137,19 +142,12 @@ impl<'a, D: Doc> Hits<'a, D> {
         built
     }
 
-    pub(crate) fn skeleton(&self, scope: &Node<'a, D>) -> Rc<Skeleton<'a, D>> {
+    fn skeleton(&self, scope: &Node<'a, D>) -> Rc<Skeleton<'a, D>> {
         // Seeded: built for this summary only, not shared.
         if let Some((name, value)) = self.seed_of(scope) {
             return Rc::new(skeleton(scope, Some((&name, value))));
         }
-        if let Some(known) = self.skeletons.borrow().get(&key(scope)) {
-            return known.clone();
-        }
-        let built = Rc::new(skeleton(scope, None));
-        self.skeletons
-            .borrow_mut()
-            .insert(key(scope), built.clone());
-        built
+        shared_skeleton(&self.skeletons, scope)
     }
 
     fn build(&self, scope: &Node<'a, D>, guards: &[Check]) -> Vec<(usize, Event<'a, D>)> {
@@ -198,10 +196,20 @@ impl<'a, D: Doc> Hits<'a, D> {
     }
 }
 
-pub(super) fn skeleton<'a, D: Doc>(
+/// The unseeded skeleton of `scope`, built once per file whoever asks.
+pub(super) fn shared_skeleton<'a, D: Doc>(
+    skeletons: &Skeletons<'a, D>,
     scope: &Node<'a, D>,
-    seed: Option<(&str, bool)>,
-) -> Skeleton<'a, D> {
+) -> Rc<Skeleton<'a, D>> {
+    if let Some(known) = skeletons.borrow().get(&key(scope)) {
+        return known.clone();
+    }
+    let built = Rc::new(skeleton(scope, None));
+    skeletons.borrow_mut().insert(key(scope), built.clone());
+    built
+}
+
+fn skeleton<'a, D: Doc>(scope: &Node<'a, D>, seed: Option<(&str, bool)>) -> Skeleton<'a, D> {
     let mut out: Skeleton<D> = Vec::new();
     let branches = super::deadcode::Branches::of(scope, seed);
     let lists = super::lists::Lists::of(scope);

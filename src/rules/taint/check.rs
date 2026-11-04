@@ -45,8 +45,7 @@ impl TaintRule {
         let mut out = Vec::new();
         // Fields a method stores request data in, by class: read by the
         // class's other methods, so a second walk starts them tainted.
-        let mut fields: HashMap<(usize, usize), HashSet<String>> = HashMap::new();
-        for _ in 0..2 {
+        fixpoint(|fields: &HashMap<(usize, usize), HashSet<String>>| {
             let own = |n: &Node<_>| {
                 let mut names = self.own_names(n);
                 if let Some(f) = class_of(n).and_then(|c| fields.get(&c)) {
@@ -76,16 +75,8 @@ impl TaintRule {
                 }
                 _ => {}
             });
-            let known = |(c, f): (&(usize, usize), &HashSet<String>)| {
-                fields.get(c).is_some_and(|k| f.is_subset(k))
-            };
-            if stored.iter().all(known) {
-                break;
-            }
-            for (c, f) in stored {
-                fields.entry(c).or_default().extend(f);
-            }
-        }
+            stored
+        });
         // A sink reached directly and through a summary is one finding.
         out.sort_by_key(|v| (v.line, v.column));
         out.dedup_by_key(|v| (v.line, v.column));
@@ -117,6 +108,41 @@ impl TaintRule {
                 .lines()
                 .nth(pos.line())
                 .map(|l| l.trim().chars().take(120).collect()),
+        }
+    }
+}
+
+/// What a walk stores per class: the fields its methods put request data in.
+pub(super) trait Stored: Default {
+    /// Is everything stored here already in `known`?
+    fn covered_by(&self, known: &Self) -> bool;
+    fn absorb(&mut self, more: Self);
+}
+
+impl Stored for HashSet<String> {
+    fn covered_by(&self, known: &Self) -> bool {
+        self.is_subset(known)
+    }
+
+    fn absorb(&mut self, more: Self) {
+        self.extend(more);
+    }
+}
+
+/// Walks with the fields stored so far, by class, a second time when the
+/// first walk stored fields that were not known.
+pub(super) fn fixpoint<S: Stored>(
+    mut walk: impl FnMut(&HashMap<(usize, usize), S>) -> HashMap<(usize, usize), S>,
+) {
+    let mut fields: HashMap<(usize, usize), S> = HashMap::new();
+    for _ in 0..2 {
+        let stored = walk(&fields);
+        let known = |(c, f): (&(usize, usize), &S)| fields.get(c).is_some_and(|k| f.covered_by(k));
+        if stored.iter().all(known) {
+            break;
+        }
+        for (c, f) in stored {
+            fields.entry(c).or_default().absorb(f);
         }
     }
 }

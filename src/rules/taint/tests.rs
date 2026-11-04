@@ -64,7 +64,10 @@ fn lines(r: &TaintRule, rel: &str, src: &str) -> Vec<usize> {
         rel: rel.into(),
         content: src.into(),
     };
-    r.check(&file).iter().map(|v| v.line).collect()
+    super::tests_support::check_parity(r, &file)
+        .iter()
+        .map(|v| v.line)
+        .collect()
 }
 
 #[test]

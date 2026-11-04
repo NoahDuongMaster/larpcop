@@ -4,6 +4,7 @@
 //! decorator (FastAPI `@app.get(…)`, Flask `@app.route('/u/<name>')`), and the
 //! arguments of GraphQL resolvers (`(parent, args) => …`, `def resolve_x(root, info, id)`).
 
+use super::TaintRule;
 use super::kotlin::Part;
 use ast_grep_core::{Doc, Node};
 use regex::Regex;
@@ -241,4 +242,22 @@ pub(super) fn type_of<D: Doc>(p: &Node<D>) -> Option<String> {
 /// Is the parameter of a type the framework converts (a number, a date)?
 fn validated<D: Doc>(p: &Node<D>) -> bool {
     type_of(p).is_some_and(|t| VALIDATED_TYPES.contains(&t.as_str()))
+}
+
+impl TaintRule {
+    /// Could a decorator bring request data into this file (`@Body()`, a route
+    /// handler)? Cheap text check before the walk.
+    pub(super) fn decorated_input(&self, content: &str) -> bool {
+        self.param_decorators
+            .iter()
+            .any(|d| content.contains(&format!("@{d}")) || content.contains(&format!("[{d}")))
+            || (self.handler_decorators.is_some()
+                && (content.contains('@') || content.contains('[')))
+            || (self.resolver_args && (content.contains("args") || content.contains("info")))
+            || super::services::may_serve(
+                content,
+                self.handler_classes.as_ref(),
+                self.input_types.is_some(),
+            )
+    }
 }

@@ -4,17 +4,15 @@
 //! p2 = &data`: what is written through `p1` is read through `p2`). A member
 //! of such a group tainted taints the group.
 
-use super::events::Event;
-use ast_grep_core::Doc;
+use ast_grep_core::{Doc, Node};
 use std::collections::HashSet;
 
 /// The groups of names the scope's `&local` assignments join.
-pub(super) fn groups<D: Doc>(events: &[(usize, Event<'_, D>)]) -> Vec<HashSet<String>> {
+pub(super) fn groups<'a: 'x, 'x, D: Doc>(
+    assigns: impl IntoIterator<Item = (&'x Node<'a, D>, &'x Node<'a, D>)>,
+) -> Vec<HashSet<String>> {
     let mut groups: Vec<HashSet<String>> = Vec::new();
-    for (_, e) in events {
-        let Event::Assign(left, right, ..) = e else {
-            continue;
-        };
+    for (left, right) in assigns {
         if right.kind() != "pointer_expression" || !right.text().starts_with('&') {
             continue;
         }

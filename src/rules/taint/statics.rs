@@ -106,13 +106,21 @@ pub(super) fn held<D: Doc>(call: &Node<D>, key: &str, names: &HashSet<String>) -
     if names.contains(key) {
         return true;
     }
-    let Some((class, field)) = key.strip_suffix(']').and_then(|k| k.split_once('[')) else {
+    let Some((class, field)) = split(key) else {
         return false;
     };
-    names.contains(field)
-        && call
-            .ancestors()
-            .find(|a| crate::rules::complexity::is_function(a))
-            .and_then(|f| super::defs::class_of(&f))
-            .is_some_and(|c| c == class)
+    names.contains(field) && within(call, class)
+}
+
+/// `Cls[field]` as (`Cls`, `field`).
+pub(super) fn split(key: &str) -> Option<(&str, &str)> {
+    key.strip_suffix(']').and_then(|k| k.split_once('['))
+}
+
+/// Is `call` in a method of class `class`?
+pub(super) fn within<D: Doc>(call: &Node<D>, class: &str) -> bool {
+    call.ancestors()
+        .find(|a| crate::rules::complexity::is_function(a))
+        .and_then(|f| super::defs::class_of(&f))
+        .is_some_and(|c| c == class)
 }

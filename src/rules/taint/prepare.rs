@@ -162,23 +162,33 @@ impl TaintRule {
             safe_prefix: self.safe_prefix.clone(),
             summarized: Default::default(),
             built: Default::default(),
+            memo: Default::default(),
             cleaners: self.cleaners.clone(),
             writes: self.writes.clone(),
             writes_clean: self.own_serialization_safe,
             numbers: lang == SupportLang::Php,
+            scalars: super::scalars::of(lang, &file.content),
         };
-        let known = summary::with_unique_methods(self.imported_summaries(lang, index, file, depth));
         // The file being checked (not an import, whose callers need its
-        // summaries) can only carry taint from a source, a destructured request
-        // parameter (`{ query }`) or a callee returning source data.
-        let property = |s: &String| s.rsplit('.').next().map(|p| file.content.contains(p));
-        if depth == 0
-            && base.sources.is_empty()
-            && !self.source_texts.iter().any(|s| property(s) == Some(true))
-            && !known.values().any(|s| s.returns_source)
-            && !self.decorated_input(&file.content)
-            && !self.writes.reads_input(&file.content)
-        {
+        // summaries) can only carry taint from a source, a request parameter
+        // (`{ query }` destructured, a decorated one) or a callee returning
+        // source data.
+        let alone = depth == 0
+            && !self.input_here(
+                lang,
+                index,
+                (&file.content, &index.root.text()),
+                (
+                    !base.sources.is_empty(),
+                    self.decorated_input(&file.content),
+                ),
+            );
+        // Nor can a callee, when no file it comes from takes input.
+        if alone && !self.imports_take_input(lang, index, &file.rel) {
+            return None;
+        }
+        let known = summary::with_unique_methods(self.imported_summaries(lang, index, file, depth));
+        if alone && !known.values().any(|s| s.returns_source) {
             return None;
         }
         let mut summaries = self.summarize(index, lang, file, &base, &hits, &known);
@@ -195,6 +205,7 @@ impl TaintRule {
             sourcing: Default::default(),
             summarized: Default::default(),
             built: Default::default(),
+            memo: Default::default(),
             ..base
         };
         let validating = super::validators::calls(index, &ctx);
@@ -278,21 +289,5 @@ impl TaintRule {
         let grep = lang.ast_grep(crate::rules::macros::expand(lang, &file.content));
         let (ctx, _) = self.prepare(lang, &FileIndex::new(grep.root()), &file, depth)?;
         Some(Arc::new(ctx.summaries))
-    }
-
-    /// Could a decorator bring request data into this file (`@Body()`, a route
-    /// handler)? Cheap text check before the walk.
-    fn decorated_input(&self, content: &str) -> bool {
-        self.param_decorators
-            .iter()
-            .any(|d| content.contains(&format!("@{d}")) || content.contains(&format!("[{d}")))
-            || (self.handler_decorators.is_some()
-                && (content.contains('@') || content.contains('[')))
-            || (self.resolver_args && (content.contains("args") || content.contains("info")))
-            || super::services::may_serve(
-                content,
-                self.handler_classes.as_ref(),
-                self.input_types.is_some(),
-            )
     }
 }

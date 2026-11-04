@@ -1,11 +1,13 @@
-//! Multi-rule taint checking orchestrator evaluating compatible rules in a single AST pass.
+//! A file's check for many taint rules at once, in batches of [`BATCH`]: each
+//! rule is prepared on its own, then one walk judges them all.
 
 use super::TaintRule;
-use super::check::class_of;
+use super::check::{Stored, class_of, fixpoint};
+use super::events::Hits;
 use super::fields;
 use super::flow::Ctx;
 use super::multi_hits::MultiHits;
-use super::multi_mask::{RuleMask, TaintEnv};
+use super::multi_mask::{BATCH, RuleMask, TaintEnv, bit, rules_in};
 use super::multi_summary::MultiSummaries;
 use super::multi_walk::{MultiCtx, MultiReached};
 use super::scan::FileIndex;
@@ -16,82 +18,97 @@ use ast_grep_core::{Doc, Node};
 use ast_grep_language::SupportLang;
 use std::collections::HashMap;
 
+/// What a batch's walk found: the rule (in the whole list), where, and the
+/// summary the sink was reached through.
+struct Found<'a, D: Doc> {
+    rule: usize,
+    at: Node<'a, D>,
+    into: Option<String>,
+}
+
 /// Checks all taint rules across a parsed and indexed file simultaneously.
-pub fn check_indexed_multi<D: Doc>(
+pub fn check_indexed_multi<'a, D: Doc>(
     rules: &[TaintRule],
     file: &SourceFile,
     lang: SupportLang,
-    index: &FileIndex<D>,
+    index: &FileIndex<'a, D>,
 ) -> Vec<Violation> {
     let candidates: Vec<(usize, &TaintRule)> = rules
         .iter()
         .enumerate()
         .filter(|(_, r)| r.handles(lang) && !r.exclude.is_match(&file.rel))
         .collect();
+    let mut found: Vec<Found<'a, D>> = Vec::new();
+    for batch in candidates.chunks(BATCH) {
+        check_batch(batch, file, lang, index, &mut found);
+    }
+    // A sink reached directly and through a summary is one finding.
+    found.sort_by_key(|f| (f.rule, f.at.range().start));
+    found.dedup_by_key(|f| (f.rule, f.at.range().start));
+    found
+        .into_iter()
+        .map(|f| rules[f.rule].violation(file, &f.at, f.into))
+        .collect()
+}
 
-    if candidates.is_empty() {
-        return Vec::new();
+/// What rule `k` of a batch stores per class: the fields its methods put
+/// request data in.
+impl Stored for HashMap<String, RuleMask> {
+    fn covered_by(&self, known: &Self) -> bool {
+        self.iter()
+            .all(|(name, m)| m & !known.get(name).copied().unwrap_or(0) == 0)
     }
 
-    let mut all_violations = Vec::new();
-    for batch in candidates.chunks(128) {
-        let mut original_indices = Vec::new();
-        let mut surviving_rules = Vec::new();
-        let mut surviving_ctxs = Vec::new();
-        let mut surviving_hits = Vec::new();
-
-        for &(orig_idx, rule) in batch {
-            if let Some((ctx, hits)) = rule.prepare(lang, index, file, 0) {
-                original_indices.push(orig_idx);
-                surviving_rules.push(rule);
-                surviving_ctxs.push(ctx);
-                surviving_hits.push(hits);
-            }
+    fn absorb(&mut self, more: Self) {
+        for (name, mask) in more {
+            *self.entry(name).or_default() |= mask;
         }
-        if surviving_rules.is_empty() {
-            continue;
+    }
+}
+
+fn check_batch<'a, D: Doc>(
+    batch: &[(usize, &TaintRule)],
+    file: &SourceFile,
+    lang: SupportLang,
+    index: &FileIndex<'a, D>,
+    found: &mut Vec<Found<'a, D>>,
+) {
+    let mut listed: Vec<usize> = Vec::new();
+    let mut rules: Vec<&TaintRule> = Vec::new();
+    let mut ctxs: Vec<Ctx> = Vec::new();
+    let mut hits: Vec<Hits<'a, D>> = Vec::new();
+    for &(listing, rule) in batch {
+        if let Some((ctx, h)) = rule.prepare(lang, index, file, 0) {
+            listed.push(listing);
+            rules.push(rule);
+            ctxs.push(ctx);
+            hits.push(h);
         }
-
-        let ctx_refs: Vec<&Ctx> = surviving_ctxs.iter().collect();
-        let multi_hits = MultiHits::from_prepared(&surviving_rules, &ctx_refs, &surviving_hits);
-        let summaries_per_rule: Vec<(RuleMask, &Summaries)> = surviving_ctxs
-            .iter()
-            .enumerate()
-            .map(|(i, c)| (1u128 << i, &c.summaries))
-            .collect();
-        let multi_summaries = MultiSummaries::merge(&summaries_per_rule);
-
-        let active_rules: RuleMask = if surviving_rules.len() >= 128 {
-            !0u128
-        } else {
-            (1u128 << surviving_rules.len()) - 1
-        };
-        let bare_calls = surviving_ctxs.iter().any(|c| c.bare_calls);
-        let numbers = surviving_ctxs.iter().any(|c| c.numbers);
-
-        let ctx = MultiCtx {
-            active_rules,
-            hits: &multi_hits,
-            summaries: &multi_summaries,
-            bare_calls,
-            numbers,
-        };
-
-        let root = &index.root;
-        let mut out: Vec<(usize, Violation)> = Vec::new();
-        let mut fields: HashMap<(usize, usize), HashMap<String, RuleMask>> = HashMap::new();
-
-        for _ in 0..2 {
-            let own = |n: &Node<D>| {
+    }
+    if rules.is_empty() {
+        return;
+    }
+    let ctx_refs: Vec<&Ctx> = ctxs.iter().collect();
+    let multi_hits =
+        MultiHits::from_prepared(&ctx_refs, &hits, &index.root, index.skeletons.clone());
+    let summaries: Vec<&Summaries> = ctxs.iter().map(|c| &c.summaries).collect();
+    let multi_summaries = MultiSummaries::merge(&summaries);
+    let ctx = MultiCtx::new(&multi_hits, &multi_summaries, &ctx_refs, &rules);
+    let root = &index.root;
+    // Fields a method stores request data in, by class: read by the class's
+    // other methods, so a second walk starts them tainted.
+    fixpoint(
+        |stored_before: &HashMap<(usize, usize), HashMap<String, RuleMask>>| {
+            let own = |n: &Node<'a, D>| {
                 let mut env = TaintEnv::new();
-                for (k, rule) in surviving_rules.iter().enumerate() {
-                    let bit = 1u128 << k;
+                for (k, rule) in rules.iter().enumerate() {
                     for name in rule.own_names(n) {
-                        env.or_mask(name, bit);
+                        env.or_mask(&name, bit(k as u8));
                     }
                 }
-                if let Some(f_map) = class_of(n).and_then(|c| fields.get(&c)) {
-                    for (name, &mask) in f_map {
+                if let Some(known) = class_of(n).and_then(|c| stored_before.get(&c)) {
+                    for (name, &mask) in known {
+                        // A bare field name is shadowed by a parameter or local.
                         if name.contains('.') || !fields::declares(n, name) {
                             env.or_mask(name, mask);
                         }
@@ -99,50 +116,50 @@ pub fn check_indexed_multi<D: Doc>(
                 }
                 env
             };
-
             let mut stored: HashMap<(usize, usize), HashMap<String, RuleMask>> = HashMap::new();
-            ctx.run(root, own(root), &own, &mut |r| match r {
+            ctx.run(root, own(root), &own, false, &mut |r| match r {
                 MultiReached::Sink {
                     arg,
-                    mask,
-                    sink_mask,
-                    typed,
+                    rules: reached,
+                    sink,
                 } => {
-                    let reached = mask & sink_mask;
-                    for (k, rule) in surviving_rules.iter().enumerate() {
-                        let bit = 1u128 << k;
-                        if (reached & bit) != 0 {
-                            let rule_typed = typed
-                                .iter()
-                                .find(|(id, _)| *id == (k as u8))
-                                .map(|(_, t)| t.as_slice())
-                                .unwrap_or(&[]);
-                            if rule.typed.holds(lang, file, rule_typed) {
-                                out.push((original_indices[k], rule.violation(file, &arg, None)));
-                            }
+                    for k in rules_in(reached) {
+                        let typed = multi_hits.sinks[sink]
+                            .typed
+                            .iter()
+                            .find(|(id, _)| *id == k)
+                            .map_or(&[][..], |(_, t)| t.as_slice());
+                        if rules[k as usize].typed.holds(lang, file, typed) {
+                            let rule = listed[k as usize];
+                            found.push(Found {
+                                rule,
+                                at: arg.clone(),
+                                into: None,
+                            });
                         }
                     }
                 }
-                MultiReached::Call {
-                    arg,
-                    mask: _,
-                    into,
-                    rule_id,
-                } => {
-                    let k = rule_id as usize;
-                    if let (Some(rule), Some(&orig_idx)) =
-                        (surviving_rules.get(k), original_indices.get(k))
-                    {
-                        out.push((orig_idx, rule.violation(file, &arg, Some(into))));
-                    }
+                MultiReached::Call { arg, into, rule } => {
+                    let rule = listed[rule as usize];
+                    found.push(Found {
+                        rule,
+                        at: arg,
+                        into: Some(into),
+                    });
                 }
                 MultiReached::Responds { f, value, mask } => {
-                    for (k, rule) in surviving_rules.iter().enumerate() {
-                        let bit = 1u128 << k;
-                        if (mask & bit) != 0
-                            && rule.responds.as_ref().is_some_and(|r| r.holds(&f, &value))
+                    for k in rules_in(mask) {
+                        if rules[k as usize]
+                            .responds
+                            .as_ref()
+                            .is_some_and(|r| r.holds(&f, &value))
                         {
-                            out.push((original_indices[k], rule.violation(file, &value, None)));
+                            let rule = listed[k as usize];
+                            found.push(Found {
+                                rule,
+                                at: value.clone(),
+                                into: None,
+                            });
                         }
                     }
                 }
@@ -153,34 +170,9 @@ pub fn check_indexed_multi<D: Doc>(
                         *stored.entry(c).or_default().entry(name).or_default() |= mask;
                     }
                 }
-                _ => {}
+                MultiReached::Return(..) => {}
             });
-
-            let known = |(c, stored_map): (&(usize, usize), &HashMap<String, RuleMask>)| {
-                fields.get(c).is_some_and(|f_map| {
-                    stored_map
-                        .iter()
-                        .all(|(k, m)| (m & !f_map.get(k).copied().unwrap_or(0)) == 0)
-                })
-            };
-            if stored.iter().all(known) {
-                break;
-            }
-            for (c, stored_map) in stored {
-                let f_map = fields.entry(c).or_default();
-                for (k, m) in stored_map {
-                    *f_map.entry(k).or_default() |= m;
-                }
-            }
-        }
-
-        all_violations.extend(out);
-    }
-
-    all_violations.sort_by(|a, b| {
-        a.0.cmp(&b.0)
-            .then_with(|| (a.1.line, a.1.column).cmp(&(b.1.line, b.1.column)))
-    });
-    all_violations.dedup_by(|a, b| a.0 == b.0 && a.1.line == b.1.line && a.1.column == b.1.column);
-    all_violations.into_iter().map(|(_, v)| v).collect()
+            stored
+        },
+    );
 }

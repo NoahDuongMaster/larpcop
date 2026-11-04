@@ -81,7 +81,12 @@ curl -LsSf https://github.com/NoahDuongMaster/larpcop/releases/latest/download/l
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/NoahDuongMaster/larpcop/releases/latest/download/larpcop-installer.ps1 | iex"
 ```
 
-安装脚本会把二进制文件放进 `~/.local/bin`。想从源码构建，克隆仓库后运行 `cargo build --release`。目前还没有 crates.io、npm 或 Homebrew 包。
+```sh
+# Any platform with Node.js 14.14 or newer
+npm install -g larpcop
+```
+
+安装脚本会把二进制文件放进 `~/.local/bin`。npm 包在安装时会从 GitHub release 下载同版本的二进制文件。想从源码构建，克隆仓库后运行 `cargo build --release`。目前还没有 crates.io 或 Homebrew 包。
 
 ## 快速开始
 

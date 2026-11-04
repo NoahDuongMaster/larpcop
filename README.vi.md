@@ -81,7 +81,12 @@ curl -LsSf https://github.com/NoahDuongMaster/larpcop/releases/latest/download/l
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/NoahDuongMaster/larpcop/releases/latest/download/larpcop-installer.ps1 | iex"
 ```
 
-Installer đặt binary vào `~/.local/bin`. Muốn build từ source thì clone repo rồi chạy `cargo build --release`. Hiện chưa có package trên crates.io, npm hay Homebrew.
+```sh
+# Any platform with Node.js 14.14 or newer
+npm install -g larpcop
+```
+
+Installer đặt binary vào `~/.local/bin`. Package npm tải binary cùng phiên bản từ GitHub release khi cài. Muốn build từ source thì clone repo rồi chạy `cargo build --release`. Hiện chưa có package trên crates.io hay Homebrew.
 
 ## Bắt đầu nhanh
 

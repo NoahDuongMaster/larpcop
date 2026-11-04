@@ -13,3 +13,7 @@ jobs:
     uses: ./.github/workflows/enforce.yml
     with:
       standards: examples/standards
+      # Run the code in this PR, not the last release: a change to a generated
+      # file (the AGENTS.md template, say) and to the code that writes it must
+      # pass together.
+      larpcop-from-source: true

@@ -6,11 +6,11 @@
 #       permissions:
 #         contents: read
 #         pull-requests: write      # PR comment; add security-events: write for `sarif`
-#       uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.3.0
+#       uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.3.1
 #       with:
 #         standards: https://github.com/<org>/standards.git#v1.0.0
 #       secrets:
-#         larpcop-token: ${{ secrets.LARPCOP_TOKEN }}   # only while larpcop is private
+#         larpcop-token: ${{ secrets.LARPCOP_TOKEN }}   # only when the standards repo is private
 name: larpcop-enforce
 
 on:
@@ -24,6 +24,13 @@ on:
         description: larpcop release tag. Empty = latest release.
         type: string
         default: ""
+      larpcop-from-source:
+        description: >-
+          Build larpcop from the checked-out repository instead of downloading a release
+          (ignores larpcop-version). For larpcop's own CI: the gate then runs the code under
+          review, so changing a generated file and the code that writes it needs no release first.
+        type: boolean
+        default: false
       comment:
         description: Post (and keep updating) one summary comment on the pull request. Needs `pull-requests write`.
         type: boolean
@@ -46,7 +53,7 @@ on:
         default: ""
     secrets:
       larpcop-token:
-        description: Token able to read larpcop releases and private standards (needed while they are private).
+        description: Token able to read private standards, or the releases of a private fork of larpcop.
         required: false
       anthropic-api-key:
         description: For `review` with Claude Code.
@@ -68,6 +75,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install larpcop
+        if: ${{ !inputs.larpcop-from-source }}
         env:
           VERSION: ${{ inputs.larpcop-version }}
         run: |
@@ -76,6 +84,21 @@ jobs:
           sudo tar -xJf larpcop.tar.xz --strip-components=1 -C /usr/local/bin
           rm larpcop.tar.xz
           larpcop --version
+
+      - name: Rust toolchain
+        if: ${{ inputs.larpcop-from-source }}
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache build
+        if: ${{ inputs.larpcop-from-source }}
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: enforce-from-source
+      - name: Build larpcop from source
+        if: ${{ inputs.larpcop-from-source }}
+        run: |
+          cargo build --locked
+          echo "$PWD/target/debug" >> "$GITHUB_PATH"
+          target/debug/larpcop --version
 
       - name: Allow fetching private standards
         if: env.GH_TOKEN != github.token

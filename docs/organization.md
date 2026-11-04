@@ -55,16 +55,16 @@ jobs:
     permissions:
       contents: read
       pull-requests: write   # comment on the PR; also add security-events: write if sarif is enabled
-    uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.3.0
+    uses: NoahDuongMaster/larpcop/.github/workflows/enforce.yml@v0.3.1
     with:
       standards: https://github.com/<org>/standards.git#v1.0.0
     secrets:
       larpcop-token: ${{ secrets.LARPCOP_TOKEN }}   # only needed when the standards repo (or a fork of larpcop) is private
 ```
 
-`permissions` must be declared in the calling job: a reusable workflow cannot have more permissions than the job that calls it, and a repo's default token usually has read-only permissions. If a permission is missing, the gate still runs and still blocks. Only the comment on the PR cannot be posted, and the workflow shows a warning that names the missing permission. This was found by trying v0.2.0 on a real PR.
+`permissions` must be declared in the calling job: a reusable workflow cannot have more permissions than the job that calls it, and a repo's default token usually has read-only permissions. If a permission is missing, the gate still runs and still blocks. Only the comment on the PR cannot be posted, and the workflow shows a warning that names the missing permission.
 
-The workflow checks only the files that a PR changes, so old technical debt does not block the PR and new debt cannot get in. It also runs `sync --check` to make sure the generated agent files always match the rules. This repo uses the same workflow on itself through [`self-enforce.yml`](../.github/workflows/self-enforce.yml).
+The workflow checks only the files that a PR changes, so old technical debt does not block the PR and new debt cannot get in. It also runs `sync --check` to make sure the generated agent files always match the rules. By default it installs the latest larpcop release (`larpcop-version` pins another tag). This repo uses the same workflow on itself through [`self-enforce.yml`](../.github/workflows/self-enforce.yml), with `larpcop-from-source: true`, so its own PRs are checked by the code they change instead of the last release.
 
 ## Releases and distribution
 
